@@ -1,0 +1,116 @@
+{% extends "base.html" %} {% block content %}
+<h1 class="visuallyhidden">Admin</h1>
+<div class="row">
+	<div class="col-md-offset-4 col-md-4">
+		<h2><b>Register a New User</b></h2>
+	</div>
+</div>
+{% from "harvester/helpers/field_render.html" import render_field%}
+<form class="article-full__body" method="post" action="{{url_for('account.register')}}" id="registration-details">
+	<div class="row">
+		<div class="col span-12">
+			<fieldset class="form__fieldset">
+				<ul class="form-fields">
+					<li class="form-fields__item--text"> 
+						{{render_field(form.email,'form-fields__item--text','form-fields__label-text')}}
+					</li>
+					<li class="form-fields__item--text">
+						{{render_field(form.email_verify,'form-fields__item--text','form-fields__label-text')}}
+					</li>
+					<li class="form-fields__item--text">
+						{{render_field(form.password,'form-fields__item--text','form-fields__label-text')}}
+					</li>
+					<li class="form-fields__item--text">
+						{{render_field(form.password_verify,'form-fields__item--text','form-fields__label-text')}}
+					</li>
+				</ul>
+				<ul class="form-fields">
+					<li class="form-fields__item-radio">
+					{{render_field(form.radio,'form-fields__item--text','form-fields__label-text')}}
+					</li>
+				</ul>
+				<div class="rolers repository">
+					<ul class="form-fields">
+						<li class="form-fields__item--text">
+							{{render_field(form.repository_name,'form-fields__item--text','form-fields__label-text')}}
+						</li>
+						<li class="form-fields__item--text">
+							{{render_field(form.repository_bibid,'form-fields__item--text','form-fields__label-text')}}
+						</li>
+						<li class="form-fields__item--text">
+							{{render_field(form.repository_sigel,'form-fields__item--text','form-fields__label-text')}}
+						</li>
+						<li class="form-fields__item--text">
+							{{render_field(form.repository_url,'form-fields__item--text','form-fields__label-text')}}
+						</li>
+						<li class="form-fields__item--text">
+							{{render_field(form.repository_software,'form-fields__item--text','form-fields__label-text')}}
+						</li>
+						<li class="form-fields__item--text">
+							{{render_field(form.sword_username,'form-fields__item--text','form-fields__label-text')}}
+						</li>
+						<li class="form-fields__item--text">
+							{{render_field(form.sword_password,'form-fields__item--text','form-fields__label-text')}}
+						</li>
+						<li class="form-fields__item--text">
+							{{render_field(form.sword_collection,'form-fields__item--text','form-fields__label-text')}}
+						</li>
+						<li class="form-fields__item--text">
+							{{render_field(form.packaging,'form-fields__item--text','form-fields__label-text')}}
+						</li>
+					</ul>
+				</div>
+				<div class="rolers publisher">
+					<ul class="form-fields">
+						<li class="form-fields__item--text">
+							{{render_field(form.embargo_duration,'form-fields__item--text','form-fields__label-text')}}
+						</li>
+						<li class="form-fields__item--text">
+					   		{{render_field(form.license_title,'form-fields__item--text','form-fields__label-text')}}
+					   	</li>
+					   	<li class="form-fields__item--text">
+					   		{{render_field(form.license_type,'form-fields__item--text','form-fields__label-text')}}
+					   	</li>
+					   	<li class="form-fields__item--text">
+					   		{{render_field(form.license_url,'form-fields__item--text','form-fields__label-text')}}
+					   	</li>
+						<li class="form-fields__item--text">
+					   		{{render_field(form.license_version,'form-fields__item--text','form-fields__label-text')}}
+					   	</li>
+					</ul>
+				</div>
+				
+				<div class="btn--right-align">
+					<button class="btn btn--3d btn--primary" id="register" type="submit">Add user</button>
+				</div>
+				
+				<div class="btn--right-align">
+					<input action="action" type="button" class="btn btn--3d btn--primary" value="Cancel" onclick="history.back();" />
+				</div>
+				
+			</fieldset>
+		</div>
+	</div>
+</form>
+
+{% endblock %} 
+
+{% block extra_js_bottom %}
+
+<script>
+$( document ).ready(function() {
+	$('.rolers').hide();
+	var name = 'input[name=radio]';
+	$(name).on('change',function(){
+		$('.rolers').hide();
+		$('.'+$(name+':checked').prop('value')).show();
+	});
+	$(name).trigger('change');
+});
+</script>
+
+{% endblock extra_js_bottom %}
+
+
+
+

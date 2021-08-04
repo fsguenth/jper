@@ -1,0 +1,36 @@
+{% extends "base.html" %} {% block content %}
+
+<h1 class="visuallyhidden">Admin</h1>
+<div class="row cms">
+	<div class="col span-9">
+		<h2><b>Manage Users</b></h2>
+		{% if current_user.is_super %} 
+		<a href="{{url_for('account.register')}}">
+			<button type="button" class="btn btn--3d btn--primary">Add&nbsp;a&nbsp;user</button>
+		</a>
+		{% endif %}
+		<table data-rwdtable data-rwdtable-sortable class="content-table" id="users">
+			<thead>
+				<tr>
+					<th scope="col" class="persist essential" data-sort-default>User Name</th>
+					<th scope="col" class="persist essential">Account type</th>
+					<!-- th scope="col" class="optional">ID</th -->
+					<th scope="col" class="persist">ID</th>
+					<th scope="col" class="persist">Manage</th>
+				</tr>
+			</thead>
+
+			<tbody>
+				{% for user in users %}
+				<tr>
+					<td>{{user[1]}}</td>
+					<td>{% for r in user[2] %}{{r}};{% endfor %}</td>
+					<td>{{user[0]}}</td>
+					<td><a href="/account/{{user[0]}}">Manage</a></td>
+				</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+</div>
+{% endblock %} 

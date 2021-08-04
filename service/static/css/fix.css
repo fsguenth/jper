@@ -1,0 +1,142 @@
+/* .pattern-library__page-title.fix {
+    background: url(https://ux.jisc.ac.uk/ui/img/polygon-bg.png) 50% 0 no-repeat #E85E13;
+    background-image: url(https://ux.jisc.ac.uk/ui/img/polygon-bg.png);
+} */
+.no-underscore a{
+	text-decoration: none;
+}
+.move-up{
+	margin-top: -5px;
+}
+/* over ride the jisc accordion 
+.is-collapsible--button.show_hide--is-expanded, .is-collapsible--button.show_hide--is-expanding{
+	background-color: #fff;
+}
+
+.data-table th, table th{
+	background-color: #e4eaec;
+} 
+.data-table tbody tr:nth-child(odd), table tbody tr:nth-child(odd){
+	background-color: #f8fafa;
+}
+.data-table tbody tr, table tbody tr{
+	background-color: #f8fafa;
+} */
+.btn{
+	white-space: nowrap;
+}
+
+/* .box--brd-vlgreyblue {
+  border-color: #e4e9ec;
+}
+ .box--bg-vlgreyblue {
+  background-color: #e4e9ec;
+}
+.box--padding-bottom-none {
+  padding-bottom: 0;
+} 
+
+.dl-horizontal dd:before,
+.dl-horizontal dd:after {
+  display: table;
+  content: " ";
+}
+.dl-horizontal dd:after {
+  clear: both;
+}
+  @media (min-width: 758px) {
+  .cms > .dl-horizontal dt {
+    float: left;
+    width: 160px;
+    overflow: hidden;
+    clear: left;
+    font-family: "Stag Sans Web Light", "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", Arial, sans-serif;
+    text-align: right;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cms > .dl-horizontal dd {
+    margin-top: 9px;
+    margin-top: .9rem;
+    margin-left: 180px;
+  }
+  .cms > .dl-horizontal--account-details dt, .cms > .dl-horizontal--account-details dd {
+    margin-top: 0;
+  }
+} */
+
+.show_hide__target ol li{
+	background-image: inherit;
+}
+
+/* .show_hide__target li{
+	font-size: 18px;
+} */
+
+.outer {margin-left:10%; margin-right: 5%; margin-top: 1%; float: left; position: relative;}
+
+.outer img {box-shadow: 8px 10px 10px rgba(0,0,0,.9)}
+
+.FAQ {
+	display:block;
+	height:auto !important;
+	margin: 0px;
+	vertical-align:top;
+}
+	
+
+.list {
+    display:none; 
+    padding-left: 1px;
+    float: left;
+    text-indent: 1em;
+}
+
+.show {
+    display: none; 
+}
+.hide:target + .show {
+    display: inline; 
+}
+.hide:target {
+    display: none; 
+}
+.hide:target ~ .list {
+    display:inline; 
+}
+
+/*style the (+) and (-) */
+.hide, .show {
+	width: 30px;
+	height: 30px;
+	font-size: 20px;
+	color: #00331a;
+	text-align: center;
+	text-decoration: none !important;
+	margin-right: 0;
+	float: left;
+	margin-bottom: 5px;
+}
+
+.hide:hover, .show:hover {
+	color: #008000;
+	text-shadow: 0 0 1px #006633;
+	text-decoration: none;
+	opacity: 1;
+	margin-bottom: 5px;
+}
+
+.list p{
+    height:auto;
+    margin-bottom: 10px !important;
+}
+.question {
+	
+	padding-left: 20px;
+	margin-bottom: 15px;
+}
+
+.btnright {
+	margin-left:395px;
+	margin-top:-10px; 
+}

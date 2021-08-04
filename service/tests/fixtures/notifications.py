@@ -1,14 +1,30 @@
+"""
+Fixtures for testing notifications
+"""
+
 from copy import deepcopy
 
-
 class NotificationFactory(object):
+    """
+    Class which provides access to the various fixtures used for testing the notifications
+    """
 
     @classmethod
     def unrouted_notification(cls):
+        """
+        A basic unrouted notification
+
+        :return: notification
+        """
         return deepcopy(BASE_NOTIFICATION)
 
     @classmethod
     def routed_notification(cls):
+        """
+        A routed notification
+
+        :return: notification
+        """
         base = deepcopy(BASE_NOTIFICATION)
         base["links"].append(deepcopy(ROUTED_LINK))
         base.update(deepcopy(ROUTING_INFO))
@@ -16,7 +32,21 @@ class NotificationFactory(object):
 
     @classmethod
     def routing_metadata(cls):
+        """
+        Routing metadata
+
+        :return: routing metadata
+        """
         return deepcopy(ROUTING_METADATA)
+
+    @classmethod
+    def notification_metadata(cls):
+        """
+        Notification metadata
+
+        :return: notification metadata
+        """
+        return deepcopy(ALT_METADATA)
 
 ROUTING_METADATA = {
     "urls" : ["http://www.ed.ac.uk", "http://www.ucl.ac.uk"],
@@ -34,20 +64,27 @@ ROUTING_METADATA = {
         {
             "id" : "aaaa-0000-1111-bbbb",
             "type" : "orcid"
+        },
+        {
+            "id" : "someone@sms.ucl.ac.uk",
+            "type" : "email"
         }
     ],
-    "addresses" : ["Central London Campus", "George Sq"],
+    "postcodes" : ["SW1 0AA", "EH23 5TZ"],
     "keywords" : ["science", "technology", "arts", "medicine"],
     "grants" : ["BB/34/juwef"],
     "content_types" : ["article"]
 }
+"""Example routing metadata object"""
 
 ROUTED_LINK = {
     "type" : "fulltext",
     "format" : "application/zip",
     "access" : "router",
-    "url" : "http://router.jisc.ac.uk/api/v1/notification/1234567890/content"
+    "url" : "http://datahub.deepgreen.org/api/v1/notification/1234567890/content",
+    "packaging" : "https://datahub.deepgreen.org/FilesAndJATS"
 }
+"""A link object that can be grafted in to notifications"""
 
 ROUTING_INFO = {
     "analysis_date" : "2015-02-02T00:00:00Z",
@@ -55,6 +92,73 @@ ROUTING_INFO = {
         "repo1", "repo2", "repo3"
     ]
 }
+"""The routing info that can be grafted into a notification to make it routed"""
+
+ALT_METADATA = {
+    "metadata" : {
+        "title" : "Alternative Article",
+        "version" : "AAM",
+        "publisher" : "Other Publisher",
+        "source" : {
+            "name" : "Journal of Important Things",
+            "identifier" : [
+                {"type" : "other", "id" : "over there" }
+            ]
+        },
+        "identifier" : [
+            {"type" : "doi", "id" : "10.pp/jit.1" },
+            {"type" : "url", "id" : "http://jit.com/1" }
+        ],
+        "type" : "paper",
+        "author" : [
+            {
+                "name" : "Richard Jones",
+                "identifier" : [
+                    {"type" : "orcid", "id" : "aaaa-0000-1111-bbbb"},
+                    {"type" : "email", "id" : "richard@example.com"},
+                    {"type" : "mendeley_id", "id" : "12345"}
+                ],
+                "affiliation" : "Cottage Labs, HP3 9AA"
+            },
+            {
+                "name" : "Dave Spiegel",
+                "identifier" : [
+                    {"type" : "email", "id" : "dave@example.com"},
+                ],
+                "affiliation" : "University of Life"
+            }
+        ],
+        "language" : "eng",
+        "publication_date" : "2015-01-01T00:00:00Z",
+        "date_accepted" : "2014-09-01T00:00:00Z",
+        "date_submitted" : "2014-07-03T00:00:00Z",
+        "license_ref" : {
+            "title" : "CC BY",
+            "type" : "CC BY",
+            "url" : "http://creativecommons.org/cc-by",
+            "version" : "4.0",
+        },
+        "project" : [
+            {
+                "name" : "BBSRC",
+                "identifier" : [
+                    {"type" : "ringold", "id" : "bbsrcid"},
+                    {"type" : "isni", "id" : "asdf-ghtk"}
+                ],
+                "grant_number" : "BB/34/juwef"
+            },
+            {
+                "name" : "EPSRC",
+                "identifier" : [
+                    {"type" : "ringold", "id" : "askjdhfasdf"}
+                ],
+                "grant_number" : "EP/34/juwef"
+            }
+        ],
+        "subject" : ["arts", "medicine", "literature"]
+    }
+}
+"""Example metadata section of a notification"""
 
 BASE_NOTIFICATION = {
     "id" : "1234567890",
@@ -70,8 +174,7 @@ BASE_NOTIFICATION = {
     },
 
     "content" : {
-        "packaging_format" : "http://router.jisc.ac.uk/package/RouterNative",
-        "store_id" : "abc"
+        "packaging_format" : "https://datahub.deepgreen.org/FilesAndJATS"
     },
 
     "links" : [
@@ -119,7 +222,7 @@ BASE_NOTIFICATION = {
                     {"type" : "orcid", "id" : "aaaa-0000-1111-bbbb"},
                     {"type" : "email", "id" : "richard@example.com"},
                 ],
-                "affiliation" : "Cottage Labs"
+                "affiliation" : "Cottage Labs, HP3 9AA"
             },
             {
                 "name" : "Mark MacGillivray",
@@ -127,7 +230,7 @@ BASE_NOTIFICATION = {
                     {"type" : "orcid", "id" : "dddd-2222-3333-cccc"},
                     {"type" : "email", "id" : "mark@example.com"},
                 ],
-                "affiliation" : "Cottage Labs"
+                "affiliation" : "Cottage Labs, EH9 5TP"
             }
         ],
         "language" : "eng",
@@ -152,3 +255,4 @@ BASE_NOTIFICATION = {
         "subject" : ["science", "technology", "arts", "medicine"]
     }
 }
+"""Example base notification which can be extended for other uses"""

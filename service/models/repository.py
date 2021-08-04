@@ -1,47 +1,49 @@
+"""
+Model objects used to represent interactions with repositories
+"""
+
 from octopus.lib import dataobj
+from octopus.core import app
 from service import dao
+import csv
 
 class RepositoryConfig(dataobj.DataObj, dao.RepositoryConfigDAO):
     """
-    {
-        "id" : "<opaque id for repository config record>",
-        "created_date" : "<date this notification was received>",
-        "last_updated" : "<last modification time - required by storage layer>",
+    Class to represent the configuration information that repositories provide to the system
+    to enable routing based on RoutingMetadata extracted from notifications
 
-        "repository" : "<account id of repository that owns this configuration>",
-        "domains" : ["<list of all domains that match this repository's institution>"],
-        "name_variants" : ["<The names by which this repository's institution is known>"],
-        "author_ids" : [
-            {
-                "id" : "<author id string>",
-                "type" : "<author id type (e.g. orcid, or name)>"
-            }
-        ],
-        "postcodes" : ["<list of postcodes that appear in the repository's institution's addresses>"],
-        "addresses" : ["<full organisation addresses>"],
-        "keywords" : ["<keywords and subject classifications>"],
-        "grants" : ["<grant names or numbers>"],
-        "content_types" : ["<list of content types the repository is interested in>"]
-    }
+    See the core system model documentation for details on the JSON structure used by this model.
     """
 
     def __init__(self, raw=None):
+        """
+        Create a new instance of the RepositoryConfig object, optionally around the
+        raw python dictionary.
+
+        If supplied, the raw dictionary will be validated against the allowed structure of this
+        object, and an exception will be raised if it does not validate
+
+        :param raw: python dict object containing the data
+        """
         struct = {
             "fields" : {
                 "id" : {"coerce" : "unicode"},
                 "created_date" : {"coerce" : "unicode"},
                 "last_updated" : {"coerce" : "unicode"},
-                "repository" : {"coerce" : "unicode"}
+                "repo" : {"coerce" : "unicode"}
+                # "repository" : {"coerce" : "unicode"}
+                # 2016-06-29 TD : index mapping exception fix for ES 2.3.3
             },
             "lists" : {
                 "domains" : {"contains" : "field", "coerce" : "unicode"},
                 "name_variants" : {"contains" : "field", "coerce" : "unicode"},
                 "author_ids" : {"contains" : "object"},
                 "postcodes" : {"contains" : "field", "coerce" : "unicode"},
-                "addresses" : {"contains" : "field", "coerce" : "unicode"},
                 "keywords" : {"contains" : "field", "coerce" : "unicode"},
                 "grants" : {"contains" : "field", "coerce" : "unicode"},
                 "content_types" : {"contains" : "field", "coerce" : "unicode"},
+                "strings" : {"contains" : "field", "coerce" : "unicode"},
+                "excluded_license": {"contains" : "field", "coerce" : "unicode"},
             },
             "structs" : {
                 "author_ids" : {
@@ -55,40 +57,315 @@ class RepositoryConfig(dataobj.DataObj, dao.RepositoryConfigDAO):
         self._add_struct(struct)
         super(RepositoryConfig, self).__init__(raw=raw)
 
+    @property
+    def repo(self):
+        """
+        Get the id of the repository this config represents
+
+        :return: repository id
+        """
+        return self._get_single("repo", coerce=dataobj.to_unicode())
+        # return self._get_single("repository", coerce=dataobj.to_unicode())
+        # 2016-06-29 TD : index mapping exception fix for ES 2.3.3
+
+    @repo.setter
+    def repo(self, val):
+        """
+        Set the id of the repository this config represents
+
+        :param val: the repository id
+        """
+        self._set_single("repo", val, coerce=dataobj.to_unicode())
+        # self._set_single("repository", val, coerce=dataobj.to_unicode())
+        # 2016-06-29 TD : index mapping exception fix for ES 2.3.3
+
+    @property
+    def repository(self):
+        """
+        Get the id of the repository this config represents
+
+        :return: repository id
+        """
+        return self._get_single("repo", coerce=dataobj.to_unicode())
+        # return self._get_single("repository", coerce=dataobj.to_unicode())
+        # 2016-06-29 TD : index mapping exception fix for ES 2.3.3
+
+    @repository.setter
+    def repository(self, val):
+        """
+        Set the id of the repository this config represents
+
+        :param val: the repository id
+        """
+        self._set_single("repo", val, coerce=dataobj.to_unicode())
+        # self._set_single("repository", val, coerce=dataobj.to_unicode())
+        # 2016-06-29 TD : index mapping exception fix for ES 2.3.3
+
+    @property
+    def domains(self):
+        """
+        List of domains that this repository is associated with
+
+        :return: list of domains
+        """
+        return self._get_list("domains", coerce=dataobj.to_unicode())
+
+    @property
+    def name_variants(self):
+        """
+        List of name variants this repository/institution is known by
+
+        :return: list of name variants
+        """
+        return self._get_list("name_variants", coerce=dataobj.to_unicode())
+
+    @property
+    def author_ids(self):
+        """
+        List of author id objects associated with this repository
+
+        Author id objects are of the form:
+
+        ::
+
+            {
+                "id" : "<author id string>",
+                "type" : "<author id type (e.g. orcid, or name)>"
+            }
+        """
+        return self._get_list("author_ids")
+
+    @property
+    def author_emails(self):
+        """
+        Get a list of email addresses for authors associated with the repository
+
+        Short cut for self.get_author_ids("email")
+
+        :return: list of email addresses
+        """
+        # special function just to return the email type from the author ids
+        return self.get_author_ids("email")
+
+    def get_author_ids(self, type):
+        """
+        List of author identifiers of the specified type
+
+        :return: list of author identifiers as plain strings
+        """
+        aids = []
+        for aid in self.author_ids:
+            if aid.get("type") == type:
+                aids.append(aid.get("id"))
+        return aids
+
+    @property
+    def postcodes(self):
+        """
+        List of postcodes associated with this repository/institution
+
+        :return: postcodes
+        """
+        return self._get_list("postcodes", coerce=dataobj.to_unicode())
+
+    @property
+    def keywords(self):
+        """
+        List of keywords associated with this repository
+
+        :return: keywords
+        """
+        return self._get_list("keywords", coerce=dataobj.to_unicode())
+
+    @property
+    def grants(self):
+        """
+        List of grant codes associated with this repository/institution
+
+        :return: grant codes
+        """
+        return self._get_list("grants", coerce=dataobj.to_unicode())
+
+    @property
+    def content_types(self):
+        """
+        List of content types associated with this repository
+
+        :return: content types
+        """
+        return self._get_list("content_types", coerce=dataobj.to_unicode())
+
+    @property
+    def strings(self):
+        """
+        List of arbitrary strings which may be used to match against this repository
+
+        :return: list of match strings
+        """
+        return self._get_list("strings", coerce=dataobj.to_unicode())
+
+    @property
+    def excluded_license(self):
+        """
+        List of licenses not associated with this repository
+
+        :return: excluded licenses
+        """
+        return self._get_list("excluded_license", coerce=self._utf8_unicode())
+
+    def add_excluded_license(self, excluded_license):
+        self._add_to_list("excluded_license", excluded_license, coerce=self._utf8_unicode())
+
+    def remove_excluded_license(self, excluded_license):
+        self._delete_from_list("excluded_license", excluded_license)
+
+    @excluded_license.setter
+    def excluded_license(self, excluded_license):
+        self._set_list("excluded_license", excluded_license, coerce=self._utf8_unicode())
+
+    def excludes_license(self, license):
+        return license in self.excluded_license
+
+    @classmethod
+    def pull_by_key(cls,key,value):
+        res = cls.query(q={"query":{"term":{key+'.exact':value}}})
+        if res.get('hits',{}).get('total',{}).get('value', 0) == 1:
+            return cls.pull( res['hits']['hits'][0]['_source']['id'] )
+        else:
+            return None        
+
+    @classmethod
+    def pull_by_repo(cls,repoid):
+        return cls.pull_by_key('repo',repoid)
+        # return cls.pull_by_key('repository',repoid)
+        # 2016-06-29 TD : index mapping exception fix for ES 2.3.3
+        
+
+    def set_repo_config(self,repository,csvfile=None,textfile=None,jsoncontent=None):
+        repoid = repository
+        # human readable fields are 'Domains','Name Variants','Author Emails','Postcodes','Grant Numbers','ORCIDs'
+        #
+        # 2019-02-25 TD : /German/ Postcodes are not sensible for DeepGreen, thus now disabled 
+        # 2019-03-27 TD : Due to data privacy issues, Author Emails and ORCIDs will not be read until further notice (see also the comment below)
+        #
+        fields = ['domains','name_variants','author_ids','postcodes','grants','keywords','content_types','strings']
+        for f in fields:
+            if f in self.data: del self.data[f]
+        if csvfile is not None:
+            # could do some checking of the obj
+            lines = False
+            inp = csv.DictReader(csvfile)
+            for row in inp:
+                for x in list(row.keys()):
+                    # 2019-05-21 TD : A tiny safeguard with respect to forgotten commata
+                    #                 'None' appears if there are less than fields in row.keys()
+                    if None in list(row.values()):
+                        continue
+                    # 2019-05-21 TD
+                    if x.strip().lower().replace(' ','').replace('s','').replace('number','') == 'grant' and len(row[x].strip()) > 1:
+                        self.data['grants'] = self.data.get('grants',[]) + [row[x].strip()]
+                    # 2019-02-25 TD : Instead of 'postcode' we will support 'keywords' here!
+                    #elif x.strip().lower().replace(' ','').strip('s') == 'postcode' and len(row[x].strip()) > 1:
+                    #    self.data['postcodes'] = self.data.get('postcodes',[]) + [row[x].strip()]
+                    elif x.strip().lower().replace(' ','').strip('s') == 'keyword' and len(row[x].strip()) > 1:
+                        self.data['keywords'] = self.data.get('keywords',[]) + [row[x].strip()]
+                    # 2019-02-25 TD
+                    elif x.strip().lower().replace(' ','').replace('s','') == 'namevariant' and len(row[x].strip()) > 1:
+                        self.data['name_variants'] = self.data.get('name_variants',[]) + [row[x].strip()]
+                    elif x.strip().lower().replace(' ','').replace('s','') == 'domain' and len(row[x].strip()) > 1:
+                        self.data['domains'] = self.data.get('domains',[]) + [row[x].strip()]
+                    #
+                    # 2019-03-27 TD : !!!ATTENTION!!! Author Emails and ORCIDS will be disabled here. No such items will be taken up by DeepGreen now.
+                    # 
+                    #elif x.strip().lower().replace(' ','').replace('s','').replace('email','') == 'author' and len(row[x].strip()) > 1:
+                    #    self.data['author_ids'] = self.data.get('author_ids',[]) + [{"type":"email","id":row[x].strip()}]
+                    #elif x.strip().lower().replace(' ','').replace('s','') == 'orcid' and len(row[x].strip()) > 1:
+                    #    self.data['author_ids'] = self.data.get('author_ids',[]) + [{"type":"orcid","id":row[x].strip()}]
+                    # 2019-03-27 TD
+            app.logger.debug("Extracted complex config from .csv file for repo: {x}".format(x=repoid))
+            # app.logger.debug("Extracted complex config from .csv file for repo: {x}".format(x=self.id))
+            self.data['repo'] = repoid
+            # self.data['repository'] = repository
+            # 2016-06-29 TD : index mapping exception fix for ES 2.3.3
+            self.save()
+            return True
+        elif textfile is not None:
+            app.logger.debug("Extracted simple config from .txt file for repo: {x}".format(x=repoid))
+            # app.logger.debug("Extracted simple config from .txt file for repo: {x}".format(x=self.id))
+            self.data['strings'] = [line.rstrip('\n').rstrip('\r').strip() for line in textfile if len(line.rstrip('\n').rstrip('\r').strip()) > 1]
+            self.data['repo'] = repoid
+            # self.data['repository'] = repository
+            # 2016-06-29 TD : index mapping exception fix for ES 2.3.3
+            self.save()
+            return True
+        elif jsoncontent is not None:
+            # save the lines into the repo config
+            for k in list(jsoncontent.keys()):
+                self.data[k] = jsoncontent[k]
+            self.data['repo'] = repoid
+            # self.data['repository'] = repository
+            # 2016-06-29 TD : index mapping exception fix for ES 2.3.3
+            self.save()
+            app.logger.debug("Saved config for repo: {x}".format(x=repoid))
+            # app.logger.debug("Saved config for repo: {x}".format(x=self.id))
+            return True
+        else:
+            app.logger.error("Could not save config for repo: {x}".format(x=repoid))            
+            # app.logger.error("Could not save config for repo: {x}".format(x=self.id))            
+            return False
+        
+
+
 class MatchProvenance(dataobj.DataObj, dao.MatchProvenanceDAO):
     """
-    {
-        "id" : "<opaque id for repository config record>",
-        "created_date" : "<date this notification was received>",
-        "last_updated" : "<last modification time - required by storage layer>",
+    Class to represent a record of a match between a RepositoryConfig and a RoutingMetadata object
 
-        "repository" : "<account id of repository to which the match pertains>",
-        "notification" : "<id of the notification to which the match pertains>",
-        "provenance" : [
-            {
-                "source_field" : "<field from the configuration that matched>",
-                "term" : "<term from the configuration that matched>",
-                "notification_field" : "<field from the notification that matched>"
-                "matched" : "<text from the notification routing metadata that matched>",
-                "explanation" : "<any additional explanatory text to go with this match (e.g. description of levenstein criteria)>"
-            }
-        ]
-    }
+    See the core system model documentation for details on the JSON structure used by this model.
     """
 
     def __init__(self, raw=None):
+        """
+        Create a new instance of the MatchProvenance object, optionally around the
+        raw python dictionary.
+
+        If supplied, the raw dictionary will be validated against the allowed structure of this
+        object, and an exception will be raised if it does not validate
+
+        :param raw: python dict object containing the metadata
+        """
         struct = {
             "fields" : {
                 "id" : {"coerce" : "unicode"},
                 "created_date" : {"coerce" : "unicode"},
                 "last_updated" : {"coerce" : "unicode"},
-                "repository" : {"coerce" : "unicode"},
+                "bibid" : {"coerce" : "unicode"},
+                # 2016-10-18 TD : additional field to hold EZB-Id (which is more 'human' readable...)
+                "repo" : {"coerce" : "unicode"},
+                # "repository" : {"coerce" : "unicode"},
+                # 2016-06-29 TD : index type 'match_prov' mapping exception fix for ES 2.3.3
+                "pub" : {"coerce" : "unicode"},
+                # 2016-08-10 TD : add an additional field for origin of notification (publisher)
                 "notification" : {"coerce" : "unicode"}
             },
+            "objects" : [
+                "alliance" 
+            ],
+            # 2016-10-13 TD : additional object for licensing data (alliance license)
             "lists" : {
                 "provenance" : {"contains" : "object"}
             },
             "structs" : {
+                "alliance" : {
+                    "fields" : {
+                        "name" : {"coerce" : "unicode"},
+                        "id" : {"coerce" : "unicode"},
+                        "issn" : {"coerce" : "unicode"},
+                        "doi" : {"coerce" : "unicode"},
+                        "link" : {"coerce" : "unicode"},
+                        "embargo" : {"coerce" : "integer"}
+                    }
+                },
+                # 2016-10-13 TD : additional object for licensing data (alliance license)
                 "provenance" : {
                     "fields" : {
                         "source_field" : {"coerce" : "unicode"},
@@ -104,18 +381,206 @@ class MatchProvenance(dataobj.DataObj, dao.MatchProvenanceDAO):
         self._add_struct(struct)
         super(MatchProvenance, self).__init__(raw=raw)
 
+    @property
+    def repository(self):
+        """
+        Repository id to which the match pertains
+
+        :return: repository id
+        """
+        return self._get_single("repo", coerce=dataobj.to_unicode())
+        # return self._get_single("repository", coerce=dataobj.to_unicode())
+        # 2016-06-29 TD : index type 'match_prov' mapping exception fix for ES 2.3.3
+
+    @repository.setter
+    def repository(self, val):
+        """
+        Set the repository id to which the match pertains
+
+        :param val: repository id
+        """
+        self._set_single("repo", val, coerce=dataobj.to_unicode())
+        # self._set_single("repository", val, coerce=dataobj.to_unicode())
+        # 2016-06-29 TD : index type 'match_prov' mapping exception fix for ES 2.3.3
+
+
+    # 2016-10-18 TD : additional field "bibid" --- start ---
+    #
+    @property
+    def bibid(self):
+        """
+        The repository EZB-Id to which the match pertains
+
+        :return: EZB-Id (or more general any 'readable' id...)
+        """
+        return self._get_single("bibid", coerce=dataobj.to_unicode())
+
+    @bibid.setter
+    def bibid(self, val):
+        """
+        Set the repository EZB-Id to which the match pertains
+
+        :param val: EZB-Id (or any more 'human' readable unique(!) repository id...)
+        """
+        self._set_single("bibid", val, coerce=dataobj.to_unicode())
+    #
+    # 2016-10-18 TD : additional field "bibid" --- end ---
+
+
+    # 2016-08-10 TD : add additional field "pub" --- start ---
+    #
+    @property
+    def publisher(self):
+        """
+        Publisher id to which the match pertains
+
+        :return: publisher id
+        """
+        return self._get_single("pub", coerce=dataobj.to_unicode())
+
+    @publisher.setter
+    def publisher(self, val):
+        """
+        Set the publisher id to which the match pertains
+
+        :param val: publisher id
+        """
+        self._set_single("pub", val, coerce=dataobj.to_unicode())
+    #
+    # 2016-08-10 TD : add additional field "pub" --- end ---
+
+    @property
+    def notification(self):
+        """
+        Notification id to which the match pertains
+
+        :return: notification id
+        """
+        return self._get_single("notification", coerce=dataobj.to_unicode())
+
+    @notification.setter
+    def notification(self, val):
+        """
+        Set the notification id to which the match pertains
+
+        :param val: notification id
+        """
+        self._set_single("notification", val, coerce=dataobj.to_unicode())
+
+    @property
+    def provenance(self):
+        """
+        List of match provenance events for the combination of the repository id and notification id
+        represented by this object
+
+        Provenance records are of the following structure:
+
+        ::
+
+            {
+                "source_field" : "<field from the configuration that matched>",
+                "term" : "<term from the configuration that matched>",
+                "notification_field" : "<field from the notification that matched>"
+                "matched" : "<text from the notification routing metadata that matched>",
+                "explanation" : "<any additional explanatory text to go with this match (e.g. description of levenstein criteria)>"
+            }
+
+        :return: list of provenance objects
+        """
+        return self._get_list("provenance")
+
+    def add_provenance(self, source_field, term, notification_field, matched, explanation):
+        """
+        add a provenance record to the existing list of provenances
+
+        :param source_field: the field from the repository configuration from which a match was drawn
+        :param term: the text from the repository configuration which matched
+        :param notification_field: the field from the notification that matched
+        :param matched: the text from the notification that matched
+        :param explanation: human readable description of the nature of the match
+        """
+        uc = dataobj.to_unicode()
+        obj = {
+            "source_field" : self._coerce(source_field, uc),
+            "term" : self._coerce(term, uc),
+            "notification_field" : self._coerce(notification_field, uc),
+            "matched" : self._coerce(matched, uc),
+            "explanation" : self._coerce(explanation, uc)
+        }
+        self._add_to_list("provenance", obj)
+
+    @property
+    def alliance(self):
+        """
+        The alliance license information that apply to the combination of the 
+        repository id and notification id represented by this object
+
+        The returned object is of the following structure:
+
+        ::
+            {
+                "name" : "<name of license as per entry in EZB>",
+                "id" : "<license_id>",
+                "issn" : "<issn (or eissn!) of the involved journal>,
+                "doi" : "<DOI of the involved article>,
+                "link" : "<url of license information (e.g. as given by EZB)>",
+                "embargo" : <number of month(s)> (integer)
+            }
+
+        :return: The alliance license information as a python dict object
+        """
+        return self._get_single("alliance")
+
+    @alliance.setter
+    def alliance(self, obj):
+        """
+        Set the alliance license object.
+
+        The object will be validated and types coerced as needed.
+
+        The supplied object should be structured as follows:
+
+        ::
+            {
+                "name" : "<name of license as per entry in EZB>",
+                "id" : "<license_id>",
+                "issn" : "<issn (or eissn!) of the involved journal>,
+                "doi" : "<DOI of the involved article>,
+                "link" : "<url of license information (e.g. as given by EZB)>",
+                "embargo" : <number of month(s)> (integer)
+            }
+
+        :param obj: the alliance license object as a dict
+        :return:
+        """
+        # validate the object structure quickly
+        allowed = ["name", "id", "issn", "doi", "link", "embargo"]
+        for k in list(obj.keys()):
+            if k not in allowed:
+                raise dataobj.DataSchemaException("Alliance license object must only contain the following keys: {x}".format(x=", ".join(allowed)))
+
+        # coerce the values of the keys
+        uc = dataobj.to_unicode()
+        it = dataobj.to_int()
+        for k in allowed:
+            if k in obj:
+                if k == "embargo":
+                    obj[k] = self._coerce(obj[k], it)
+                else:
+                    obj[k] = self._coerce(obj[k], uc)
+
+        # finally write it
+        self._set_single("alliance", obj)
+
+
 class RetrievalRecord(dataobj.DataObj, dao.RetrievalRecordDAO):
     """
-    {
-        "id" : "<opaque id for repository config record>",
-        "created_date" : "<date this notification was received>",
-        "last_updated" : "<last modification time - required by storage layer>",
+    Class to allow us to record a retrieval of a file for the purposes of later reporting
 
-        "repository" : "<user id of repository doing the retrieval>",
-        "notification" : "<id of the notification retrieved>",
-        "retrieval_date" : "<date the repository retrieved the record>",
-        "scope" : "<what the repository actually retrieved: notification, fulltext>"
-    }
+    DO NOT USE.
+
+    This class is not currently in use in the system, but may be activated later.  In the mean time,
+    you should ignore it!
     """
     def __init__(self, raw=None):
         struct = {
@@ -123,10 +588,17 @@ class RetrievalRecord(dataobj.DataObj, dao.RetrievalRecordDAO):
                 "id" : {"coerce" : "unicode"},
                 "created_date" : {"coerce" : "unicode"},
                 "last_updated" : {"coerce" : "unicode"},
-                "repository" : {"coerce" : "unicode"},
+                "repo" : {"coerce" : "unicode"},
+                # "repository" : {"coerce" : "unicode"},
+                # 2016-06-29 TD : index type 'retrieval'(???) mapping exception fix for ES 2.3.3
+                "pub" : {"coerce" : "unicode"},
+                # 2016-08-10 TD : add additional field for origin of notification (publisher)
                 "notification" : {"coerce" : "unicode"},
+                "payload" : {"coerce" : "unicode"},
+                # "content" : {"coerce" : "unicode"},
+                # 2016-09-01 TD : index type 'retrieval'(!) mapping exception fix for ES 2.3.3
                 "retrieval_date" : {"coerce" : "utcdatetime"},
-                "scope" : {"coerce" : "unicode", "allowed" : ["notification", "fulltext"]}
+                "scope" : {"coerce" : "unicode", "allowed_values" : ["notification", "fulltext"]}
             }
         }
 

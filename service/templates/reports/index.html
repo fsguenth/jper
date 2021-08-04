@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="visuallyhidden">Reports</h1>
+<div class="row cms">
+	<!-- <div class="col span-9 pull-1"> -->
+	<div class="col span-9">
+		{% if current_user.is_super %} 
+		<!--
+		<a href="/reports/update">
+			<button type="button" class="btn btn--3d btn--primary">Update&nbsp;detailed&nbsp;reports</button>
+		</a>
+		-->
+		<p></p>
+		{% endif %}
+		<h2><b>Detailed reports</b></h2>
+		<table>
+			<tr>
+				<th style="width:20%">Date</th>
+				<th style="width:55%">File</th>
+				<th style="width:15%">#Lines (header incl.)</th>
+				<th style="width:10%">Action</th>
+			</tr>
+			{% for fname,mtime,nline,yrmth in detailedlists %}
+			<tr>
+				<td>{{mtime}}</td>
+				<td><a href="/reports/{{fname}}">{{fname}}</a></td>
+				<!-- <p><a href="/reports/{{fname}}">{{fname}}</a></p> -->
+				<td align="right">{{nline}}</td>
+				<td><a href="/reports/update/{{yrmth}}">
+						<button type="button" class="btn btn--3d btn--primary">Update</button>
+					</a></td>
+			</tr>
+			{% endfor %}
+		</table>
+		<h2><b>Overall reports</b></h2>
+		<table>
+			<tr>
+				<th>Date</th>
+				<th>File</th>
+				<th>#Lines (header incl.)</th>
+			</tr>
+			{% for fname,mtime,nline,yrmth in grandtotals %}
+			<tr>
+				<td>{{mtime}}</td>
+				<td><a href="/reports/{{fname}}">{{fname}}</a></td>
+				<!-- <p><a href="/reports/{{fname}}">{{fname}}</a></p> -->
+				<td align="right">{{nline}}</td>
+			</tr>
+			{% endfor %}
+		</table>
+	</div>
+</div>
+{% endblock %}
+
+{% block extra_js_bottom %}
+{% endblock extra_js_bottom %}
