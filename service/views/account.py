@@ -190,6 +190,28 @@ def _download_request(repo_id=None, provider=False):
     return nbulk.json()
 
 
+def _sword_logs(repo_id):
+    """
+    Obtain the sword logs for the latest run along with the logs from each associated deposit record
+
+    :param repo_id: the repo id to limit the request to
+    :return: Sword log data
+    """
+    logs = None
+    try:
+        logs = models.RepositoryDepositLog().pull_by_id(repo_id)
+        deposit_record_logs = {}
+        if logs and logs.messages:
+            for msg in logs.messages:
+                if msg.get('deposit_record', None) and msg['deposit_record'] != "None":
+                    detailed_log = models.DepositRecord.pull(msg['deposit_record'])
+                    if detailed_log and detailed_log.messages:
+                        deposit_record_logs[msg['deposit_record']] = detailed_log.messages
+    except ParameterException as e:
+        return _bad_request(str(e))
+    return logs, deposit_record_logs
+
+
 def _validate_since():
     since = request.values.get("since", None)
     if since is None or since == "":
@@ -221,6 +243,54 @@ def _validate_page_size():
     return page_size
 
 
+def _get_notification_value(header, notification):
+    if header == 'id':
+        return notification.get('id', '')
+    elif header == 'Analysis Date':
+        return notification.get('analysis_date', '')
+    elif header == 'Send Date':
+        return notification.get('created_date', '')
+    elif header == 'Embargo':
+        return notification.get('embargo', {}).get('duration', '')
+    elif header == 'DOI':
+        identifiers = notification.get('metadata', {}).get('identifier', [])
+        for identifier in identifiers:
+            if identifier.get('type', '') == 'doi':
+                return identifier.get('id', '')
+    elif header == 'Publisher':
+        return notification.get('metadata', {}).get('publisher', '')
+    elif header == 'Title':
+        return notification.get('metadata', {}).get('title', '')
+    elif header == 'Publication Date':
+        return notification.get('metadata', {}).get('publication_date', '')
+    return ''
+
+
+def _notifications_for_display(results, table):
+    notifications = []
+    # header
+    header_row = ['id']
+    for header in table['header']:
+        if isinstance(header, list):
+            header_row.append(' / '.join(header))
+        else:
+            header_row.append(header)
+    notifications.append(header_row)
+    # results
+    for result in results.get('notifications', []):
+        row = {
+            'id': _get_notification_value('id', result)
+        }
+        for header in table['header']:
+            cell = []
+            val = _get_notification_value(header, result)
+            cell.append(val)
+            key = header.lower().replace(' ', '_')
+            row[key] = cell
+        notifications.append(row)
+    return notifications
+
+
 @blueprint.before_request
 def restrict():
     if current_user.is_anonymous:
@@ -232,9 +302,20 @@ def restrict():
 def index():
     if not current_user.is_super:
         abort(401)
-    users = [[i['_source']['id'], i['_source']['email'], i['_source'].get('role', [])] for i in
-             models.Account().query(q='*', size=10000).get('hits', {}).get('hits', [])]
-    return render_template('account/users.html', users=users)
+    users = []
+    for u in models.Account().query(q='*', size=10000).get('hits', {}).get('hits', []):
+        user = {
+            'id': u.get('_source', {}).get('id', ''),
+            'email': u.get('_source', {}).get('email', ''),
+            'role': u.get('_source', {}).get('role', [])
+        }
+        users.append(user)
+    sword_status = {}
+    for s in models.sword.RepositoryStatus().query(q='*', size=10000).get('hits', {}).get('hits', []):
+        acc_id = s.get('_source', {}).get('id')
+        if acc_id:
+            sword_status[acc_id] = s.get('_source', {}).get('status', '')
+    return render_template('account/users.html', users=users, sword_status=sword_status)
 
 
 # 2016-11-15 TD : enable download option ("csv", for a start...)
@@ -304,13 +385,14 @@ def details(repo_id):
         link += '/' + acc.id + '?since=01/06/2019&api_key=' + acc.data['api_key']
 
     results = json.loads(data)
+    data_to_display = _notifications_for_display(results, ntable)
 
     page_num = int(request.values.get("page", app.config.get("DEFAULT_LIST_PAGE_START", 1)))
     num_of_pages = int(math.ceil(results['total'] / results['pageSize']))
     if provider:
         return render_template('account/matching.html', repo=data, tabl=[json.dumps(mtable)],
                                num_of_pages=num_of_pages, page_num=page_num, link=link, date=date)
-    return render_template('account/details.html', repo=data, tabl=[json.dumps(ntable)],
+    return render_template('account/details.html', repo=data, results=data_to_display,
                            num_of_pages=num_of_pages, page_num=page_num, link=link, date=date)
 
 
@@ -366,6 +448,20 @@ def failing(provider_id):
     num_of_pages = int(math.ceil(results['total'] / results['pageSize']))
     return render_template('account/failing.html', repo=data, tabl=[json.dumps(ftable)], num_of_pages=num_of_pages,
                            page_num=page_num, link=link, date=date)
+
+
+@blueprint.route('/sword_logs/<repo_id>', methods=["GET"])
+def sword_logs(repo_id):
+    acc = models.Account.pull(repo_id)
+    if acc is None:
+        abort(404)
+    if not acc.has_role('repository'):
+        abort(404)
+
+    logs_data, deposit_record_logs = _sword_logs(repo_id)
+
+    return render_template('account/sword_log.html', logs_data=logs_data, deposit_record_logs=deposit_record_logs, account=acc,
+                           api_base_url=app.config.get("API_BASE_URL"))
 
 
 @blueprint.route("/configview", methods=["GET", "POST"])
@@ -439,7 +535,19 @@ def username(username):
             else:
                 flash('Account ' + acc.id + ' deleted')
             return redirect(url_for('.index'))
-    elif request.method == 'POST':
+
+    if acc.has_role('repository'):
+        repoconfig = models.RepositoryConfig.pull_by_repo(acc.id)
+        licenses = get_matching_licenses(acc.id)
+        license_ids = json.dumps([license['id'] for license in licenses])
+        sword_status = models.sword.RepositoryStatus.pull(acc.id)
+    else:
+        repoconfig = None
+        licenses = None
+        license_ids = None
+        sword_status = None
+
+    if request.method == 'POST':
         if current_user.id != acc.id and not current_user.is_super:
             abort(401)
 
@@ -449,25 +557,19 @@ def username(username):
         if 'password' in request.values and not request.values['password'].startswith('sha1'):
             if len(request.values['password']) < 8:
                 flash("Sorry. Password must be at least eight characters long", "error")
-                return render_template('account/user.html', account=acc)
+                return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
+                                       license_ids=license_ids, sword_status=sword_status)
             else:
                 acc.set_password(request.values['password'])
 
         acc.save()
         time.sleep(2)
         flash("Record updated", "success")
-        return render_template('account/user.html', account=acc)
-    elif current_user.id == acc.id or current_user.is_super:
-        if acc.has_role('repository'):
-            repoconfig = models.RepositoryConfig.pull_by_repo(acc.id)
-            licenses = get_matching_licenses(acc.id)
-            license_ids = json.dumps([license['id'] for license in licenses])
-        else:
-            repoconfig = None
-            licenses = None
-            license_ids = None
         return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
-                               license_ids=license_ids)
+                               license_ids=license_ids, sword_status=sword_status)
+    elif current_user.id == acc.id or current_user.is_super:
+        return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
+                               license_ids=license_ids, sword_status=sword_status)
     else:
         abort(404)
 
@@ -561,6 +663,10 @@ def repoinfo(username):
         acc.data['sword']['collection'] = request.values['sword_collection'].strip()
     else:
         acc.data['sword']['collection'] = ''
+    if request.values.get('sword_deposit_method', False):
+        acc.data['sword']['deposit_method'] = request.values['sword_deposit_method'].strip()
+    else:
+        acc.data['sword']['deposit_method'] = ''
 
     if request.values.get('packaging', False):
         acc.data['packaging'] = [s.strip() for s in request.values['packaging'].split(',')]
@@ -681,6 +787,34 @@ def changerole(username, role):
         return redirect(url_for('.username', username=username))
     else:
         abort(401)
+
+
+@blueprint.route('/<username>/sword_activate', methods=['POST'])
+def sword_activate(username):
+    if current_user.id != username and not current_user.is_super:
+        abort(401)
+    acc = models.Account.pull(username)
+    sword_status = models.sword.RepositoryStatus.pull(acc.id)
+    if sword_status and sword_status.status == 'failing':
+        sword_status.activate()
+        sword_status.save()
+    time.sleep(2)
+    flash('The sword connection has been activated.', "success")
+    return redirect(url_for('.username', username=username))
+
+
+@blueprint.route('/<username>/sword_deactivate', methods=['POST'])
+def sword_deactivate(username):
+    if current_user.id != username and not current_user.is_super:
+        abort(401)
+    acc = models.Account.pull(username)
+    sword_status = models.sword.RepositoryStatus.pull(acc.id)
+    if sword_status and sword_status.status in ['succeeding', 'problem']:
+        sword_status.deactivate()
+        sword_status.save()
+    time.sleep(2)
+    flash('The sword connection has been deactivated.', "success")
+    return redirect(url_for('.username', username=username))
 
 
 @blueprint.route('/<username>/matches')

@@ -20,38 +20,22 @@
     <title>DeepGreen Prototype</title>
 	<meta name="description" content="DeepGreen Prototype">
     <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
-	<!--[if gte mso 9]><xml>
-
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-
-    <link rel="shortcut icon" href="//ux-stg.jisc.ac.uk/favicon.ico">
-    <!-- Le HTML5 shim, for IE6-8 support of HTML elements -->
     <!--[if lt IE 9]>
       <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
     <![endif]-->
 
-
-  <!--    <link rel="stylesheet" type="text/css" href="{{url_for('static', filename='css/octopus.css')}}">
--->
-
     <!-- get the application's css -->
     <link rel="stylesheet" href="{{url_for('static', filename='css/service.css')}}"> 
-    <!-- ux.jisc styles and script head (includes jquery) -->
-    <!--[if IE]><![endif]-->
     <!--[if lte IE 8]>
-    <link rel="stylesheet" href="//ux.jisc.ac.uk/1.1.0/css/ux.jisc-1.1.0.style-oldie.min.css" media="all" />
     <script src="//cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.2/html5shiv.min.js"></script>
     <![endif]-->
-    <!--[if gt IE 8]><!-->
-    <!-- <link rel="stylesheet" href="//ux.jisc.ac.uk/1.1.0/css/ux.jisc-1.1.0.style.min.css" media="all" /> -->
-    <!--<![endif]-->
-    
+
     <!--- *******Please put main.css in your css folder ******* -->
-        <link rel="stylesheet" href="{{url_for('static', filename='css/jisc.css')}}">
-        <link rel="stylesheet" href="{{url_for('static', filename='css/fix.css')}}">
+    <link rel="stylesheet" href="{{url_for('static', filename='css/jisc.css')}}">
+    <link rel="stylesheet" href="{{url_for('static', filename='css/fix.css')}}">
     <link rel="stylesheet" href="{{url_for('static', filename='css/main.css')}}">
-        <link rel="stylesheet" href="{{url_for('static', filename='css/pretty-json.css')}}">
+    <link rel="stylesheet" href="{{url_for('static', filename='css/pretty-json.css')}}">
+    <link rel="stylesheet" href="{{url_for('static', filename='css/theme.green.min.css')}}" type="text/css" />
     
     <script type="text/javascript" src="/static/js/jquery-1.11.1.min.js"></script>
     <script type="text/javascript" src="/static/js/underscore-min.js"></script>
@@ -59,8 +43,9 @@
     <script type="text/javascript" src="/static/js/pretty-json-min.js"></script>
     <script type="text/javascript" src="/static/js/jquery.holder.js"></script>
     <script type="text/javascript" src="/static/js/jsonpath.min.js"></script>
-    
-    <script src="//ux.jisc.ac.uk/1.1.0/js/ux.jisc-1.1.0.script-head.min.js"></script>
+    <script type="text/javascript" src="/static/js/jquery.tablesorter.min.js"></script>
+    <script type="text/javascript" src="/static/js/jquery.tablesorter.widgets.min.js"></script>
+    <script type="text/javascript" src="/static/js/parser-date-iso8601.min.js"></script>
 </head>
 
 <body class='body-bare'>
@@ -78,8 +63,5 @@
 	{% block extra_js_bottom %}
     {% endblock extra_js_bottom %}
 	</main>
-	<script
-		src="https://ux.jisc.ac.uk/1.1.0/js/ux.jisc-1.1.0.script-foot.min.js">
-	</script>
 </body>
 </html>
