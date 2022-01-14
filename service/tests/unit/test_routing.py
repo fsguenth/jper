@@ -14,10 +14,7 @@ from octopus.modules.store import store
 from service.web import app
 from flask import url_for
 
-if app.config.get("DEEPGREEN_EZB_ROUTING",False):
-    from service import routing_deepgreen as routing
-else:
-    from service import routing
+from service import routing_deepgreen as routing
 from service import models, api, packages
 from service.tests import fixtures
 
@@ -30,6 +27,7 @@ from copy import deepcopy
 PACKAGE = "https://datahub.deepgreen.org/FilesAndJATS"
 TEST_FORMAT = "http://datahub.deepgreen.org/packages/OtherTestFormat"
 SIMPLE_ZIP = "http://purl.org/net/sword/package/SimpleZip"
+
 
 class TestRouting(ESTestCase):
     def setUp(self):
@@ -124,10 +122,10 @@ class TestRouting(ESTestCase):
 
     def test_05_author_match(self):
         match_set = [
-            ({"type": "orcid", "id" : "abcd"}, {"type" : "orcid", "id" : "ABCD"}, True),
-            ({"type": "orcid", "id" : "abcd"}, {"type" : "orcid", "id" : "zyx"}, False),
-            ({"type": "email", "id" : "abcd"}, {"type" : "orcid", "id" : "abcd"}, False),
-            ({"type": "email", "id" : "richard@here"}, {"type" : "orcid", "id" : "abcd"}, False)
+            ({"type": "orcid", "id": "abcd"}, {"type": "orcid", "id": "ABCD"}, True),
+            ({"type": "orcid", "id": "abcd"}, {"type": "orcid", "id": "zyx"}, False),
+            ({"type": "email", "id": "abcd"}, {"type": "orcid", "id": "abcd"}, False),
+            ({"type": "email", "id": "richard@here"}, {"type": "orcid", "id": "abcd"}, False)
         ]
         for ms in match_set:
             m = routing.author_match(ms[0], ms[1])
@@ -139,9 +137,9 @@ class TestRouting(ESTestCase):
 
     def test_06_author_string_match(self):
         match_set = [
-            ("abcd", {"type" : "orcid", "id" : "ABCD"}, True),
-            ("zyx", {"type" : "email", "id" : "zyx"}, True),
-            ("whatever", {"type" : "orcid", "id" : "abcd"}, False)
+            ("abcd", {"type": "orcid", "id": "ABCD"}, True),
+            ("zyx", {"type": "email", "id": "zyx"}, True),
+            ("whatever", {"type": "orcid", "id": "abcd"}, False)
         ]
         for ms in match_set:
             m = routing.author_string_match(ms[0], ms[1])
@@ -285,7 +283,7 @@ class TestRouting(ESTestCase):
         source = fixtures.NotificationFactory.routed_notification()
         routed = models.RoutedNotification(source)
         l = {
-            'url':'http://example.com',
+            'url': 'http://example.com',
             'access': 'public',
             'type': 'whatever',
             'format': 'whatever',
@@ -301,7 +299,8 @@ class TestRouting(ESTestCase):
                     assert link['access'] == 'public'
                     assert link['proxy']
                     nid = link['proxy']
-                elif nid and link['url'] == app.config.get("BASE_URL") + url_for("webapi.proxy_content", notification_id=routed.id, pid=nid):
+                elif nid and link['url'] == app.config.get("BASE_URL") + url_for("webapi.proxy_content",
+                                                                                 notification_id=routed.id, pid=nid):
                     assert link['access'] == 'router'
 
     def test_11_enhance_authors_projects(self):
@@ -431,7 +430,6 @@ class TestRouting(ESTestCase):
             elif n.get("name") == "EPSRC":
                 assert len(n.get("identifier", [])) == 1
 
-
     def test_40_match_success_no_postcode(self):
         # example routing metadata from a notification
         if app.config.get("EXTRACT_POSTCODES", None) == True:
@@ -456,35 +454,37 @@ class TestRouting(ESTestCase):
         for p in prov.provenance:
             # check that there's an explanation in all of them
             assert "explanation" in p
-            assert len(p.get("explanation")) > 0    # a non-zero length string
+            assert len(p.get("explanation")) > 0  # a non-zero length string
 
             # run through each match that we know should have happened
-            if p.get("source_field") == "domains":                          # domains
-                if p.get("notification_field") == "urls":                   ## URLs
+            if p.get("source_field") == "domains":  # domains
+                if p.get("notification_field") == "urls":  ## URLs
                     assert p.get("term") == "ucl.ac.uk"
                     assert p.get("matched") == "http://www.ucl.ac.uk"
                     check[0] = 1
-                elif p.get("notification_field") == "emails":               ## Emails
+                elif p.get("notification_field") == "emails":  ## Emails
                     assert p.get("term") == "ucl.ac.uk"
                     assert p.get("matched") == "someone@sms.ucl.ac.uk"
                     check[1] = 1
 
-            elif p.get("source_field") == "name_variants":                  # Name Variants
-                if p.get("notification_field") == "affiliations":           ## Affiliations
+            elif p.get("source_field") == "name_variants":  # Name Variants
+                if p.get("notification_field") == "affiliations":  ## Affiliations
                     assert p.get("term") == "UCL"
                     assert p.get("matched") == "UCL"
                     check[2] = 1
 
-            elif p.get("source_field") == "author_emails":                  # Author ID: Email
-                if p.get("notification_field") == "emails":                 ## Emails
+            elif p.get("source_field") == "author_emails":  # Author ID: Email
+                if p.get("notification_field") == "emails":  ## Emails
                     assert p.get("term") == "someone@sms.ucl.ac.uk"
                     assert p.get("matched") == "someone@sms.ucl.ac.uk"
                     check[3] = 1
 
-            elif p.get("source_field") == "author_ids":                     # All Author IDs
-                if p.get("notification_field") == "author_ids":             ## All Author IDs
-                    assert p.get("term") in ["name: Richard Jones", "name: Mark MacGillivray", "email: someone@sms.ucl.ac.uk"]
-                    assert p.get("matched") in ["name: Richard Jones", "name: Mark MacGillivray", "email: someone@sms.ucl.ac.uk"]
+            elif p.get("source_field") == "author_ids":  # All Author IDs
+                if p.get("notification_field") == "author_ids":  ## All Author IDs
+                    assert p.get("term") in ["name: Richard Jones", "name: Mark MacGillivray",
+                                             "email: someone@sms.ucl.ac.uk"]
+                    assert p.get("matched") in ["name: Richard Jones", "name: Mark MacGillivray",
+                                                "email: someone@sms.ucl.ac.uk"]
                     if check[4] == 0:
                         check[4] = 1
                     elif check[5] == 0:
@@ -492,34 +492,34 @@ class TestRouting(ESTestCase):
                     elif check[6] == 0:
                         check[6] = 1
 
-            elif p.get("source_field") == "grants":                         # Grants
-                if p.get("notification_field") == "grants":                 ## Grants
+            elif p.get("source_field") == "grants":  # Grants
+                if p.get("notification_field") == "grants":  ## Grants
                     assert p.get("term") == "BB/34/juwef"
                     assert p.get("matched") == "BB/34/juwef"
                     check[7] = 1
 
-            elif p.get("source_field") == "strings":                        # Strings
-                if p.get("notification_field") == "urls":                   ## URLs
+            elif p.get("source_field") == "strings":  # Strings
+                if p.get("notification_field") == "urls":  ## URLs
                     assert p.get("term") == "https://www.ed.ac.uk/"
                     assert p.get("matched") == "http://www.ed.ac.uk"
                     check[8] = 1
 
-                elif p.get("notification_field") == "emails":               ## Emails
+                elif p.get("notification_field") == "emails":  ## Emails
                     assert p.get("term") == "richard@EXAMPLE.com"
                     assert p.get("matched") == "richard@example.com"
                     check[9] = 1
 
-                elif p.get("notification_field") == "affiliations":         ## Affiliations
+                elif p.get("notification_field") == "affiliations":  ## Affiliations
                     assert p.get("term") == "cottage labs"
                     assert p.get("matched") == "Cottage Labs"
                     check[10] = 1
 
-                elif p.get("notification_field") == "author_ids":           ## All Author IDs
+                elif p.get("notification_field") == "author_ids":  ## All Author IDs
                     assert p.get("term") == "AAAA-0000-1111-BBBB"
                     assert p.get("matched") == "orcid: aaaa-0000-1111-bbbb"
                     check[11] = 1
 
-                elif p.get("notification_field") == "grants":               ## Grants
+                elif p.get("notification_field") == "grants":  ## Grants
                     assert p.get("term") == "bb/34/juwef"
                     assert p.get("matched") == "BB/34/juwef"
                     check[12] = 1
@@ -549,35 +549,37 @@ class TestRouting(ESTestCase):
         for p in prov.provenance:
             # check that there's an explanation in all of them
             assert "explanation" in p
-            assert len(p.get("explanation")) > 0    # a non-zero length string
+            assert len(p.get("explanation")) > 0  # a non-zero length string
 
             # run through each match that we know should have happened
-            if p.get("source_field") == "domains":                          # domains
-                if p.get("notification_field") == "urls":                   ## URLs
+            if p.get("source_field") == "domains":  # domains
+                if p.get("notification_field") == "urls":  ## URLs
                     assert p.get("term") == "ucl.ac.uk"
                     assert p.get("matched") == "http://www.ucl.ac.uk"
                     check[0] = 1
-                elif p.get("notification_field") == "emails":               ## Emails
+                elif p.get("notification_field") == "emails":  ## Emails
                     assert p.get("term") == "ucl.ac.uk"
                     assert p.get("matched") == "someone@sms.ucl.ac.uk"
                     check[1] = 1
 
-            elif p.get("source_field") == "name_variants":                  # Name Variants
-                if p.get("notification_field") == "affiliations":           ## Affiliations
+            elif p.get("source_field") == "name_variants":  # Name Variants
+                if p.get("notification_field") == "affiliations":  ## Affiliations
                     assert p.get("term") == "UCL"
                     assert p.get("matched") == "UCL"
                     check[2] = 1
 
-            elif p.get("source_field") == "author_emails":                  # Author ID: Email
-                if p.get("notification_field") == "emails":                 ## Emails
+            elif p.get("source_field") == "author_emails":  # Author ID: Email
+                if p.get("notification_field") == "emails":  ## Emails
                     assert p.get("term") == "someone@sms.ucl.ac.uk"
                     assert p.get("matched") == "someone@sms.ucl.ac.uk"
                     check[3] = 1
 
-            elif p.get("source_field") == "author_ids":                     # All Author IDs
-                if p.get("notification_field") == "author_ids":             ## All Author IDs
-                    assert p.get("term") in ["name: Richard Jones", "name: Mark MacGillivray", "email: someone@sms.ucl.ac.uk"]
-                    assert p.get("matched") in ["name: Richard Jones", "name: Mark MacGillivray", "email: someone@sms.ucl.ac.uk"]
+            elif p.get("source_field") == "author_ids":  # All Author IDs
+                if p.get("notification_field") == "author_ids":  ## All Author IDs
+                    assert p.get("term") in ["name: Richard Jones", "name: Mark MacGillivray",
+                                             "email: someone@sms.ucl.ac.uk"]
+                    assert p.get("matched") in ["name: Richard Jones", "name: Mark MacGillivray",
+                                                "email: someone@sms.ucl.ac.uk"]
                     if check[4] == 0:
                         check[4] = 1
                     elif check[5] == 0:
@@ -585,45 +587,45 @@ class TestRouting(ESTestCase):
                     elif check[6] == 0:
                         check[6] = 1
 
-            elif p.get("source_field") == "postcodes":                      # Postcodes
-                if p.get("notification_field") == "postcodes":              ## Postcodes
+            elif p.get("source_field") == "postcodes":  # Postcodes
+                if p.get("notification_field") == "postcodes":  ## Postcodes
                     assert p.get("term") == "SW1 0AA"
                     assert p.get("matched") == "SW1 0AA"
                     check[7] = 1
 
-            elif p.get("source_field") == "grants":                         # Grants
-                if p.get("notification_field") == "grants":                 ## Grants
+            elif p.get("source_field") == "grants":  # Grants
+                if p.get("notification_field") == "grants":  ## Grants
                     assert p.get("term") == "BB/34/juwef"
                     assert p.get("matched") == "BB/34/juwef"
                     check[8] = 1
 
-            elif p.get("source_field") == "strings":                        # Strings
-                if p.get("notification_field") == "urls":                   ## URLs
+            elif p.get("source_field") == "strings":  # Strings
+                if p.get("notification_field") == "urls":  ## URLs
                     assert p.get("term") == "https://www.ed.ac.uk/"
                     assert p.get("matched") == "http://www.ed.ac.uk"
                     check[9] = 1
 
-                elif p.get("notification_field") == "emails":               ## Emails
+                elif p.get("notification_field") == "emails":  ## Emails
                     assert p.get("term") == "richard@EXAMPLE.com"
                     assert p.get("matched") == "richard@example.com"
                     check[10] = 1
 
-                elif p.get("notification_field") == "affiliations":         ## Affiliations
+                elif p.get("notification_field") == "affiliations":  ## Affiliations
                     assert p.get("term") == "cottage labs"
                     assert p.get("matched") == "Cottage Labs"
                     check[11] = 1
 
-                elif p.get("notification_field") == "author_ids":           ## All Author IDs
+                elif p.get("notification_field") == "author_ids":  ## All Author IDs
                     assert p.get("term") == "AAAA-0000-1111-BBBB"
                     assert p.get("matched") == "orcid: aaaa-0000-1111-bbbb"
                     check[12] = 1
 
-                elif p.get("notification_field") == "postcodes":            ## Postcodes
+                elif p.get("notification_field") == "postcodes":  ## Postcodes
                     assert p.get("term") == "eh235tz"
                     assert p.get("matched") == "EH23 5TZ"
                     check[13] = 1
 
-                elif p.get("notification_field") == "grants":               ## Grants
+                elif p.get("notification_field") == "grants":  ## Grants
                     assert p.get("term") == "bb/34/juwef"
                     assert p.get("matched") == "BB/34/juwef"
                     check[14] = 1
@@ -717,7 +719,8 @@ class TestRouting(ESTestCase):
         # 2. Creation of metadata + zip content
         notification = fixtures.APIFactory.incoming()
         del notification["links"]
-        del notification["metadata"]["type"]    # so that we can test later that it gets added with the metadata enhancement
+        # so that we can test later that it gets added with the metadata enhancement
+        del notification["metadata"]["type"]
         filepath = fixtures.PackageFactory.example_package_path()
         with open(filepath, 'rb') as f:
             note = api.JPER.create_notification(acc1, notification, f)
