@@ -2,15 +2,19 @@
 Module which handles all the routing mechanics to convert UnroutedNotifications into either
 RoutedNotifications or FailedNotifications
 """
-from octopus.lib import dates
-from service import packages, models
-from octopus.core import app
-from flask import url_for
+import re
+import unicodedata
+import uuid
 from copy import deepcopy
 from datetime import datetime
-import uuid, re
-import unicodedata
+
+from flask import url_for
 from werkzeug.routing import BuildError
+
+from octopus.core import app
+from octopus.lib import dates
+from service import packages, models
+
 
 class RoutingException(Exception):
     """
@@ -84,10 +88,12 @@ def _route(unrouted):
     if issn_data is not None and len(issn_data) > 0 and publ_date is not None:
         dt = datetime.strptime(publ_date, "%Y-%m-%dT%H:%M:%SZ")
         publ_year = str(dt.year)
-        app.logger.debug("Routing - Notification:{y} provides issn_data:{x} and publ_year:{w}".format(y=unrouted.id, x=issn_data, w=publ_year))
+        app.logger.debug("Routing - Notification:{y} provides issn_data:{x} "
+                         "and publ_year:{w}".format(y=unrouted.id, x=issn_data, w=publ_year))
     else:
         routing_reason = "No ISSN/EISSN nor publication date found."
-        app.logger.debug("Routing - Notification:{y} includes no ISSN or no publ_year in metatdata".format(y=unrouted.id, x=issn_data))
+        app.logger.debug("Routing - Notification:{y} includes no ISSN "
+                         "or no publ_year in metatdata".format(y=unrouted.id, x=issn_data))
         issn_data = []
 
     # Extract doi
@@ -110,8 +116,8 @@ def _route(unrouted):
     for issn in issn_data:
         # are there licenses stored for this ISSN?
         # 2016-10-12 TD : an ISSN could appear in more than one license !
-        lics = models.License.pull_by_journal_id(issn) # matches issn, eissn, doi, etc.
-        if lics is None: # nothing found at all...
+        lics = models.License.pull_by_journal_id(issn)  # matches issn, eissn, doi, etc.
+        if lics is None:  # nothing found at all...
             continue
         for lic in lics:
             # lic_data includes only valid license for the issn.
@@ -167,7 +173,10 @@ def _route(unrouted):
         app.logger.debug("Routing - Notification:{y} al_repos:{x}".format(y=unrouted.id, x=al_repos))
     else:
         routing_reason = "No (active!) qualified repositories."
-        app.logger.debug("Routing - Notification {y} No (active!) qualified repositories currently found to receive this notification.  Notification will not be routed!".format(y=unrouted.id))
+        app.logger.debug(
+            "Routing - Notification {y} No (active!) qualified repositories "
+            "currently found to receive this notification.  "
+            "Notification will not be routed!".format(y=unrouted.id))
     # 2016-09-08 TD : end of checking alliance (and probably other!) license legitimation(s)
 
     # iterate through all the repository configs, collecting match provenance and id information
@@ -195,17 +204,17 @@ def _route(unrouted):
             prov.notification = unrouted.id
             match(match_data, rc, prov, repo)
             if len(prov.provenance) > 0:
-                app.logger.debug("Routing - Notification:{y} successfully matched Repository:{x}".format(y=unrouted.id,
-                                                                                                          x=repo))
+                app.logger.debug("Routing - Notification:{y} successfully matched Repository:{x}"
+                                 .format(y=unrouted.id, x=repo))
                 prov.save()
                 match_ids.append(repo)
-                app.logger.debug(
-                    "Routing - Provenance:{z} written for Notification:{y} for match to Repisitory:{x}".format(
-                        x=prov.repository,
-                        y=unrouted.id,
-                        z=prov.id))
+                app.logger.debug("Routing - Provenance:{z} written for Notification:{y} for match to Repisitory:{x}"
+                                 .format(x=prov.repository,
+                                         y=unrouted.id,
+                                         z=prov.id))
             else:
-                app.logger.debug("Routing - Notification:{y} did not match Repository:{x}".format(y=unrouted.id, x=repo))
+                app.logger.debug("Routing - Notification:{y} did not match Repository:{x}"
+                                 .format(y=unrouted.id, x=repo))
 
     # except esprit.tasks.ScrollException as e:
     # 2016-09-08 TD : replace ScrollException by more general Exception type as .scroll() is no longer used here (see above)
@@ -235,7 +244,7 @@ def _route(unrouted):
             routed.issn_data = "None"
         for pl in pack_links:
             routed.add_link(pl.get("url"), pl.get("type"), pl.get("format"), pl.get("access"), pl.get("packaging"))
-        routed.repositories = list(set(match_ids)) # make them unique
+        routed.repositories = list(set(match_ids))  # make them unique
         routed.analysis_date = dates.now()
         if metadata is not None:
             enhance(routed, metadata)
@@ -338,7 +347,7 @@ def match(notification_data, repository_config, provenance, acc_id):
                         m = fn(rprop, mprop)
                     else:
                         m = fn(rprop, mprop)
-                    if m is not False: # it will be a string then
+                    if m is not False:  # it will be a string then
                         matched = True
                         # convert the values that have matched to string values suitable for provenance
                         rval = repo_property_values.get(repo_property)(
@@ -675,7 +684,8 @@ def get_current_license_data(lic, publ_year, issn, doi):
 def license_included(urid, lic_data, rc):
     lic = lic_data.get('id', None)
     if rc and lic and lic in rc.excluded_license:
-        reason = "Routing - Notification {y} License {x} is excluded by repository.  Notification will not be routed!".format(y=urid, x=lic)
+        reason = "Routing - Notification {y} License {x} is excluded by repository.  " \
+                 "Notification will not be routed!".format(y=urid, x=lic)
         app.logger.debug(reason)
         return False
     reason = "Routing - Notification {y} license {x} is not excluded by repository.".format(y=urid, x=lic)
@@ -931,9 +941,11 @@ def _normalise(s):
 def has_match_all(acc_id):
     acc = models.Account.pull(acc_id)
     if acc.has_role('match_all'):
-        app.logger.debug("Routing: User account {x} has role match all, so no affiliation match needed".format(x=acc_id))
+        app.logger.debug("Routing: User account {x} has role match all, "
+                         "so no affiliation match needed".format(x=acc_id))
         return "Repository has role 'match_all'. Matching on all affiliations."
     return False
+
 
 ####################################################
 # Functions for turning objects into their string representations
