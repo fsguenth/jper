@@ -2,11 +2,13 @@
 Module which handles all the routing mechanics to convert UnroutedNotifications into either
 RoutedNotifications or FailedNotifications
 """
+import itertools
 import re
 import unicodedata
 import uuid
 from copy import deepcopy
 from datetime import datetime
+from typing import Callable, Union
 
 from flask import url_for
 from werkzeug.routing import BuildError
@@ -14,6 +16,9 @@ from werkzeug.routing import BuildError
 from octopus.core import app
 from octopus.lib import dates
 from service import packages, models
+
+MatchResult = Union[str, bool]
+MatchFn = Callable[[str, any], MatchResult]
 
 
 class RoutingException(Exception):
@@ -282,7 +287,7 @@ def match(notification_data, repository_config, provenance, acc_id):
     md = notification_data
     rc = repository_config
 
-    match_algorithms = {
+    match_algorithms: dict[str, dict[str, MatchFn]] = {
         "domains": {
             "urls": domain_url,
             "emails": domain_email
@@ -327,7 +332,6 @@ def match(notification_data, repository_config, provenance, acc_id):
     # do the required matches
     matched = False
     check_match_all = True
-    match_affiliation = True
     for repo_property, sub in match_algorithms.items():
         for match_property, fn in sub.items():
             # NEW FEATURE
@@ -338,25 +342,25 @@ def match(notification_data, repository_config, provenance, acc_id):
                 m = has_match_all(acc_id)
                 check_match_all = False
                 if m is not False:
-                    match_affiliation = False
                     matched = True
                     provenance.add_provenance(repo_property, "", match_property, "", m)
-            for rprop in getattr(rc, repo_property):
-                for mprop in getattr(md, match_property):
-                    if match_property == 'affiliations' and match_affiliation:
-                        m = fn(rprop, mprop)
-                    else:
-                        m = fn(rprop, mprop)
-                    if m is not False:  # it will be a string then
-                        matched = True
-                        # convert the values that have matched to string values suitable for provenance
-                        rval = repo_property_values.get(repo_property)(
-                            rprop) if repo_property in repo_property_values else rprop
-                        mval = match_property_values.get(match_property)(
-                            mprop) if match_property in match_property_values else mprop
 
-                        # record the provenance
-                        provenance.add_provenance(repo_property, rval, match_property, mval, m)
+            rc_md_props_cases = itertools.product(getattr(rc, repo_property),
+                                                  getattr(md, match_property))
+            rc_md_props_cases = ((rprop, mprop, fn(rprop, mprop))
+                                 for rprop, mprop in rc_md_props_cases)
+            rc_md_props_cases = (case for case in rc_md_props_cases if case[2] is not False)
+            for rprop, mprop, match_msg in rc_md_props_cases:
+                matched = True
+
+                # convert the values that have matched to string values suitable for provenance
+                rval = (repo_property_values.get(repo_property)(rprop)
+                        if repo_property in repo_property_values else rprop)
+                mval = (match_property_values.get(match_property)(mprop)
+                        if match_property in match_property_values else mprop)
+
+                # record the provenance
+                provenance.add_provenance(repo_property, rval, match_property, mval, match_msg)
 
     # if none of the required matches hit, then no need to look at the optional refinements
     if not matched:
@@ -693,7 +697,7 @@ def license_included(urid, lic_data, rc):
     return True
 
 
-def domain_url(domain, url):
+def domain_url(domain, url) -> MatchResult:
     """
     normalise the domain: strip prefixes and URL paths.  If either ends with the other, it is a match
 
@@ -727,7 +731,7 @@ def domain_url(domain, url):
     return False
 
 
-def domain_email(domain, email):
+def domain_email(domain, email) -> MatchResult:
     """
     normalise the domain: strip prefixes an URL paths.  Normalise the email: strip everything before @.  If either ends with the other it is a match
 
@@ -779,7 +783,7 @@ def domain_email(domain, email):
     return False
 
 
-def author_match(author_obj_1, author_obj_2):
+def author_match(author_obj_1, author_obj_2) -> MatchResult:
     """
     Match two author objects against eachother
 
@@ -802,7 +806,7 @@ def author_match(author_obj_1, author_obj_2):
     return False
 
 
-def author_string_match(author_string, author_obj):
+def author_string_match(author_string, author_obj) -> MatchResult:
     """
     Match an arbitrary string against the id in the author object
 
@@ -841,7 +845,7 @@ def postcode_match(pc1, pc2):
     return False
 
 
-def exact_substring(s1, s2):
+def exact_substring(s1, s2) -> MatchResult:
     """
     normalised s1 must be an exact substring of normalised s2
 
@@ -892,7 +896,7 @@ def exact_substring(s1, s2):
     return False
 
 
-def exact(s1, s2):
+def exact(s1, s2) -> MatchResult:
     """
     normalised s1 must be identical to normalised s2
 
