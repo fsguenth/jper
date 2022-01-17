@@ -29,6 +29,14 @@ TEST_FORMAT = "http://datahub.deepgreen.org/packages/OtherTestFormat"
 SIMPLE_ZIP = "http://purl.org/net/sword/package/SimpleZip"
 
 
+def create_test_acc__resp_a() -> models.Account:
+    acc1 = models.Account()
+    acc1.add_packaging(SIMPLE_ZIP)
+    acc1.add_role('repository')
+    acc1.save()
+    return acc1
+
+
 class TestRouting(ESTestCase):
     def setUp(self):
         self.store_impl = app.config.get("STORE_IMPL")
@@ -446,7 +454,7 @@ class TestRouting(ESTestCase):
 
         prov = models.MatchProvenance()
 
-        m = routing.match(md, rc, prov)
+        m = routing.match(md, rc, prov, create_test_acc__resp_a().id)
         assert m is True
         assert len(prov.provenance) == 13
         check = [0] * 13
@@ -541,7 +549,7 @@ class TestRouting(ESTestCase):
 
         prov = models.MatchProvenance()
 
-        m = routing.match(md, rc, prov)
+        m = routing.match(md, rc, prov, create_test_acc__resp_a().id)
         assert m is True
         assert len(prov.provenance) == 15
         check = [0] * 15
@@ -644,7 +652,7 @@ class TestRouting(ESTestCase):
 
         prov = models.MatchProvenance()
 
-        m = routing.match(md, rc, prov)
+        m = routing.match(md, rc, prov, create_test_acc__resp_a().id)
         assert m is False
         assert len(prov.provenance) == 0
 
