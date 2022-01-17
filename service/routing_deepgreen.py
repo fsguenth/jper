@@ -103,12 +103,7 @@ def _route(unrouted):
 
     # Extract doi
     doi = metadata.get_identifiers("doi")
-    if doi is None:
-        doi = "unknown"
-    elif len(doi) == 0:
-        doi = "unknown"
-    else:
-        doi = doi[0]
+    doi = doi[0] if doi else "unknown"
 
     bibids = list(set(models.Account.pull_all_repositories()))
     # NEW FEATURE
@@ -190,11 +185,13 @@ def _route(unrouted):
         # for rc in models.RepositoryConfig.scroll(page_size=10, keepalive="1m"):
         # 2016-09-08 TD : iterate through all _qualified_ repositories by the current alliance license
         for repo, lic_data, bibid in al_repos:
+            app.logger.debug(f'Routing - working for entry [{repo}][{lic_data}][{bibid}] ')
             rc = models.RepositoryConfig.pull_by_repo(repo)
             if rc is None:
+                app.logger.debug(f'Routing - repository_conf not found, use default')
                 rc = models.RepositoryConfig()
-            app.logger.debug(
-                "Routing - Notification:{y} matching against Repository:{x}".format(y=unrouted.id, x=repo))
+            app.logger.debug("Routing - Notification:{y} matching against Repository:{x}"
+                             .format(y=unrouted.id, x=repo))
             # NEW FEATURE
             # Does repository want articles for this license?
             if not license_included(unrouted.id, lic_data, rc):
