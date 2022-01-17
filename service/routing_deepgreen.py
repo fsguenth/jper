@@ -360,7 +360,7 @@ def match(noti_data: models.RoutingMetadata,
         "author_ids": author_id_string
     }
 
-    new_matched_prov_data_list: list[MatchedProvenanceData] = []
+    new_prov_list: list[MatchedProvenanceData] = []
 
     # NEW FEATURE
     # Check if repository has role match_all'
@@ -371,31 +371,31 @@ def match(noti_data: models.RoutingMetadata,
         if prop_pair.match_prop == 'affiliations':
             match_msg = has_match_all(acc_id)
             if match_msg is not False:
-                new_matched_prov_data_list.append(MatchedProvenanceData(prop_pair.repo_prop, '',
-                                                                        prop_pair.match_prop, '',
-                                                                        match_msg))
+                new_prov_list.append(MatchedProvenanceData(prop_pair.repo_prop, '',
+                                                           prop_pair.match_prop, '',
+                                                           match_msg))
 
     # do the required matches
     prop_pair_list = _yield_repo_match_prop_pair(match_algorithms)
-    _prov_list = (create_matched_provenance_data_list(noti_data, repo_conf,
-                                                      prop_pair.repo_prop,
-                                                      prop_pair.match_prop,
-                                                      prop_pair.match_fn)
-                  for prop_pair in prop_pair_list)
-    _prov_list = itertools.chain.from_iterable(_prov_list)
-    for prov in _prov_list:
+    todo_prov_list = (create_matched_provenance_data_list(noti_data, repo_conf,
+                                                          prop_pair.repo_prop,
+                                                          prop_pair.match_prop,
+                                                          prop_pair.match_fn)
+                      for prop_pair in prop_pair_list)
+    todo_prov_list = itertools.chain.from_iterable(todo_prov_list)
+    for prov in todo_prov_list:
         prov: MatchedProvenanceData
 
         # convert the values that have matched to string values suitable for provenance
         prov.repo_val = repo_val_factory_map.get(prov.repo_prop, _no_val_change)(prov.repo_val)
         prov.match_val = match_val_factory_map.get(prov.match_prop, _no_val_change)(prov.match_val)
 
-        new_matched_prov_data_list.append(prov)
+        new_prov_list.append(prov)
 
     # if none of the required matches hit, then no need to look at the optional refinements
-    if new_matched_prov_data_list:
+    if new_prov_list:
         # record the provenance
-        add_all_provenance(provenance, new_matched_prov_data_list)
+        add_all_provenance(provenance, new_prov_list)
     else:
         app.logger.debug('stop matching [general], none of the required matches hit ')
         return False
@@ -410,8 +410,7 @@ def match(noti_data: models.RoutingMetadata,
 
     for prop in refinement_props:
         prov_list = create_matched_provenance_data_list(noti_data, repo_conf,
-                                                        prop, prop,
-                                                        exact)
+                                                        prop, prop, exact)
         prov_list = list(prov_list)
 
         if prov_list:
