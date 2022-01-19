@@ -159,18 +159,13 @@ class PackageManager(object):
         pm = PackageFactory.incoming(format)
 
         # list the stored file and determine which are the metadata files
-        remotes = storage_manager.list(store_id)
         mdfs = pm.metadata_names()
-        mds = []
-        for r in remotes:
-            if r in mdfs:
-                mds.append(r)
+        mds = (r for r in storage_manager.list(store_id) if r in mdfs)
 
         # create a list of tuples of filenames and contents
-        handles = []
-        for r in mds:
-            fh = storage_manager.get(store_id, r)
-            handles.append((r, fh))
+        handles = [
+            (r, storage_manager.get(store_id, r),) for r in mds
+        ]
 
         # create the specific package manager around the new metadata (replacing the old instance)
         pm = PackageFactory.incoming(format, metadata_files=handles)
