@@ -7,20 +7,21 @@ File "jper/src/jper/service/routing_deepgreen.py", line 974, in _normalise
 #                 all sorts of diacritical signs
 # s = unicodedata.normalize('NFD',s)
 """
+import os
+import time
+import unittest
+from copy import deepcopy
+from datetime import datetime
 
-from octopus.modules.es.testindex import ESTestCase
-from octopus.lib import paths
-from octopus.modules.store import store
-from service.web import app
 from flask import url_for
 
-from service import routing_deepgreen as routing
+from octopus.lib import paths
+from octopus.modules.es.testindex import ESTestCase
+from octopus.modules.store import store
 from service import models, api, packages
+from service import routing_deepgreen as routing
 from service.tests import fixtures
-
-from datetime import datetime
-import time, os
-from copy import deepcopy
+from service.web import app
 
 ## PACKAGE = "https://pubrouter.jisc.ac.uk/FilesAndJATS"
 ## TEST_FORMAT = "http://router.jisc.ac.uk/packages/OtherTestFormat"
@@ -655,6 +656,67 @@ class TestRouting(ESTestCase):
         m = routing.match(md, rc, prov, create_test_acc__resp_a().id)
         assert m is False
         assert len(prov.provenance) == 0
+
+    def test_match__normal_cases(self):
+
+        expected_match = "111 __key__ 111"
+
+        notification_data: models.RoutingMetadata = models.RoutingMetadata({
+            'emails': ['ggg@abc.om'],
+            'affiliations': [
+                expected_match,
+                "111 gg 111",
+            ],
+            'keywords': ['keyword_a', 'keyword_b', ],
+        })
+
+        repository_config: models.RepositoryConfig = models.RepositoryConfig({
+            'name_variants': ['__key__', ],
+        })
+
+        provenance: models.MatchProvenance = models.MatchProvenance()
+
+        acc1 = create_test_acc__resp_a()
+
+        # assert before run
+        self.assertEqual(len(provenance.provenance), 0)
+
+        # run
+        result = routing.match(notification_data, repository_config, provenance, acc1.id)
+
+        # assert after run
+        self.assertTrue(result)
+        self.assertEqual(len(provenance.provenance), 1)
+        self.assertEqual(provenance.provenance[0]['notification_field'], 'affiliations', )
+        self.assertEqual(provenance.provenance[0]['matched'], expected_match, )
+
+    def test_match__affiliations_not_match(self):
+
+        notification_data: models.RoutingMetadata = models.RoutingMetadata({
+            'emails': ['ggg@abc.om'],
+            'affiliations': [
+                'random value',
+                "111 gg 111",
+            ],
+            'keywords': ['keyword_a', 'keyword_b', ],
+        })
+
+        repository_config: models.RepositoryConfig = models.RepositoryConfig({
+            'name_variants': ['__key__', ],
+        })
+
+        provenance: models.MatchProvenance = models.MatchProvenance()
+
+        # assert before run
+        self.assertEqual(len(provenance.provenance), 0)
+
+        # run
+        result = routing.match(notification_data, repository_config, provenance,
+                               create_test_acc__resp_a().id)
+
+        # assert after run
+        self.assertFalse(result)
+        self.assertEqual(len(provenance.provenance), 0)
 
     def test_97_routing_success_metadata(self):
         # start a timer so we can check the analysed date later
