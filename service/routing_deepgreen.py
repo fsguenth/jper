@@ -189,7 +189,7 @@ def _route(unrouted):
             app.logger.debug(f'Routing - working for entry [{repo}][{lic_data}][{bibid}] ')
             rc = models.RepositoryConfig.pull_by_repo(repo)
             if rc is None:
-                app.logger.debug(f'Routing - repository_conf not found, use default')
+                app.logger.warning(f'Routing - repository_conf not found, use default')
                 rc = models.RepositoryConfig()
             app.logger.debug("Routing - Notification:{y} matching against Repository:{x}"
                              .format(y=unrouted.id, x=repo))
@@ -272,7 +272,7 @@ def _no_val_change(val):
 
 
 @dataclasses.dataclass
-class RepoMatchPropPair:
+class MatchAlgorithm:
     repo_prop: str
     match_prop: str
     match_fn: MatchFn
@@ -291,33 +291,7 @@ class MatchedProvenanceData:
     match_msg: str
 
 
-def _yield_repo_match_prop_pair(match_algorithms: dict) -> Iterable[RepoMatchPropPair]:
-    for repo_prop, sub in match_algorithms.items():
-        for match_prop, fn in sub.items():
-            yield RepoMatchPropPair(repo_prop, match_prop, fn)
-
-
-def match(noti_data: models.RoutingMetadata,
-          repo_conf: models.RepositoryConfig,
-          provenance: models.MatchProvenance,
-          acc_id: str):
-    """
-    Match the incoming notification data, to the repository config and determine
-    if there is a match.
-
-    If there is a match, all criteria for the match will be added to the provenance
-    object
-
-    :param noti_data:   models.RoutingMetadata
-    :param repo_conf:   models.RepositoryConfig
-    :param provenance:          models.MatchProvenance
-    :param acc_id:              Account id matching the bib_id
-    :return:  True if there was a match, False if not
-    """
-    # just to give us a short-hand without compromising the useful names in the method sig
-    md = notification_data
-    rc = repository_config
-
+def _yield_match_algorithm() -> Iterable[MatchAlgorithm]:
     match_algorithms: dict[str, dict[str, MatchFn]] = {
         "domains": {
             "urls": domain_url,
@@ -352,13 +326,35 @@ def match(noti_data: models.RoutingMetadata,
         }
         match_algorithms["strings"]["postcodes"] = postcode_match
 
-    repo_val_factory_map = {
-        "author_ids": author_id_string
-    }
+    for repo_prop, sub in match_algorithms.items():
+        for match_prop, fn in sub.items():
+            yield MatchAlgorithm(repo_prop, match_prop, fn)
 
-    match_val_factory_map = {
-        "author_ids": author_id_string
-    }
+
+def match(noti_data: models.RoutingMetadata,
+          repo_conf: models.RepositoryConfig,
+          provenance: models.MatchProvenance,
+          acc_id: str):
+    """
+    Match the incoming notification data, to the repository config and determine
+    if there is a match.
+
+    If there is a match, all criteria for the match will be added to the provenance
+    object
+
+    :param noti_data:   models.RoutingMetadata
+    :param repo_conf:   models.RepositoryConfig
+    :param provenance:          models.MatchProvenance
+    :param acc_id:              Account id matching the bib_id
+    :return:  True if there was a match, False if not
+    """
+
+    app.logger.debug('-------------------------')
+    app.logger.debug(noti_data.data)
+    app.logger.debug(repo_conf.data)
+    app.logger.debug(provenance.data)
+    app.logger.debug(acc_id)
+    app.logger.debug('-------------------------')
 
     new_prov_list: list[MatchedProvenanceData] = []
 
@@ -366,31 +362,24 @@ def match(noti_data: models.RoutingMetadata,
     # Check if repository has role match_all'
     # if yes, do not need to match affiliations
     # Need to do this just once
-    # KTODO logic and comment mismatch, no role match_all checked
-    for prop_pair in _yield_repo_match_prop_pair(match_algorithms):
-        if prop_pair.match_prop == 'affiliations':
+    match_algorithms: list[MatchAlgorithm] = list(_yield_match_algorithm())
+    for match_alg in match_algorithms:
+        if match_alg.match_prop == 'affiliations':
             match_msg = has_match_all(acc_id)
             if match_msg is not False:
-                new_prov_list.append(MatchedProvenanceData(prop_pair.repo_prop, '',
-                                                           prop_pair.match_prop, '',
+                new_prov_list.append(MatchedProvenanceData(match_alg.repo_prop, '',
+                                                           match_alg.match_prop, '',
                                                            match_msg))
 
     # do the required matches
-    prop_pair_list = _yield_repo_match_prop_pair(match_algorithms)
-    todo_prov_list = (create_matched_provenance_data_list(noti_data, repo_conf,
-                                                          prop_pair.repo_prop,
-                                                          prop_pair.match_prop,
-                                                          prop_pair.match_fn)
-                      for prop_pair in prop_pair_list)
-    todo_prov_list = itertools.chain.from_iterable(todo_prov_list)
-    for prov in todo_prov_list:
-        prov: MatchedProvenanceData
-
-        # convert the values that have matched to string values suitable for provenance
-        prov.repo_val = repo_val_factory_map.get(prov.repo_prop, _no_val_change)(prov.repo_val)
-        prov.match_val = match_val_factory_map.get(prov.match_prop, _no_val_change)(prov.match_val)
-
-        new_prov_list.append(prov)
+    todo_prov_list: Iterable[Iterable[MatchedProvenanceData]] = (
+        _create_matched_provenance_data_list(noti_data, repo_conf,
+                                             match_alg.repo_prop,
+                                             match_alg.match_prop,
+                                             match_alg.match_fn)
+        for match_alg in match_algorithms
+    )
+    new_prov_list.extend(itertools.chain.from_iterable(todo_prov_list))
 
     # if none of the required matches hit, then no need to look at the optional refinements
     if new_prov_list:
@@ -400,7 +389,7 @@ def match(noti_data: models.RoutingMetadata,
         app.logger.debug('stop matching [general], none of the required matches hit ')
         return False
 
-    # do the match refinements
+    # -------- do the match refinements --------------------
     # if the configuration specifies a keyword, it must match the notification data, otherwise
     # the match fails
     # as above, if the config requires a content type it must match the notification data or the match fails
@@ -409,10 +398,9 @@ def match(noti_data: models.RoutingMetadata,
                         if len(getattr(repo_conf, prop)))
 
     for prop in refinement_props:
-        prov_list = create_matched_provenance_data_list(noti_data, repo_conf,
-                                                        prop, prop, exact)
+        prov_list = _create_matched_provenance_data_list(noti_data, repo_conf,
+                                                         prop, prop, exact)
         prov_list = list(prov_list)
-
         if prov_list:
             add_all_provenance(provenance, prov_list)
         else:
@@ -422,10 +410,18 @@ def match(noti_data: models.RoutingMetadata,
     return len(provenance.provenance) > 0
 
 
-def create_matched_provenance_data_list(noti_data: models.RoutingMetadata,
-                                        repo_conf: models.RepositoryConfig,
-                                        repo_prop: str, match_prop: str,
-                                        match_fn: MatchFn) -> Iterable[MatchedProvenanceData]:
+def _create_matched_provenance_data_list(noti_data: models.RoutingMetadata,
+                                         repo_conf: models.RepositoryConfig,
+                                         repo_prop: str, match_prop: str,
+                                         match_fn: MatchFn) -> Iterable[MatchedProvenanceData]:
+    repo_val_factory_map = {
+        "author_ids": author_id_string
+    }
+
+    match_val_factory_map = {
+        "author_ids": author_id_string
+    }
+
     data = itertools.product(getattr(repo_conf, repo_prop),
                              getattr(noti_data, match_prop))
     data = ((repo_val, match_val, match_fn(repo_val, match_val),)
@@ -434,7 +430,14 @@ def create_matched_provenance_data_list(noti_data: models.RoutingMetadata,
     data = (MatchedProvenanceData(repo_prop, repo_val,
                                   match_prop, match_val,
                                   match_msg) for repo_val, match_val, match_msg in data)
-    yield from data
+
+    for prov in data:
+        prov: MatchedProvenanceData
+
+        # convert the values that have matched to string values suitable for provenance
+        prov.repo_val = repo_val_factory_map.get(prov.repo_prop, _no_val_change)(prov.repo_val)
+        prov.match_val = match_val_factory_map.get(prov.match_prop, _no_val_change)(prov.match_val)
+        yield prov
 
 
 def add_all_provenance(provenance: models.MatchProvenance,
