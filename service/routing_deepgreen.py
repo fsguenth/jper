@@ -370,6 +370,7 @@ def match(noti_data: models.RoutingMetadata,
                 new_prov_list.append(MatchedProvenanceData(match_alg.repo_prop, '',
                                                            match_alg.match_prop, '',
                                                            match_msg))
+            break  # reference original logic of `check_match_all`
 
     # do the required matches
     todo_prov_list: Iterable[Iterable[MatchedProvenanceData]] = (
