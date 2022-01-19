@@ -18,11 +18,13 @@ from datetime import datetime
 from lxml import etree
 from io import StringIO
 
+
 class PackageException(Exception):
     """
     Generic exception to be thrown when there are issues working with packages
     """
     pass
+
 
 class PackageFactory(object):
     """
@@ -80,6 +82,7 @@ class PackageFactory(object):
         klazz = plugin.load_class(cname)
         return klazz()
 
+
 class PackageManager(object):
     """
     Class which provides an API onto the package management system
@@ -87,6 +90,7 @@ class PackageManager(object):
     If you need to work with packages, the operation you want to do should be covered by one of the
     methods on this class.
     """
+
     @classmethod
     def ingest(cls, store_id, zip_path, format, storage_manager=None):
         """
@@ -196,7 +200,8 @@ class PackageManager(object):
         :param storage_manager: an instance of Store to use as the storage API
         :return: a list of tuples of the conversions carried out of the form [(format, filename, url name)]
         """
-        app.logger.debug("Package Convert - StoreID:{a}; SourceFormat:{b}; TargetFormats:{c}".format(a=store_id, b=source_format, c=",".join(target_formats)))
+        app.logger.debug("Package Convert - StoreID:{a}; SourceFormat:{b}; TargetFormats:{c}"
+                         .format(a=store_id, b=source_format, c=",".join(target_formats)))
 
         # load the storage manager
         if storage_manager is None:
@@ -251,10 +256,12 @@ class PackageManager(object):
         # return the conversions record to the caller
         return conversions
 
+
 class PackageHandler(object):
     """
     Interface/Parent class for all objects wishing to provide package handling
     """
+
     def __init__(self, zip_path=None, metadata_files=None):
         """
         Construct a new PackageHandler around the zip file and/or the metadata files.
@@ -452,6 +459,8 @@ class OPUS4Zip(PackageHandler):
         :return: url name
         """
         return "OPUS4Zip"
+
+
 #
 ############################################################################
 
@@ -498,6 +507,8 @@ class ESciDoc(PackageHandler):
         :return: url name
         """
         return "ESciDoc"
+
+
 #
 ############################################################################
 
@@ -544,6 +555,8 @@ class METSDSpaceSIP(PackageHandler):
         :return: url name
         """
         return "METSDSpaceSIP"
+
+
 #
 ############################################################################
 
@@ -591,6 +604,8 @@ class METSMODS(PackageHandler):
         :return: url name
         """
         return "METSMODS"
+
+
 #
 ############################################################################
 
@@ -611,6 +626,7 @@ class FilesAndJATS(PackageHandler):
     To be valid, the zip must just consist of the JATS file OR the EPMC metadata file.
     All other files are optional
     """
+
     def __init__(self, zip_path=None, metadata_files=None):
         """
         Construct a new PackageHandler around the zip file and/or the metadata files.
@@ -806,7 +822,6 @@ class FilesAndJATS(PackageHandler):
         # files and jats are already basically a simple zip, so a straight copy
         shutil.copyfile(in_path, out_path)
 
-
     # 2017-03-21 TD : added an internal method converting to OPUS4 zip format;
     #                 basically by invoking an xslt transformation of the xml metadata 
     def _opus4_zip(self, in_path, out_path):
@@ -820,8 +835,9 @@ class FilesAndJATS(PackageHandler):
         # 2017-03-21 TD :
         # files and jats are already basically a OPUS4 zip, so a straight copy
         # well, almost...
-        #shutil.copyfile(in_path, out_path)
-        app.logger.debug("PackageHandler FilesAndJATS._opus4_zip(): ... converting {x} into {y}.".format(x=in_path,y=out_path))
+        # shutil.copyfile(in_path, out_path)
+        app.logger.debug("PackageHandler FilesAndJATS._opus4_zip(): ... converting {x} into {y}."
+                         .format(x=in_path, y=out_path))
         try:
             zin = zipfile.ZipFile(in_path, "r", allowZip64=True)
         except zipfile.BadZipfile as e:
@@ -833,12 +849,12 @@ class FilesAndJATS(PackageHandler):
         #
         # 2017-04-21 TD : all of the above missing list done!! (-:
         #
-        xslt_root = etree.XML(models.XSLT.jats2opus4) 
+        xslt_root = etree.XML(models.XSLT.jats2opus4)
         transform = etree.XSLT(xslt_root)
 
         xslt_addf = etree.XML(models.XSLT.addfiles2opus4)
         addfile = etree.XSLT(xslt_addf)
- 
+
         parser = etree.XMLParser(load_dtd=True, no_network=False)
 
         try:
@@ -846,16 +862,16 @@ class FilesAndJATS(PackageHandler):
                 for item in zin.infolist():
                     if item.filename.endswith(".xml"):
                         data = zin.read(item.filename)
-                        opus4xml = transform( etree.fromstring(data, parser) )
+                        opus4xml = transform(etree.fromstring(data, parser))
                         break  # only *one* .xml allowed per .zip
 
                 for item in zin.infolist():
                     if not item.filename.endswith(".xml"):
                         data = zin.read(item.filename)
                         md5sum = hashlib.md5(data).hexdigest()
-                        opus4xml = addfile( opus4xml, 
-                                            md5=etree.XSLT.strparam(md5sum), 
-                                            file=etree.XSLT.strparam(item.filename) )
+                        opus4xml = addfile(opus4xml,
+                                           md5=etree.XSLT.strparam(md5sum),
+                                           file=etree.XSLT.strparam(item.filename))
                         zout.writestr(item, data)
 
                 zout.writestr("opus.xml", str(opus4xml))
@@ -865,7 +881,6 @@ class FilesAndJATS(PackageHandler):
         except Exception:
             zin.close()
             raise PackageException("Unable to parse and/or transform XML file in package {x}".format(x=in_path))
-
 
     # 2017-05-15 TD : added an internal method converting to ESciDoc zip format;
     #                 basically by invoking an xslt transformation of the xml metadata 
@@ -880,8 +895,9 @@ class FilesAndJATS(PackageHandler):
         # 2017-05-15 TD :
         # files and jats are already basically a ESciDoc zip, so a straight copy
         # well, almost...
-        #shutil.copyfile(in_path, out_path)
-        app.logger.debug("PackageHandler FilesAndJATS._escidoc_zip(): ... converting {x} into {y}.".format(x=in_path,y=out_path))
+        # shutil.copyfile(in_path, out_path)
+        app.logger.debug("PackageHandler FilesAndJATS._escidoc_zip(): ... converting {x} into {y}."
+                         .format(x=in_path, y=out_path))
         try:
             zin = zipfile.ZipFile(in_path, "r", allowZip64=True)
         except zipfile.BadZipfile as e:
@@ -890,12 +906,12 @@ class FilesAndJATS(PackageHandler):
         # 2017-03-22 TD : still missing [Done: correct 'document()' handling in XSLT string]
         # 2017-05-15 TD : all of the above missing list done!! (-:
         #
-        xslt_root = etree.XML(models.XSLT.jats2escidoc) 
+        xslt_root = etree.XML(models.XSLT.jats2escidoc)
         transform = etree.XSLT(xslt_root)
 
         # xslt_addf = etree.XML(models.XSLT.addfiles2escidoc)
         # addfile = etree.XSLT(xslt_addf)
- 
+
         parser = etree.XMLParser(load_dtd=True, no_network=False)
 
         try:
@@ -903,7 +919,7 @@ class FilesAndJATS(PackageHandler):
                 for item in zin.infolist():
                     if item.filename.endswith(".xml"):
                         data = zin.read(item.filename)
-                        escidoc = transform( etree.fromstring(data, parser) )
+                        escidoc = transform(etree.fromstring(data, parser))
                         break  # only *one* .xml allowed per .zip
 
                 for item in zin.infolist():
@@ -923,7 +939,6 @@ class FilesAndJATS(PackageHandler):
             zin.close()
             raise PackageException("Unable to parse and/or transform XML file in package {x}".format(x=in_path))
 
-
     # 2017-05-15 TD : added an internal method converting to METSDSpaceSIP zip format;
     #                 basically by invoking an xslt transformation of the xml metadata 
     def _metsdspace_zip(self, in_path, out_path):
@@ -937,8 +952,9 @@ class FilesAndJATS(PackageHandler):
         # 2017-05-15 TD :
         # files and jats are already basically a METSDSpaceSIP, so a straight copy
         # well, almost...
-        #shutil.copyfile(in_path, out_path)
-        app.logger.debug("PackageHandler FilesAndJATS._metsdspace_zip(): ... converting {x} into {y}.".format(x=in_path,y=out_path))
+        # shutil.copyfile(in_path, out_path)
+        app.logger.debug("PackageHandler FilesAndJATS._metsdspace_zip(): ... converting {x} into {y}."
+                         .format(x=in_path, y=out_path))
         try:
             zin = zipfile.ZipFile(in_path, "r", allowZip64=True)
         except zipfile.BadZipfile as e:
@@ -968,8 +984,8 @@ class FilesAndJATS(PackageHandler):
                     if item.filename.endswith(".xml"):
                         data = zin.read(item.filename)
                         now = datetime.now().strftime("%FT%T.%f")
-                        mets = transform( etree.fromstring(data, parser),
-                                          currdatetime=etree.XSLT.strparam(now) )
+                        mets = transform(etree.fromstring(data, parser),
+                                         currdatetime=etree.XSLT.strparam(now))
                         break  # only *one* .xml allowed per .zip
 
                 count = 0
@@ -982,15 +998,15 @@ class FilesAndJATS(PackageHandler):
                         mimetype = mimetypes.MimeTypes().guess_type(item.filename)
                         if mimetype[0] is None:
                             mimetype = ("application/octet-stream", None)
-                        mets = addfile( mets, 
-                                        md5=etree.XSLT.strparam(md5sum), 
-                                        file=etree.XSLT.strparam(item.filename),
-                                        mime=etree.XSLT.strparam(mimetype[0]),
-                                        cnt=etree.XSLT.strparam(str(count)) )
+                        mets = addfile(mets,
+                                       md5=etree.XSLT.strparam(md5sum),
+                                       file=etree.XSLT.strparam(item.filename),
+                                       mime=etree.XSLT.strparam(mimetype[0]),
+                                       cnt=etree.XSLT.strparam(str(count)))
                         zout.writestr(item, data)
 
                 # 2018-03-20 TD : closing the mets xml by adding the (final) structMap
-                mets = addstruct( mets )
+                mets = addstruct(mets)
 
                 # 2018-02-21 TD : Strictly needs to be 'mets.xml' due to DSPACE requirements.
                 # zout.writestr("mets_dspace.xml", str(mets))
@@ -1001,7 +1017,6 @@ class FilesAndJATS(PackageHandler):
         except Exception:
             zin.close()
             raise PackageException("Unable to parse and/or transform XML file in package {x}".format(x=in_path))
-
 
     # 2017-07-11 TD : added an internal method converting to METSMODS zip format;
     #                 basically by invoking an xslt transformation of the xml metadata 
@@ -1017,7 +1032,8 @@ class FilesAndJATS(PackageHandler):
         # files and jats are already basically a METSMODS, so a straight copy
         # eer, well, almost...
         # shutil.copyfile(in_path, out_path)
-        app.logger.debug("PackageHandler FilesAndJATS._metsmods_zip(): ... converting {x} into {y}.".format(x=in_path,y=out_path))
+        app.logger.debug("PackageHandler FilesAndJATS._metsmods_zip(): ... converting {x} into {y}."
+                         .format(x=in_path, y=out_path))
         try:
             zin = zipfile.ZipFile(in_path, "r", allowZip64=True)
         except zipfile.BadZipfile as e:
@@ -1047,8 +1063,8 @@ class FilesAndJATS(PackageHandler):
                     if item.filename.endswith(".xml"):
                         data = zin.read(item.filename)
                         now = datetime.now().strftime("%FT%T.%f")
-                        mets = transform( etree.fromstring(data, parser),
-                                          currdatetime=etree.XSLT.strparam(now) )
+                        mets = transform(etree.fromstring(data, parser),
+                                         currdatetime=etree.XSLT.strparam(now))
                         break  # only *one* .xml allowed per .zip
 
                 count = 0
@@ -1061,15 +1077,15 @@ class FilesAndJATS(PackageHandler):
                         mimetype = mimetypes.MimeTypes().guess_type(item.filename)
                         if mimetype[0] is None:
                             mimetype = ("application/octet-stream", None)
-                        mets = addfile( mets, 
-                                        md5=etree.XSLT.strparam(md5sum), 
-                                        file=etree.XSLT.strparam(item.filename),
-                                        mime=etree.XSLT.strparam(mimetype[0]),
-                                        cnt=etree.XSLT.strparam(str(count)) )
+                        mets = addfile(mets,
+                                       md5=etree.XSLT.strparam(md5sum),
+                                       file=etree.XSLT.strparam(item.filename),
+                                       mime=etree.XSLT.strparam(mimetype[0]),
+                                       cnt=etree.XSLT.strparam(str(count)))
                         zout.writestr(item, data)
 
                 # 2018-03-20 TD : closing the mets xml by adding the (final) structMap
-                mets = addstruct( mets )
+                mets = addstruct(mets)
 
                 # 2018-02-21 TD : Strictly needs to be 'mets.xml' due to DSPACE requirements.
                 # zout.writestr("mets_mods.xml", str(mets))
@@ -1080,7 +1096,6 @@ class FilesAndJATS(PackageHandler):
         except Exception:
             zin.close()
             raise PackageException("Unable to parse and/or transform XML file in package {x}".format(x=in_path))
-
 
     def _merge_metadata(self, emd, jmd):
         """
@@ -1138,7 +1153,7 @@ class FilesAndJATS(PackageHandler):
 
         md.title = self.jats.title
         # 2020-02-11 TD : additional bibliographic items from JATS metadata
-        md.journal = self.jats.journal 
+        md.journal = self.jats.journal
         md.volume = self.jats.volume
         md.issue = self.jats.issue
         md.fpage = self.jats.fpage
@@ -1162,19 +1177,19 @@ class FilesAndJATS(PackageHandler):
             name = author.get("given-names", "") + " " + author.get("surname", "")
             if name.strip() == "":
                 continue
-            firstname = author.get("given-names","")
-            lastname = author.get("surname","")
+            firstname = author.get("given-names", "")
+            lastname = author.get("surname", "")
             if lastname.strip() == "":
                 continue
             # 2018-10-17 TD : add the author's ORCID if provided with the jats 
             orcid = author.get("orcid", "")
             affs = "; ".join(author.get("affiliations", []))
-            obj = {"name" : name, "firstname" : firstname, "lastname" : lastname}
+            obj = {"name": name, "firstname": firstname, "lastname": lastname}
             if affs is not None and affs != "":
                 obj["affiliation"] = affs
             if orcid is not None and orcid != "":
                 obj["identifier"] = []
-                obj["identifier"].append({"type" : "orcid", "id" : orcid})
+                obj["identifier"].append({"type": "orcid", "id": orcid})
             # 2018-10-17 TD
             md.add_author(obj)
 
@@ -1195,7 +1210,7 @@ class FilesAndJATS(PackageHandler):
 
         md.title = self.epmc.title
         # 2020-02-11 TD : additional bibliographic items from EMPC metadata
-        md.journal = self.epmc.journal 
+        md.journal = self.epmc.journal
         md.volume = self.epmc.volume
         md.issue = self.epmc.issue
         md.fpage = self.epmc.fpage
@@ -1223,12 +1238,12 @@ class FilesAndJATS(PackageHandler):
             # 2018-10-17 TD : add the author's ORCID if provided with the epmc xml
             orcid = author.get("orcid", "")
             aff = author.get("affiliation")
-            obj = {"name" : fn, "firstname" : first, "lastname" : last}
+            obj = {"name": fn, "firstname": first, "lastname": last}
             if aff is not None:
                 obj["affiliation"] = aff
             if orcid is not None and orcid != "":
                 obj["identifier"] = []
-                obj["identifier"].append({"type" : "orcid", "id" : orcid})
+                obj["identifier"].append({"type": "orcid", "id": orcid})
             # 2018-10-17 TD
             md.add_author(obj)
 
@@ -1267,7 +1282,7 @@ class FilesAndJATS(PackageHandler):
             name = a.get("given-names", "") + " " + a.get("surname", "")
             if name.strip() != "":
                 match.add_author_id(name, "name")
-            lastname = a.get("surname","")
+            lastname = a.get("surname", "")
             if lastname.strip() != "":
                 match.add_author_id(lastname, "lastname")
                 firstname = a.get("given-names", "")
@@ -1324,10 +1339,10 @@ class FilesAndJATS(PackageHandler):
                 match.add_author_id(fn, "name")
             last = a.get("lastName")
             if last is not None:
-                match.add_author_id(last,"lastname")
+                match.add_author_id(last, "lastname")
                 first = a.get("firstName")
                 if first is not None:
-                    match.add_author_id(first,"firstname")
+                    match.add_author_id(first, "firstname")
 
             # 2018-10-17 TD : include an ORCID value as well
             # orcid
@@ -1466,6 +1481,7 @@ class FilesAndRSC(PackageHandler):
     To be valid, the zip must just consist of the RSC metadata file.
     All other files are optional
     """
+
     def __init__(self, zip_path=None, metadata_files=None):
         """
         Construct a new PackageHandler around the zip file and/or the metadata files.
@@ -1648,7 +1664,6 @@ class FilesAndRSC(PackageHandler):
         # files and rsc are already basically a simple zip, so a straight copy
         shutil.copyfile(in_path, out_path)
 
-
     # 2017-04-20 TD : added an internal method converting to OPUS4 zip format;
     #                 basically by invoking an xslt transformation of the xml metadata 
     def _opus4_zip(self, in_path, out_path):
@@ -1662,8 +1677,9 @@ class FilesAndRSC(PackageHandler):
         # 2017-04-20 TD :
         # files and jats are already basically a OPUS4 zip, so a straight copy
         # well, almost...
-        #shutil.copyfile(in_path, out_path)
-        app.logger.debug("PackageHandler FilesAndRSC._opus4_zip(): ... converting {x} into {y}.".format(x=in_path,y=out_path))
+        # shutil.copyfile(in_path, out_path)
+        app.logger.debug("PackageHandler FilesAndRSC._opus4_zip(): ... converting {x} into {y}."
+                         .format(x=in_path, y=out_path))
         try:
             zin = zipfile.ZipFile(in_path, "r", allowZip64=True)
         except zipfile.BadZipfile as e:
@@ -1675,12 +1691,12 @@ class FilesAndRSC(PackageHandler):
         #
         # 2017-04-21 TD : all of the above missing list done!! (-:
         #
-        xslt_root = etree.XML(models.XSLT.rsc2opus4) 
+        xslt_root = etree.XML(models.XSLT.rsc2opus4)
         transform = etree.XSLT(xslt_root)
 
         xslt_addf = etree.XML(models.XSLT.addfiles2opus4)
         addfile = etree.XSLT(xslt_addf)
- 
+
         parser = etree.XMLParser(load_dtd=True, no_network=False)
 
         try:
@@ -1688,16 +1704,16 @@ class FilesAndRSC(PackageHandler):
                 for item in zin.infolist():
                     if item.filename.endswith(".xml"):
                         data = zin.read(item.filename)
-                        opus4xml = transform( etree.fromstring(data, parser) )
+                        opus4xml = transform(etree.fromstring(data, parser))
                         break  # only *one* .xml allowed per .zip
 
                 for item in zin.infolist():
                     if not item.filename.endswith(".xml"):
                         data = zin.read(item.filename)
                         md5sum = hashlib.md5(data).hexdigest()
-                        opus4xml = addfile( opus4xml, 
-                                            md5=etree.XSLT.strparam(md5sum), 
-                                            file=etree.XSLT.strparam(item.filename) )
+                        opus4xml = addfile(opus4xml,
+                                           md5=etree.XSLT.strparam(md5sum),
+                                           file=etree.XSLT.strparam(item.filename))
                         zout.writestr(item, data)
 
                 zout.writestr("opus.xml", str(opus4xml))
@@ -1707,7 +1723,6 @@ class FilesAndRSC(PackageHandler):
         except Exception:
             zin.close()
             raise PackageException("Unable to parse and/or transform XML file in package {x}".format(x=in_path))
-
 
     # 2017-05-15 TD : added an internal method converting to ESciDoc zip format;
     #                 basically by invoking an xslt transformation of the xml metadata 
@@ -1722,8 +1737,9 @@ class FilesAndRSC(PackageHandler):
         # 2017-05-15 TD :
         # files and jats are already basically a ESciDoc zip, so a straight copy
         # well, almost...
-        #shutil.copyfile(in_path, out_path)
-        app.logger.debug("PackageHandler FilesAndRSC._escidoc_zip(): ... converting {x} into {y}.".format(x=in_path,y=out_path))
+        # shutil.copyfile(in_path, out_path)
+        app.logger.debug("PackageHandler FilesAndRSC._escidoc_zip(): ... converting {x} into {y}."
+                         .format(x=in_path, y=out_path))
         try:
             zin = zipfile.ZipFile(in_path, "r", allowZip64=True)
         except zipfile.BadZipfile as e:
@@ -1732,12 +1748,12 @@ class FilesAndRSC(PackageHandler):
         # 2017-03-22 TD : still missing [Done: correct 'document()' handling in XSLT string]
         # 2017-05-15 TD : all of the above missing list done!! (-:
         #
-        xslt_root = etree.XML(models.XSLT.rsc2escidoc) 
+        xslt_root = etree.XML(models.XSLT.rsc2escidoc)
         transform = etree.XSLT(xslt_root)
 
         # xslt_addf = etree.XML(models.XSLT.addfiles2escidoc)
         # addfile = etree.XSLT(xslt_addf)
- 
+
         parser = etree.XMLParser(load_dtd=True, no_network=False)
 
         try:
@@ -1745,7 +1761,7 @@ class FilesAndRSC(PackageHandler):
                 for item in zin.infolist():
                     if item.filename.endswith(".xml"):
                         data = zin.read(item.filename)
-                        escidoc = transform( etree.fromstring(data, parser) )
+                        escidoc = transform(etree.fromstring(data, parser))
                         break  # only *one* .xml allowed per .zip
 
                 for item in zin.infolist():
@@ -1765,7 +1781,6 @@ class FilesAndRSC(PackageHandler):
             zin.close()
             raise PackageException("Unable to parse and/or transform XML file in package {x}".format(x=in_path))
 
-
     # 2017-05-15 TD : added an internal method converting to METSDSpaceSIP zip format;
     #                 basically by invoking an xslt transformation of the xml metadata 
     def _metsdspace_zip(self, in_path, out_path):
@@ -1779,8 +1794,9 @@ class FilesAndRSC(PackageHandler):
         # 2017-05-15 TD :
         # files and jats are already basically a METSDSpaceSIP, so a straight copy
         # well, almost...
-        #shutil.copyfile(in_path, out_path)
-        app.logger.debug("PackageHandler FilesAndRSC._metsdspace_zip(): ... converting {x} into {y}.".format(x=in_path,y=out_path))
+        # shutil.copyfile(in_path, out_path)
+        app.logger.debug("PackageHandler FilesAndRSC._metsdspace_zip(): ... converting {x} into {y}."
+                         .format(x=in_path, y=out_path))
         try:
             zin = zipfile.ZipFile(in_path, "r", allowZip64=True)
         except zipfile.BadZipfile as e:
@@ -1792,16 +1808,16 @@ class FilesAndRSC(PackageHandler):
         #
         # 2017-05-15 TD : all of the above missing list done!! (-:
         #
-        xslt_root = etree.XML(models.XSLT.rsc2metsdspace) 
+        xslt_root = etree.XML(models.XSLT.rsc2metsdspace)
         transform = etree.XSLT(xslt_root)
 
         xslt_addf = etree.XML(models.XSLT.addfiles2mets)
         addfile = etree.XSLT(xslt_addf)
- 
+
         # 2018-03-20 TD : Separate structMap part necessary in case of /no/ file addition
         xslt_adds = etree.XML(models.XSLT.addstruct2mets)
         addstruct = etree.XSLT(xslt_adds)
- 
+
         parser = etree.XMLParser(load_dtd=True, no_network=False)
 
         try:
@@ -1810,8 +1826,8 @@ class FilesAndRSC(PackageHandler):
                     if item.filename.endswith(".xml"):
                         data = zin.read(item.filename)
                         now = datetime.now().strftime("%FT%T.%f")
-                        metsdspace = transform( etree.fromstring(data, parser),
-                                                currdatetime=etree.XSLT.strparam(now) )
+                        metsdspace = transform(etree.fromstring(data, parser),
+                                               currdatetime=etree.XSLT.strparam(now))
                         break  # only *one* .xml allowed per .zip
 
                 count = 0
@@ -1824,18 +1840,18 @@ class FilesAndRSC(PackageHandler):
                         mimetype = mimetypes.MimeTypes().guess_type(item.filename)
                         if mimetype[0] is None:
                             mimetype = ("application/octet-stream", None)
-                        metsdspace = addfile( metsdspace, 
-                                              md5=etree.XSLT.strparam(md5sum), 
-                                              file=etree.XSLT.strparam(item.filename),
-                                              mime=etree.XSLT.strparam(mimetype[0]),
-                                              cnt=etree.XSLT.strparam(str(count)) )
+                        metsdspace = addfile(metsdspace,
+                                             md5=etree.XSLT.strparam(md5sum),
+                                             file=etree.XSLT.strparam(item.filename),
+                                             mime=etree.XSLT.strparam(mimetype[0]),
+                                             cnt=etree.XSLT.strparam(str(count)))
                         zout.writestr(item, data)
 
                 # 2018-03-20 TD : closing the mets xml by adding the (final) structMap
-                metsdspace = addstruct( metsdspace )
+                metsdspace = addstruct(metsdspace)
 
                 # 2018-03-20 TD : Strictly needs to be 'mets.xml' due to DSPACE requirements.
-                #zout.writestr("mets_dspace.xml", str(metsdspace))
+                # zout.writestr("mets_dspace.xml", str(metsdspace))
                 zout.writestr("mets.xml", str(metsdspace))
 
             zin.close()
@@ -1843,7 +1859,6 @@ class FilesAndRSC(PackageHandler):
         except Exception:
             zin.close()
             raise PackageException("Unable to parse and/or transform XML file in package {x}".format(x=in_path))
-
 
     # 2017-07-13 TD : added an internal method converting to METSMODS zip format;
     #                 basically by invoking an xslt transformation of the xml metadata 
@@ -1858,8 +1873,9 @@ class FilesAndRSC(PackageHandler):
         # 2017-07-13 TD :
         # files and jats are already basically a METSMODS, so a straight copy
         # eer, well, almost...
-        #shutil.copyfile(in_path, out_path)
-        app.logger.debug("PackageHandler FilesAndRSC._metsmods_zip(): ... converting {x} into {y}.".format(x=in_path,y=out_path))
+        # shutil.copyfile(in_path, out_path)
+        app.logger.debug("PackageHandler FilesAndRSC._metsmods_zip(): ... converting {x} into {y}."
+                         .format(x=in_path, y=out_path))
         try:
             zin = zipfile.ZipFile(in_path, "r", allowZip64=True)
         except zipfile.BadZipfile as e:
@@ -1889,8 +1905,8 @@ class FilesAndRSC(PackageHandler):
                     if item.filename.endswith(".xml"):
                         data = zin.read(item.filename)
                         now = datetime.now().strftime("%FT%T.%f")
-                        mets = transform( etree.fromstring(data, parser),
-                                          currdatetime=etree.XSLT.strparam(now) )
+                        mets = transform(etree.fromstring(data, parser),
+                                         currdatetime=etree.XSLT.strparam(now))
                         break  # only *one* .xml allowed per .zip
 
                 count = 0
@@ -1903,18 +1919,18 @@ class FilesAndRSC(PackageHandler):
                         mimetype = mimetypes.MimeTypes().guess_type(item.filename)
                         if mimetype[0] is None:
                             mimetype = ("application/octet-stream", None)
-                        mets = addfile( mets, 
-                                        md5=etree.XSLT.strparam(md5sum), 
-                                        file=etree.XSLT.strparam(item.filename),
-                                        mime=etree.XSLT.strparam(mimetype[0]),
-                                        cnt=etree.XSLT.strparam(str(count)) )
+                        mets = addfile(mets,
+                                       md5=etree.XSLT.strparam(md5sum),
+                                       file=etree.XSLT.strparam(item.filename),
+                                       mime=etree.XSLT.strparam(mimetype[0]),
+                                       cnt=etree.XSLT.strparam(str(count)))
                         zout.writestr(item, data)
 
                 # 2018-03-20 TD : closing the mets xml by adding the (final) structMap
-                mets = addstruct( mets )
+                mets = addstruct(mets)
 
                 # 2018-03-20 TD : Strictly needs to be 'mets.xml' due to DSPACE requirements.
-                #zout.writestr("mets_mods.xml", str(mets))
+                # zout.writestr("mets_mods.xml", str(mets))
                 zout.writestr("mets.xml", str(mets))
 
             zin.close()
@@ -1922,7 +1938,6 @@ class FilesAndRSC(PackageHandler):
         except Exception:
             zin.close()
             raise PackageException("Unable to parse and/or transform XML file in package {x}".format(x=in_path))
-
 
     def _merge_metadata(self, emd, rmd):
         """
@@ -1980,7 +1995,7 @@ class FilesAndRSC(PackageHandler):
 
         md.title = self.rsc_xml.title
         # 2020-02-11 TD : additional bibliographic items from RSC metadata
-        md.journal = self.rsc_xml.journal 
+        md.journal = self.rsc_xml.journal
         md.volume = self.rsc_xml.volume
         md.issue = self.rsc_xml.issue
         md.fpage = self.rsc_xml.fpage
@@ -2011,12 +2026,12 @@ class FilesAndRSC(PackageHandler):
             # 2018-10-17 TD : fetch author's ORCID if provided by the rsc xml
             orcid = author.get("orcid", "")
             affs = "; ".join(author.get("affiliations", []))
-            obj = {"name" : name, "firstname" : firstname, "lastname" : lastname}
+            obj = {"name": name, "firstname": firstname, "lastname": lastname}
             if affs is not None and affs != "":
                 obj["affiliation"] = affs
             if orcid is not None and orcid != "":
                 obj["identifier"] = []
-                obj["identifier"].append({"type" : "orcid", "id" : orcid})
+                obj["identifier"].append({"type": "orcid", "id": orcid})
             # 2018-10-17 TD
             md.add_author(obj)
 
@@ -2154,4 +2169,4 @@ class FilesAndRSC(PackageHandler):
         :return:
         """
         # is valid if rsc_xml is not none
-        return self.rsc_xml is not None 
+        return self.rsc_xml is not None
