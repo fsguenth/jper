@@ -31,7 +31,7 @@ class RoutingException(Exception):
 
 # 2019-06-18 TD : a wrapper around the routing.route(obj) call in order to
 #                 be able to catch 'stalled' notifications
-def route(unrouted):
+def route(unrouted: models.UnroutedNotification):
     try:
         rc = _route(unrouted)
     except Exception as e:
@@ -43,7 +43,7 @@ def route(unrouted):
     return rc
 
 
-def _route(unrouted):
+def _route(unrouted: models.UnroutedNotification):
     """
     Route an UnroutedNotification to the appropriate repositories
 
@@ -106,68 +106,77 @@ def _route(unrouted):
     doi = metadata.get_identifiers("doi")
     doi = doi[0] if doi else "unknown"
 
-    bibids = list(set(models.Account.pull_all_repositories()))
     # NEW FEATURE
     # Get all subject repository accounts. Needed for Gold license. 
     # They do not get publications with gold license.
-    subject_repo_bibids = list(set(models.Account.pull_all_subject_repositories()))
+    subject_repo_bibids = set(models.Account.pull_all_subject_repositories())
+    bibids = [b for b in set(models.Account.pull_all_repositories())
+              if b not in subject_repo_bibids]
 
     part_bibids = []
 
-    for issn in issn_data:
-        # are there licenses stored for this ISSN?
-        # 2016-10-12 TD : an ISSN could appear in more than one license !
-        lics = models.License.pull_by_journal_id(issn)  # matches issn, eissn, doi, etc.
-        if lics is None:  # nothing found at all...
-            continue
-        for lic in lics:
-            # lic_data includes only valid license for the issn.
-            # It is a list with the url for the journal changing between each entry.
-            # So will only use the first record, as any valid url is fine.
-            lic_data = get_current_license_data(lic, publ_year, issn, doi)
-            if len(lic_data) == 0:
-                continue
-            if lic.type == "gold":
-                for bibid in bibids:
-                    # All repositories except subject repositories get publications with gold license
-                    if bibid not in subject_repo_bibids:
-                        part_bibids.append((bibid, lic_data[0]))
-            if lic.type == "alliance" or lic.type == "national" or lic.type == "deal" or lic.type == "fid":
-                al = models.Alliance.pull_by_key("license_id", lic.id)
-                if al:
-                    # collect all EZB-Ids of participating institutions of AL
-                    for participant in al.participants:
-                        for i in participant.get("identifier", []):
-                            if i.get("type", None) == "ezb" and i.get('id', None):
-                                # note: only first ISSN record found in current license will be considered!
-                                part_bibids.append((i.get("id"), lic_data[0]))
+    # are there licenses stored for this ISSN?
+    # 2016-10-12 TD : an ISSN could appear in more than one license !
+    lic_data_list = ((issn, models.License.pull_by_journal_id(issn))
+                     for issn in issn_data)
+    lic_data_list = ((issn, lic) for issn, lic in lic_data_list if lic is not None)
+
+    # lic_data includes only valid license for the issn.
+    # It is a list with the url for the journal changing between each entry.
+    # So will only use the first record, as any valid url is fine.
+    lic_data_list = ((get_current_license_data(lic, publ_year, issn, doi), lic)
+                     for issn, lic in lic_data_list)
+    lic_data_list = ((lic_data, lic) for lic_data, lic in lic_data_list
+                     if lic_data)
+
+    for lic_data, lic in lic_data_list:
+        if lic.type == "gold":
+            # All repositories except subject repositories get publications with gold license
+            part_bibids.extend((bibid, lic_data[0]) for bibid in bibids)
+
+        if lic.type in ["alliance", "national", "deal", "fid"]:
+            al = models.Alliance.pull_by_key("license_id", lic.id)
+            _participants = al.participants if al else []
+
+            # collect all EZB-Ids of participating institutions of AL
+            identifier_list = itertools.chain.from_iterable(
+                p.get("identifier", []) for p in _participants
+            )
+
+            # note: only first ISSN record found in current license will be considered!
+            identifier_list = (i for i in identifier_list
+                               if i.get("type", None) == "ezb" and i.get('id', None))
+            part_bibids.extend((i.get("id"), lic_data[0]) for i in identifier_list)
 
     # Get only active repository accounts
     # 2019-06-03 TD : yet a level more to differentiate between active and passive
     #                 accounts. A new requirement, at a /very/ early stage... gosh.
     al_repos = []
+    part_bibids = (b for b in part_bibids if b[0] is not None)
     for bibid, lic_data in part_bibids:
         # 2017-06-06 TD : insert of this safeguard ;
         #                 although it would be *very* unlikely to be needed here.  Strange.
-        if bibid is None:
-            continue
         # 2017-03-09 TD : handle DG standard (and somehow passive..) accounts as well.
         # Regular accounts
         # 2019-03-21 TD : in some (rare?) test scenarios there might be more than one account
         # 2019-03-26 TD : case decision - handle multiple, equal accs vs. single accs only
-        add_account = True
-        accounts = models.Account.pull_all_by_key("repository.bibid", bibid)
-        if len(accounts) > 1 and not app.config.get("DEEPGREEN_ALLOW_EQUAL_REPOS", False):
-            add_account = False
-        for acc1 in models.Account.pull_all_by_key("repository.bibid", bibid):
-            if add_account and acc1 is not None and acc1.has_role("repository") and not acc1.is_passive:
-                # extend this to hold all the license data may be?
-                unrouted.embargo = lic_data["embargo"]
-                al_repos.append((acc1.id, lic_data, bibid))
-        for acc2 in models.Account.pull_all_by_key("repository.bibid", "a" + bibid):
-            if add_account and acc2 is not None and acc2.has_role("repository") and not acc2.is_passive:
-                unrouted.embargo = lic_data["embargo"]
-                al_repos.append((acc2.id, lic_data, "a" + bibid))
+        add_account = (len(models.Account.pull_all_by_key("repository.bibid", bibid)) <= 1 or
+                       app.config.get("DEEPGREEN_ALLOW_EQUAL_REPOS", False))
+
+        def _should_add(_acc):
+            return (add_account and
+                    _acc is not None and
+                    _acc.has_role("repository") and
+                    not _acc.is_passive)
+
+        bibid_acc_list = itertools.chain(
+            ((bibid, acc) for acc in models.Account.pull_all_by_key("repository.bibid", bibid)),
+            (("a" + bibid, acc) for acc in models.Account.pull_all_by_key("repository.bibid", "a" + bibid)),
+        )
+        bibid_acc_list = ((b, a) for b, a in bibid_acc_list if _should_add(a))
+        for _bibid, _acc in bibid_acc_list:
+            unrouted.embargo = lic_data["embargo"]
+            al_repos.append((_acc.id, lic_data, _bibid))
 
     # 2019-03-26 TD : continue from here on with all the collected 'al_repos'
     if len(al_repos) > 0:
@@ -695,7 +704,7 @@ def modify_public_links(routed):
         routed.add_link(l.get("url"), l.get("type"), l.get("format"), l.get("access"), l.get("packaging"))
 
 
-def get_current_license_data(lic, publ_year, issn, doi):
+def get_current_license_data(lic, publ_year, issn, doi) -> list[dict]:
     lic_data = []
     for jrnl in lic.journals:
         # check anew for each journal included in the license
