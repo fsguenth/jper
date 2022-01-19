@@ -66,7 +66,7 @@ class TestRouting(ESTestCase):
         if os.path.exists(self.custom_zip_path):
             os.remove(self.custom_zip_path)
 
-        sm = store.StoreFactory.get()
+        sm: store.StoreLocal = store.StoreFactory.get()
         for sid in self.stored_ids:
             sm.delete(sid)
 
@@ -739,26 +739,26 @@ class TestRouting(ESTestCase):
 
         # get an unrouted notification
         source2 = fixtures.NotificationFactory.unrouted_notification()
-        urn = models.UnroutedNotification(source2)
+        unrouted_noti = models.UnroutedNotification(source2)
 
         # now run the routing algorithm
-        routing.route(urn)
+        routing.route(unrouted_noti)
 
         # give the index a chance to catch up before checking the results
         time.sleep(3)
 
         # check that a match provenance was recorded
-        mps = models.MatchProvenance.pull_by_notification(urn.id)
+        mps = models.MatchProvenance.pull_by_notification(unrouted_noti.id)
         assert len(mps) == 1, len(mps)
 
         # check the properties of the match provenance
         mp = mps[0]
         assert mp.repository == rc.repository
-        assert mp.notification == urn.id
+        assert mp.notification == unrouted_noti.id
         assert len(mp.provenance) > 0
 
         # check that a routed notification was created
-        rn = models.RoutedNotification.pull(urn.id)
+        rn = models.RoutedNotification.pull(unrouted_noti.id)
         assert rn is not None
         assert rn.analysis_datestamp >= now
         assert rc.repository in rn.repositories
@@ -773,7 +773,7 @@ class TestRouting(ESTestCase):
         # FIXME: check for enhanced router links
 
         # check to see that a failed notification was not recorded
-        fn = models.FailedNotification.pull(urn.id)
+        fn = models.FailedNotification.pull(unrouted_noti.id)
         assert fn is None
 
     def test_98_routing_success_package(self):
