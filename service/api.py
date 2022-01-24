@@ -7,6 +7,7 @@ consume notifications.
 
 Go around it at your own risk!
 """
+from typing import Union
 
 from flask_login import current_user
 from service import models, packages
@@ -165,7 +166,7 @@ class JPER(object):
         app.logger.debug("Request:{z} - Validate request Account:{x} succeeded".format(z=magic, x=account.id))
 
     @classmethod
-    def create_notification(cls, account, notification, file_handle=None):
+    def create_notification(cls, account, notification, file_handle=None) -> Union[models.UnroutedNotification, bool] :
         """
         Create a new notification in the system on behalf of the Account holder, based on the supplied notification
         and optional binary content.
@@ -186,7 +187,7 @@ class JPER(object):
 
         magic = uuid.uuid4().hex
         app.logger.debug("Request:{z} - Create request received from Account:{x}".format(z=magic, x=account.id))
-        
+
         # add a check for default embargo if the account has a non-zero value set for it
         # incoming notification structure is demonstrated in the account model and also documented at:
         # https://github.com/JiscPER/jper/blob/develop/docs/api/IncomingNotification.md
@@ -202,7 +203,7 @@ class JPER(object):
             if 'title' in account.data['license']:
                 # 2016-06-28 TD : additional safety check for bare-minimum JSON notification
                 if 'metadata' not in notification: notification['metadata'] = {}
-                if 'license_ref' not in notification['metadata']: 
+                if 'license_ref' not in notification['metadata']:
                     notification['metadata']['license_ref'] = {}
                     # 2016-10-24 TD : bug fix!
                     # if 'title' not in notification['metadata']['license_ref']: notification['metadata']['license_ref']['title'] = account.data['license']['title']
@@ -222,7 +223,7 @@ class JPER(object):
             raise ValidationException("Problem reading notification metadata: {x}".format(x=str(e)))
 
         # if successful, convert it to an unrouted notification
-        note = incoming.make_unrouted()
+        note: models.UnroutedNotification = incoming.make_unrouted()
 
         # set the id for the record, as we'll use this when we save the notification, and
         # when we store the associated file
@@ -254,7 +255,8 @@ class JPER(object):
             except packages.PackageException as e:
                 tmp.delete(local_id)
                 remote.delete(note.id)
-                app.logger.error("Request:{z} - Create request from Account:{x} failed with error '{y}'".format(z=magic, x=account.id, y=str(e)))
+                app.logger.error("Request:{z} - Create request from Account:{x} failed with error '{y}'"
+                                 .format(z=magic, x=account.id, y=str(e)))
                 raise ValidationException("Problem reading from the zip file: {x}".format(x=str(e)))
 
             # remove the local copy
@@ -267,7 +269,8 @@ class JPER(object):
         # if we get to here there was either no package, or the package saved successfully, so we can store the
         # note
         note.save()
-        app.logger.debug("Request:{z} - Create request from Account:{x} succeeded; Notification:{y}".format(z=magic, x=account.id, y=note.id))
+        app.logger.debug("Request:{z} - Create request from Account:{x} succeeded; Notification:{y}"
+                         .format(z=magic, x=account.id, y=note.id))
         return note
 
     @classmethod
@@ -366,8 +369,8 @@ class JPER(object):
                 if link.get('proxy',False) == pid:
                     lurl = link['url']
             return lurl
-        
-            
+
+
     @classmethod
     def get_public_url(cls, account, notification_id, content_id):
         urn = models.UnroutedNotification.pull(notification_id)
@@ -426,7 +429,7 @@ class JPER(object):
             "from": (page - 1) * page_size,
             "size": page_size
         }
-        
+
         if repository_id is not None:
             # 2016-09-07 TD : trial to filter for publisher's reporting
             if provider:
@@ -492,7 +495,7 @@ class JPER(object):
             "from": (page - 1) * page_size,
             "size": page_size
         }
-        
+
         if repository_id is not None:
             # 2016-09-07 TD : trial to filter for publisher's reporting
             if provider:
@@ -559,7 +562,7 @@ class JPER(object):
             "from": (page - 1) * page_size,
             "size": page_size
         }
-        
+
         if provider_id is not None:
             qr['query']['bool']["must"] = {"match": {"provider.id.exact": provider_id}}
 
@@ -612,7 +615,7 @@ class JPER(object):
             # "sort": [{"analysis_date":{"order":"asc"}}],
             # 2016-09-06 TD : change of sort order newest first
         }
-        
+
         if repository_id is not None:
             # 2016-09-07 TD : trial to filter for publisher's reporting
             if provider:
@@ -669,7 +672,7 @@ class JPER(object):
             "sort": [{"created_date":{"order":"desc"}}],
             # 2016-09-06 TD : change of sort order newest first
         }
-        
+
         if repository_id is not None:
             # 2016-09-07 TD : trial to filter for publisher's reporting
             if provider:
@@ -722,7 +725,7 @@ class JPER(object):
             },
             "sort": [{"created_date":{"order":"desc"}}],
         }
-        
+
         if provider_id is not None:
             qr['query']['bool']["must"] = {"match": {"provider.id.exact": provider_id}}
 
