@@ -1,9 +1,11 @@
 from service import models
+from service.__utils import str_utils
 
 
-def create_unrouted_noti__1() -> models.UnroutedNotification:
+def create_unrouted_noti__1(unrouted_noti_id=None) -> models.UnroutedNotification:
+    unrouted_noti_id = unrouted_noti_id or str_utils.create_random_id()
     unrouted_dict_1 = {
-        "id": "unrouted_id_1",
+        "id": unrouted_noti_id,
         "created_date": "2015-02-02T00:00:00Z",
 
         "event": "publication",

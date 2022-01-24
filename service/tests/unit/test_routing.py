@@ -21,11 +21,11 @@ from octopus.modules.es.testindex import ESTestCase
 from octopus.modules.store import store
 from service import models, api, packages
 from service import routing_deepgreen as routing
+from service.__utils import esprit_utils
 from service.models import License, Alliance, Account, RoutedNotification, MatchProvenance, NotificationMetadata, \
     RoutingMetadata
 from service.tests import fixtures
 from service.tests.data import test_data
-from service.utils import esprit_utils
 from service.web import app
 
 ## PACKAGE = "https://pubrouter.jisc.ac.uk/FilesAndJATS"
@@ -778,13 +778,13 @@ class TestRouting(ESTestCase):
                                          mock_pm_extract: MagicMock,
                                          ):
         # start a timer so we can check the analysed date later
-        now = datetime.utcnow()
+        now = datetime.utcnow() - timedelta(seconds=1)
 
         # get an unrouted notification
-        unrouted_noti = test_data.create_unrouted_noti__1()
+        td_unrouted_noti = test_data.create_unrouted_noti__1()
 
         # now run the routing algorithm
-        route_result = routing.route(unrouted_noti)
+        route_result = routing.route(td_unrouted_noti)
 
         # give the index a chance to catch up before checking the results
         time.sleep(3)
@@ -792,21 +792,25 @@ class TestRouting(ESTestCase):
         self.assertTrue(route_result)
 
         # check that a match provenance was recorded
-        mps = models.MatchProvenance.pull_by_notification(unrouted_noti.id)
-        self.assertGreater(len(mps), 0)
+        mps = models.MatchProvenance.pull_by_notification(td_unrouted_noti.id)
+        self.assertEqual(len(mps), 2)
 
         # check the properties of the match provenance
         mp = mps[0]
         assert mp.repository == mock_acc_pull.return_value[0].id
-        assert mp.notification == unrouted_noti.id
+        assert mp.notification == td_unrouted_noti.id
         assert len(mp.provenance) > 0
 
         # check that a routed notification was created
-        rn = models.RoutedNotification.pull(unrouted_noti.id)
+        rn = models.RoutedNotification.pull(td_unrouted_noti.id)
         assert rn is not None
         assert rn.analysis_datestamp >= now
         self.assertSetEqual(set(rn.repositories),
                             {acc.id for acc in mock_acc_pull.return_value})
+
+        # check to see that a failed notification was not recorded
+        fn = models.FailedNotification.pull(td_unrouted_noti.id)
+        assert fn is None
 
     def test_98_routing_success_package(self):
         # start a timer so we can check the analysed date later
@@ -921,7 +925,7 @@ class TestRouting(ESTestCase):
 
         date_before_run = datetime.now() - timedelta(seconds=1)
 
-        test_data_unrouted = test_data.create_unrouted_noti__1()
+        td_unrouted_noti = test_data.create_unrouted_noti__1()
 
         def _count_prov():
             return esprit_utils.size_by_query_result(MatchProvenance.query('*'))
@@ -929,7 +933,7 @@ class TestRouting(ESTestCase):
         org_prov_size = _count_prov()
 
         # run test target method
-        is_routed = routing.route(test_data_unrouted)
+        is_routed = routing.route(td_unrouted_noti)
         self.assertTrue(is_routed)
 
         time.sleep(2)  # wait for dao save completed
@@ -938,8 +942,12 @@ class TestRouting(ESTestCase):
         self.assertGreater(_count_prov(), org_prov_size)
 
         # assert saved RoutedNotification
-        routed_noti = RoutedNotification.pull(test_data_unrouted.id)
+        routed_noti = RoutedNotification.pull(td_unrouted_noti.id)
         self.assertIsNotNone(routed_noti)
         self.assertGreaterEqual(routed_noti.analysis_datestamp, date_before_run)
         self.assertEqual(len(routed_noti.repositories), 1)
         self.assertEqual(routed_noti.repositories[0], 'fake_acc_id_1')
+
+        # check to see that a failed notification was not recorded
+        fn = models.FailedNotification.pull(td_unrouted_noti.id)
+        assert fn is None
