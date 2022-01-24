@@ -91,17 +91,19 @@ def _yield_al_repos(part_bibids: Iterable[PartBibid],
         # Regular accounts
         # 2019-03-21 TD : in some (rare?) test scenarios there might be more than one account
         # 2019-03-26 TD : case decision - handle multiple, equal accs vs. single accs only
-        add_account = (len(models.Account.pull_all_by_key("repository.bibid", bibid)) <= 1 or
-                       app.config.get("DEEPGREEN_ALLOW_EQUAL_REPOS", False))
+        acc_list = models.Account.pull_all_by_key("repository.bibid", bibid)
+        is_allow_add = (len(acc_list) <= 1 or
+                        app.config.get("DEEPGREEN_ALLOW_EQUAL_REPOS", False))
+        if not is_allow_add:
+            continue
 
         def _should_add(_acc):
-            return (add_account and
-                    _acc is not None and
+            return (_acc is not None and
                     _acc.has_role("repository") and
                     not _acc.is_passive)
 
         bibid_acc_list = itertools.chain(
-            ((bibid, acc) for acc in models.Account.pull_all_by_key("repository.bibid", bibid)),
+            ((bibid, acc) for acc in acc_list),
             (("a" + bibid, acc) for acc in models.Account.pull_all_by_key("repository.bibid", "a" + bibid)),
         )
         bibid_acc_list = ((b, a) for b, a in bibid_acc_list if _should_add(a))
@@ -441,7 +443,6 @@ def match(noti_data: models.RoutingMetadata,
     # if the configuration specifies a keyword, it must match the notification data, otherwise
     # the match fails
     # as above, if the config requires a content type it must match the notification data or the match fails
-    # KTODO in old code, `match_msg is True` is always false
     refinement_props = (prop for prop in ["keywords", "content_types"]
                         if len(getattr(repo_conf, prop)))
 
@@ -453,7 +454,7 @@ def match(noti_data: models.RoutingMetadata,
             add_all_provenance(provenance, prov_list)
         else:
             app.logger.debug(f'stop matching [{prop}], none of the required matches hit ')
-            return False  # exit function rather than, break for loop
+            return False  # exit function rather than continue the for loop
 
     return len(provenance.provenance) > 0
 
