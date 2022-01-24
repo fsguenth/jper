@@ -1,4 +1,3 @@
-
 Dictionary
 ------------------
 
@@ -9,3 +8,7 @@ Dictionary
 | repo       | repository            |
 | conf       | config, configuration |
 | prop       | property              |
+| alli | Alliance |
+| md | metadata |
+| rout | routing |
+| lic | License |
