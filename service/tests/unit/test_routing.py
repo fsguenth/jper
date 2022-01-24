@@ -35,10 +35,18 @@ TEST_FORMAT = "http://datahub.deepgreen.org/packages/OtherTestFormat"
 SIMPLE_ZIP = "http://purl.org/net/sword/package/SimpleZip"
 
 
-def data_acc_list__1() -> list[Account]:
+def delayed_now():
+    # database have no microsecond but `now` have microsecond,
+    # mimus 1 seconds to avoid `now` is bigger than db save time / last updated at
+    now = datetime.utcnow() - timedelta(seconds=1)
+    return now
+
+
+def data_acc_list__1(acc_id=None) -> list[Account]:
+    acc_id = acc_id or 'fake_acc_id_1'
     # mock Account.pull_all_by_key
     td_acc_1 = Account()
-    td_acc_1.id = 'fake_acc_id_1'
+    td_acc_1.id = acc_id
     td_acc_1.add_role("repository")
     return [td_acc_1, ]
 
@@ -62,9 +70,12 @@ def data_pm_extract__1() -> tuple[NotificationMetadata, RoutingMetadata]:
     return td_noti_md, td_rout_md
 
 
-def data_license__1() -> License:
+def data_license__1(issn_list: list[str] = None) -> License:
     """ create return_value of License.pull_by_journal_id
     """
+
+    issn_list = issn_list or ['_fake_issn_1_']
+
     td_lic = License()
     td_lic.id = 'mock_lic_id_1'
     td_lic.type = "alliance"
@@ -72,7 +83,7 @@ def data_license__1() -> License:
         {
             'name': '_fake_lic_name_',
             'identifier': [
-                {'type': 'issn', 'id': '_fake_issn_1_'}
+                {'type': 'issn', 'id': issn} for issn in issn_list
             ],
             'link': [
                 {
@@ -91,9 +102,7 @@ def create_test_acc__resp_1() -> models.Account:
     """
     :return account simple_zip + repository
     """
-    acc1 = models.Account()
-    acc1.add_packaging(SIMPLE_ZIP)
-    acc1.add_role('repository')
+    acc1 = test_data.create_acc__1()
     acc1.save()
     return acc1
 
@@ -326,7 +335,9 @@ class TestRouting(ESTestCase):
         acc2.add_packaging(TEST_FORMAT)
         acc2.add_packaging(SIMPLE_ZIP)
         acc2.add_role('repository')
-        acc2.save(blocking=True)
+        acc2.save()
+
+        time.sleep(3)
 
         # put an associated package into the store
         # create a custom zip (the package manager will delete it, so don't use the fixed example)
@@ -347,7 +358,9 @@ class TestRouting(ESTestCase):
         assert links[0].get("url").endswith("SimpleZip.zip")
         assert links[0].get("packaging") == "http://purl.org/net/sword/package/SimpleZip"
 
+    @unittest.skip('routing_deepgreen have no function links')
     def test_10_proxy_links(self):
+        # TOBEREMOVE: routing_deepgreen have no function links
         # get an unrouted notification to work with
         source = fixtures.NotificationFactory.routed_notification()
         routed = models.RoutedNotification(source)
@@ -778,7 +791,7 @@ class TestRouting(ESTestCase):
                                          mock_pm_extract: MagicMock,
                                          ):
         # start a timer so we can check the analysed date later
-        now = datetime.utcnow() - timedelta(seconds=1)
+        now = delayed_now()
 
         # get an unrouted notification
         td_unrouted_noti = test_data.create_unrouted_noti__1()
@@ -812,15 +825,22 @@ class TestRouting(ESTestCase):
         fn = models.FailedNotification.pull(td_unrouted_noti.id)
         assert fn is None
 
-    def test_98_routing_success_package(self):
+    @patch.object(models.Account, 'pull_all_by_key')
+    @patch.object(models.Alliance, 'pull_by_key', return_value=data_alliance__1())
+    @patch.object(models.License, 'pull_by_journal_id', return_value=data_license__1(['2296-2646']))
+    def test_98_routing_success_package(self,
+                                        mock_lic_pull: MagicMock,
+                                        mock_alli_pull: MagicMock,
+                                        mock_acc_pull: MagicMock, ):
+
         # start a timer so we can check the analysed date later
-        now = datetime.utcnow()
+        now = delayed_now()
 
         # add an account to the index, which will take simplezip
-        acc1 = models.Account()
-        acc1.add_packaging(SIMPLE_ZIP)
-        acc1.add_role('publisher')
+        acc1 = test_data.create_acc__2()
         acc1.save()
+        mock_acc_pull.return_value = [acc1]
+        app.logger.debug(f'repo / acc.id {acc1.id}')
 
         # 2. Creation of metadata + zip content
         notification = fixtures.APIFactory.incoming()
@@ -829,7 +849,7 @@ class TestRouting(ESTestCase):
         del notification["metadata"]["type"]
         filepath = fixtures.PackageFactory.example_package_path()
         with open(filepath, 'rb') as f:
-            note = api.JPER.create_notification(acc1, notification, f)
+            unrouted_noti = api.JPER.create_notification(acc1, notification, f)
 
         # add a repository config to the index
         source = fixtures.RepositoryFactory.repo_config()
@@ -837,29 +857,30 @@ class TestRouting(ESTestCase):
         del source["content_types"]
         rc = models.RepositoryConfig(source)
         rc.repository = acc1.id
-        rc.save(blocking=True)
+        rc.save()
 
         # load the unrouted notification
-        urn = models.UnroutedNotification.pull(note.id)
+        unrouted_noti = models.UnroutedNotification.pull(unrouted_noti.id)
 
         # now run the routing algorithm
-        routing.route(urn)
+        time.sleep(2)  # wait for data save completed
+        routing.route(unrouted_noti)
 
         # give the index a chance to catch up before checking the results
         time.sleep(2)
 
         # check that a match provenance was recorded
-        mps = models.MatchProvenance.pull_by_notification(urn.id)
-        assert len(mps) == 1, len(mps)
+        mps = models.MatchProvenance.pull_by_notification(unrouted_noti.id)
+        assert len(mps) == 2, len(mps)
 
         # check the properties of the match provenance
         mp = mps[0]
         assert mp.repository == rc.repository
-        assert mp.notification == urn.id
+        assert mp.notification == unrouted_noti.id
         assert len(mp.provenance) > 0
 
         # check that a routed notification was created
-        rn = models.RoutedNotification.pull(urn.id)
+        rn = models.RoutedNotification.pull(unrouted_noti.id)
         assert rn is not None
         assert rn.analysis_datestamp >= now
         assert rc.repository in rn.repositories
@@ -923,7 +944,7 @@ class TestRouting(ESTestCase):
                                   mock_repo_conf_pull: MagicMock,
                                   mock_pm_extract: MagicMock, ):
 
-        date_before_run = datetime.now() - timedelta(seconds=1)
+        date_before_run = delayed_now()
 
         td_unrouted_noti = test_data.create_unrouted_noti__1()
 

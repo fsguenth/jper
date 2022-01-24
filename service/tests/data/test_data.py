@@ -1,6 +1,10 @@
 from service import models
 from service.__utils import str_utils
 
+PACKAGE = "https://datahub.deepgreen.org/FilesAndJATS"
+TEST_FORMAT = "http://datahub.deepgreen.org/packages/OtherTestFormat"
+SIMPLE_ZIP = "http://purl.org/net/sword/package/SimpleZip"
+
 
 def create_unrouted_noti__1(unrouted_noti_id=None) -> models.UnroutedNotification:
     unrouted_noti_id = unrouted_noti_id or str_utils.create_random_id()
@@ -127,3 +131,24 @@ def create_repo_conf__1() -> models.RepositoryConfig:
     return models.RepositoryConfig({
         'name_variants': ['__key__', 'fake affiliation 1'],
     })
+
+
+def create_acc__1() -> models.Account:
+    """
+    account simple_zip + repository
+    """
+    acc1 = models.Account()
+    acc1.add_packaging(SIMPLE_ZIP)
+    acc1.add_role('repository')
+    return acc1
+
+
+def create_acc__2() -> models.Account:
+    """
+    account simple_zip + publisher
+    """
+    acc1 = models.Account()
+    acc1.add_packaging(SIMPLE_ZIP)
+    acc1.add_role('publisher')
+    acc1.add_role('repository')
+    return acc1
