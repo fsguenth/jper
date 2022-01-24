@@ -460,7 +460,7 @@ class TestRouting(ESTestCase):
 
         prov = models.MatchProvenance()
 
-        m = routing.match(md, rc, prov, create_test_acc__resp_a().id)
+        m = routing.match(md, rc, prov, create_test_acc__resp_1().id)
         assert m is True
         assert len(prov.provenance) == 13
         check = [0] * 13
@@ -555,7 +555,7 @@ class TestRouting(ESTestCase):
 
         prov = models.MatchProvenance()
 
-        m = routing.match(md, rc, prov, create_test_acc__resp_a().id)
+        m = routing.match(md, rc, prov, create_test_acc__resp_1().id)
         assert m is True
         assert len(prov.provenance) == 15
         check = [0] * 15
@@ -658,7 +658,7 @@ class TestRouting(ESTestCase):
 
         prov = models.MatchProvenance()
 
-        m = routing.match(md, rc, prov, create_test_acc__resp_a().id)
+        m = routing.match(md, rc, prov, create_test_acc__resp_1().id)
         assert m is False
         assert len(prov.provenance) == 0
 
@@ -666,28 +666,17 @@ class TestRouting(ESTestCase):
 
         expected_match = "111 __key__ 111"
 
-        notification_data: models.RoutingMetadata = models.RoutingMetadata({
-            'emails': ['ggg@abc.om'],
-            'affiliations': [
-                expected_match,
-                "111 gg 111",
-            ],
-            'keywords': ['keyword_a', 'keyword_b', ],
-        })
-
-        repository_config: models.RepositoryConfig = models.RepositoryConfig({
-            'name_variants': ['__key__', ],
-        })
-
         provenance: models.MatchProvenance = models.MatchProvenance()
 
-        acc1 = create_test_acc__resp_a()
+        acc1 = create_test_acc__resp_1()
 
         # assert before run
         self.assertEqual(len(provenance.provenance), 0)
 
         # run
-        result = routing.match(notification_data, repository_config, provenance, acc1.id)
+        result = routing.match(test_data.rout_meta_1,
+                               test_data.repo_conf_1,
+                               provenance, acc1.id)
 
         # assert after run
         self.assertTrue(result)
@@ -703,7 +692,7 @@ class TestRouting(ESTestCase):
                 'random value',
                 "111 gg 111",
             ],
-            'keywords': ['keyword_a', 'keyword_b', ],
+            'keywords': ['keyword_1', 'keyword_2', ],
         })
 
         repository_config: models.RepositoryConfig = models.RepositoryConfig({
@@ -717,7 +706,7 @@ class TestRouting(ESTestCase):
 
         # run
         result = routing.match(notification_data, repository_config, provenance,
-                               create_test_acc__resp_a().id)
+                               create_test_acc__resp_1().id)
 
         # assert after run
         self.assertFalse(result)
