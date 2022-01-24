@@ -11,7 +11,8 @@ import os
 import time
 import unittest
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timedelta
+from unittest.mock import patch, MagicMock
 
 from flask import url_for
 
@@ -20,7 +21,11 @@ from octopus.modules.es.testindex import ESTestCase
 from octopus.modules.store import store
 from service import models, api, packages
 from service import routing_deepgreen as routing
+from service.models import License, Alliance, Account, RoutedNotification, MatchProvenance, NotificationMetadata, \
+    RoutingMetadata
 from service.tests import fixtures
+from service.tests.data import test_data
+from service.utils import esprit_utils
 from service.web import app
 
 ## PACKAGE = "https://pubrouter.jisc.ac.uk/FilesAndJATS"
@@ -30,7 +35,7 @@ TEST_FORMAT = "http://datahub.deepgreen.org/packages/OtherTestFormat"
 SIMPLE_ZIP = "http://purl.org/net/sword/package/SimpleZip"
 
 
-def create_test_acc__resp_a() -> models.Account:
+def create_test_acc__resp_1() -> models.Account:
     acc1 = models.Account()
     acc1.add_packaging(SIMPLE_ZIP)
     acc1.add_role('repository')
@@ -872,3 +877,88 @@ class TestRouting(ESTestCase):
         # check that a failed notification was recorded
         fn = models.FailedNotification.pull(urn.id)
         assert fn is not None
+
+    @patch.object(packages.PackageManager, 'extract')
+    @patch.object(models.RepositoryConfig, 'pull_by_repo')
+    @patch.object(models.Account, 'pull_all_by_key')
+    @patch.object(models.Alliance, 'pull_by_key')
+    @patch.object(models.License, 'pull_by_journal_id')
+    def test_routing__normal_case(self,
+                                  mock_lic_pull: MagicMock,
+                                  mock_alli_pull: MagicMock,
+                                  mock_acc_pull: MagicMock,
+                                  mock_repo_conf_pull: MagicMock,
+                                  mock_pm_extract: MagicMock,
+                                  ):
+
+        # mock for PackageManager.extract
+        td_noti_md = NotificationMetadata()
+        td_noti_md.publication_date = '2022-01-21'
+        td_noti_md.get_identifiers = MagicMock(return_value=['_fake_issn_1_'])
+        td_rout_md = RoutingMetadata()
+        mock_pm_extract.return_value = [td_noti_md, td_rout_md]
+
+        # mock for License.pull_by_journal_id
+        td_lic = License()
+        td_lic.id = 'mock_lic_id_1'
+        td_lic.type = "alliance"
+        td_lic._set_list("journal", [
+            {
+                'name': '_fake_lic_name_',
+                'identifier': [
+                    {'type': 'issn', 'id': '_fake_issn_1_'}
+                ],
+                'link': [
+                    {
+                        'type': 'ezb',
+                        'url': 'http://mock.url'
+                    }
+                ],
+                'embargo': {'duration': 2}
+            }
+
+        ])
+        mock_lic_pull.return_value = td_lic
+
+        # mock for Alliance.pull_by_key
+        td_alli = Alliance()
+        td_alli.participants = [
+            {'name': 'fake_part_1', 'identifier': [{'type': 'ezb', 'id': 'fake_iden_2'},
+                                                   {'type': 'sigel', 'id': 'fake_iden_1'}]}
+        ]
+        mock_alli_pull.return_value = td_alli
+
+        # mock Account.pull_all_by_key
+        td_acc_1 = Account()
+        td_acc_1.id = 'fake_acc_id_1'
+        td_acc_1.add_role("repository")
+        td_acc_1.save()
+        mock_acc_pull.return_value = [td_acc_1, ]
+
+        # mock RepositoryConfig.pull_by_repo
+        mock_repo_conf_pull.return_value = test_data.repo_conf_1
+
+        date_before_run = datetime.now() - timedelta(seconds=1)
+
+        test_data_unrouted = models.UnroutedNotification(test_data.unrouted_dict_1)
+
+        def _count_prov():
+            return esprit_utils.size_by_query_result(MatchProvenance.query('*'))
+
+        org_prov_size = _count_prov()
+
+        # run test target method
+        is_routed = routing.route(test_data_unrouted)
+        self.assertTrue(is_routed)
+
+        time.sleep(2)  # wait for dao save completed
+
+        # assert prov
+        self.assertGreater(_count_prov(), org_prov_size)
+
+        # assert saved RoutedNotification
+        routed_noti = RoutedNotification.pull(test_data_unrouted.id)
+        self.assertIsNotNone(routed_noti)
+        self.assertGreaterEqual(routed_noti.analysis_datestamp, date_before_run)
+        self.assertEqual(len(routed_noti.repositories), 1)
+        self.assertEqual(routed_noti.repositories[0], 'fake_acc_id_1')
