@@ -5,6 +5,7 @@ All packaging format handlers should extend the PackageHandler class defined in 
 
 Packages should then be configured through the PACKAGE_HANDLERS configuration option
 """
+from typing import Optional
 
 from octopus.core import app
 from octopus.lib import plugin
@@ -12,11 +13,14 @@ from octopus.modules.store import store
 from octopus.modules.epmc.models import JATS, EPMCMetadataXML, RSCMetadataXML
 # from octopus.modules.identifiers import postcode
 # 2017-01-19 TD : in the deepgreen setting, postcodes are not needed. They are rather counter-productive...
+from octopus.modules.store.store import Store
 from service import models
 import zipfile, os, shutil, hashlib, mimetypes
 from datetime import datetime
 from lxml import etree
 from io import StringIO
+
+from service.models import NotificationMetadata, RoutingMetadata
 
 
 class PackageException(Exception):
@@ -129,7 +133,9 @@ class PackageManager(object):
         os.remove(zip_path)
 
     @classmethod
-    def extract(cls, store_id, format, storage_manager=None):
+    def extract(cls, store_id, format,
+                storage_manager: Store = None) -> tuple[Optional[NotificationMetadata],
+                                                        Optional[RoutingMetadata]]:
         """
         Extract notification metadata and match data from the package in the store which has the specified format
 
@@ -171,11 +177,8 @@ class PackageManager(object):
         pm = PackageFactory.incoming(format, metadata_files=handles)
 
         # now do the metadata and the match analysis extraction
-        md = pm.notification_metadata()
-        ma = pm.match_data()
-
         # return the extracted data
-        return md, ma
+        return pm.notification_metadata(), pm.match_data()
 
     @classmethod
     def convert(cls, store_id, source_format, target_formats, storage_manager=None):
@@ -696,7 +699,7 @@ class FilesAndJATS(PackageHandler):
             if x is not None:
                 yield n, StringIO(x.tostring().decode('utf-8'))
 
-    def notification_metadata(self):
+    def notification_metadata(self) -> models.NotificationMetadata:
         """
         Get the notification metadata as extracted from the package
 
@@ -718,7 +721,7 @@ class FilesAndJATS(PackageHandler):
 
         return self._merge_metadata(emd, jmd)
 
-    def match_data(self):
+    def match_data(self) -> models.RoutingMetadata:
         """
         Get the match data as extracted from the package
 
@@ -1092,7 +1095,9 @@ class FilesAndJATS(PackageHandler):
             zin.close()
             raise PackageException("Unable to parse and/or transform XML file in package {x}".format(x=in_path))
 
-    def _merge_metadata(self, emd, jmd):
+    @staticmethod
+    def _merge_metadata(emd: NotificationMetadata,
+                        jmd: NotificationMetadata) -> NotificationMetadata:
         """
         Merge the supplied EMPC and JATS metadata records into one
 
@@ -1138,7 +1143,7 @@ class FilesAndJATS(PackageHandler):
 
         return md
 
-    def _jats_metadata(self):
+    def _jats_metadata(self) -> NotificationMetadata:
         """
         Extract metadata from the JATS file
 
@@ -1195,7 +1200,7 @@ class FilesAndJATS(PackageHandler):
 
         return md
 
-    def _epmc_metadata(self):
+    def _epmc_metadata(self) -> NotificationMetadata:
         """
         Extract metadata from the EPMC XML
 
@@ -1373,19 +1378,19 @@ class FilesAndJATS(PackageHandler):
 
         :return:
         """
-        for name, stream in self.metadata_files:
-            if name == "filesandjats_jats.xml":
-                try:
-                    xml = etree.fromstring(stream.read())
-                    self._set_jats(xml)
-                except Exception:
-                    raise PackageException("Unable to parse filesandjats_jats.xml file from store")
-            elif name == "filesandjats_epmc.xml":
-                try:
-                    xml = etree.fromstring(stream.read())
-                    self._set_epmc(xml)
-                except Exception:
-                    raise PackageException("Unable to parse filesandjats_epmc.xml file from store")
+        name_handler_map = {
+            "filesandjats_jats.xml": self._set_jats,
+            "filesandjats_epmc.xml": self._set_epmc,
+        }
+        metadata_files = ((name, stream) for name, stream in self.metadata_files
+                          if name in name_handler_map)
+        for name, stream in metadata_files:
+            handler_fn = name_handler_map[name]
+            try:
+                xml = etree.fromstring(stream.read())
+                handler_fn(xml)
+            except Exception:
+                raise PackageException(f"Unable to parse {name} file from store")
 
         if not self._is_valid():
             raise PackageException("No JATS fulltext or EPMC metadata found in metadata files")
