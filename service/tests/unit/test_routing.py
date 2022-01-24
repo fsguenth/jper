@@ -35,7 +35,62 @@ TEST_FORMAT = "http://datahub.deepgreen.org/packages/OtherTestFormat"
 SIMPLE_ZIP = "http://purl.org/net/sword/package/SimpleZip"
 
 
+def data_acc_list__1() -> list[Account]:
+    # mock Account.pull_all_by_key
+    td_acc_1 = Account()
+    td_acc_1.id = 'fake_acc_id_1'
+    td_acc_1.add_role("repository")
+    return [td_acc_1, ]
+
+
+def data_alliance__1() -> Alliance:
+    td_alli = Alliance()
+    td_alli.participants = [
+        {'name': 'fake_part_1', 'identifier': [{'type': 'ezb', 'id': 'fake_iden_2'},
+                                               {'type': 'sigel', 'id': 'fake_iden_1'}]}
+    ]
+    return td_alli
+
+
+def data_pm_extract__1() -> tuple[NotificationMetadata, RoutingMetadata]:
+    """ create return_value of PackageManager.extract
+    """
+    td_noti_md = NotificationMetadata()
+    td_noti_md.publication_date = '2022-01-21'
+    td_noti_md.get_identifiers = MagicMock(return_value=['_fake_issn_1_'])
+    td_rout_md = RoutingMetadata()
+    return td_noti_md, td_rout_md
+
+
+def data_license__1() -> License:
+    """ create return_value of License.pull_by_journal_id
+    """
+    td_lic = License()
+    td_lic.id = 'mock_lic_id_1'
+    td_lic.type = "alliance"
+    td_lic._set_list("journal", [
+        {
+            'name': '_fake_lic_name_',
+            'identifier': [
+                {'type': 'issn', 'id': '_fake_issn_1_'}
+            ],
+            'link': [
+                {
+                    'type': 'ezb',
+                    'url': 'http://mock.url'
+                }
+            ],
+            'embargo': {'duration': 2}
+        }
+
+    ])
+    return td_lic
+
+
 def create_test_acc__resp_1() -> models.Account:
+    """
+    :return account simple_zip + repository
+    """
     acc1 = models.Account()
     acc1.add_packaging(SIMPLE_ZIP)
     acc1.add_role('repository')
@@ -664,8 +719,6 @@ class TestRouting(ESTestCase):
 
     def test_match__normal_cases(self):
 
-        expected_match = "111 __key__ 111"
-
         provenance: models.MatchProvenance = models.MatchProvenance()
 
         acc1 = create_test_acc__resp_1()
@@ -674,15 +727,15 @@ class TestRouting(ESTestCase):
         self.assertEqual(len(provenance.provenance), 0)
 
         # run
-        result = routing.match(test_data.rout_meta_1,
-                               test_data.repo_conf_1,
+        result = routing.match(test_data.create_rout_meta__1(),
+                               test_data.create_repo_conf__1(),
                                provenance, acc1.id)
 
         # assert after run
         self.assertTrue(result)
-        self.assertEqual(len(provenance.provenance), 1)
+        self.assertEqual(len(provenance.provenance), 2)
         self.assertEqual(provenance.provenance[0]['notification_field'], 'affiliations', )
-        self.assertEqual(provenance.provenance[0]['matched'], expected_match, )
+        self.assertEqual(provenance.provenance[0]['matched'], "111 __key__ 111", )
 
     def test_match__affiliations_not_match(self):
 
@@ -712,42 +765,39 @@ class TestRouting(ESTestCase):
         self.assertFalse(result)
         self.assertEqual(len(provenance.provenance), 0)
 
-    def test_97_routing_success_metadata(self):
+    @patch.object(packages.PackageManager, 'extract', return_value=data_pm_extract__1())
+    @patch.object(models.RepositoryConfig, 'pull_by_repo', return_value=test_data.create_repo_conf__1())
+    @patch.object(models.Account, 'pull_all_by_key', return_value=data_acc_list__1())
+    @patch.object(models.Alliance, 'pull_by_key', return_value=data_alliance__1())
+    @patch.object(models.License, 'pull_by_journal_id', return_value=data_license__1())
+    def test_97_routing_success_metadata(self,
+                                         mock_lic_pull: MagicMock,
+                                         mock_alli_pull: MagicMock,
+                                         mock_acc_pull: MagicMock,
+                                         mock_repo_conf_pull: MagicMock,
+                                         mock_pm_extract: MagicMock,
+                                         ):
         # start a timer so we can check the analysed date later
         now = datetime.utcnow()
 
-        # add an account to the index, which will take simplezip, but there should be no repackaging done
-        # as there's no files
-        acc1 = models.Account()
-        acc1.add_packaging(SIMPLE_ZIP)
-        acc1.add_role('repository')
-        acc1.save()
-
-        # add a repository config to the index
-        source = fixtures.RepositoryFactory.repo_config()
-        del source["keywords"]
-        del source["content_types"]
-        rc = models.RepositoryConfig(source)
-        rc.repository = acc1.id
-        rc.save(blocking=True)
-
         # get an unrouted notification
-        source2 = fixtures.NotificationFactory.unrouted_notification()
-        unrouted_noti = models.UnroutedNotification(source2)
+        unrouted_noti = test_data.create_unrouted_noti__1()
 
         # now run the routing algorithm
-        routing.route(unrouted_noti)
+        route_result = routing.route(unrouted_noti)
 
         # give the index a chance to catch up before checking the results
         time.sleep(3)
 
+        self.assertTrue(route_result)
+
         # check that a match provenance was recorded
         mps = models.MatchProvenance.pull_by_notification(unrouted_noti.id)
-        assert len(mps) == 1, len(mps)
+        self.assertGreater(len(mps), 0)
 
         # check the properties of the match provenance
         mp = mps[0]
-        assert mp.repository == rc.repository
+        assert mp.repository == mock_acc_pull.return_value[0].id
         assert mp.notification == unrouted_noti.id
         assert len(mp.provenance) > 0
 
@@ -755,20 +805,8 @@ class TestRouting(ESTestCase):
         rn = models.RoutedNotification.pull(unrouted_noti.id)
         assert rn is not None
         assert rn.analysis_datestamp >= now
-        assert rc.repository in rn.repositories
-
-        # No need to check for enhanced metadata as there is no package
-
-        # check the store to be sure that no conversions were made
-        # TODO 2020-01-10 AR: The store gets created. Need to investigate why. I am commenting these lines
-        # s = store.StoreFactory.get()
-        # assert not s.exists(rn.id)
-
-        # FIXME: check for enhanced router links
-
-        # check to see that a failed notification was not recorded
-        fn = models.FailedNotification.pull(unrouted_noti.id)
-        assert fn is None
+        self.assertSetEqual(set(rn.repositories),
+                            {acc.id for acc in mock_acc_pull.return_value})
 
     def test_98_routing_success_package(self):
         # start a timer so we can check the analysed date later
@@ -843,7 +881,9 @@ class TestRouting(ESTestCase):
         # useless (won't match) repo config data
         source = fixtures.RepositoryFactory.useless_repo_config()
         rc = models.RepositoryConfig(source)
-        rc.save(blocking=True)
+        rc.save()
+
+        time.sleep(1)
 
         # get an unrouted notification
         source2 = fixtures.NotificationFactory.unrouted_notification()
@@ -867,69 +907,21 @@ class TestRouting(ESTestCase):
         fn = models.FailedNotification.pull(urn.id)
         assert fn is not None
 
-    @patch.object(packages.PackageManager, 'extract')
-    @patch.object(models.RepositoryConfig, 'pull_by_repo')
-    @patch.object(models.Account, 'pull_all_by_key')
-    @patch.object(models.Alliance, 'pull_by_key')
-    @patch.object(models.License, 'pull_by_journal_id')
+    @patch.object(packages.PackageManager, 'extract', return_value=data_pm_extract__1())
+    @patch.object(models.RepositoryConfig, 'pull_by_repo', return_value=test_data.create_repo_conf__1())
+    @patch.object(models.Account, 'pull_all_by_key', return_value=data_acc_list__1())
+    @patch.object(models.Alliance, 'pull_by_key', return_value=data_alliance__1())
+    @patch.object(models.License, 'pull_by_journal_id', return_value=data_license__1())
     def test_routing__normal_case(self,
                                   mock_lic_pull: MagicMock,
                                   mock_alli_pull: MagicMock,
                                   mock_acc_pull: MagicMock,
                                   mock_repo_conf_pull: MagicMock,
-                                  mock_pm_extract: MagicMock,
-                                  ):
-
-        # mock for PackageManager.extract
-        td_noti_md = NotificationMetadata()
-        td_noti_md.publication_date = '2022-01-21'
-        td_noti_md.get_identifiers = MagicMock(return_value=['_fake_issn_1_'])
-        td_rout_md = RoutingMetadata()
-        mock_pm_extract.return_value = [td_noti_md, td_rout_md]
-
-        # mock for License.pull_by_journal_id
-        td_lic = License()
-        td_lic.id = 'mock_lic_id_1'
-        td_lic.type = "alliance"
-        td_lic._set_list("journal", [
-            {
-                'name': '_fake_lic_name_',
-                'identifier': [
-                    {'type': 'issn', 'id': '_fake_issn_1_'}
-                ],
-                'link': [
-                    {
-                        'type': 'ezb',
-                        'url': 'http://mock.url'
-                    }
-                ],
-                'embargo': {'duration': 2}
-            }
-
-        ])
-        mock_lic_pull.return_value = td_lic
-
-        # mock for Alliance.pull_by_key
-        td_alli = Alliance()
-        td_alli.participants = [
-            {'name': 'fake_part_1', 'identifier': [{'type': 'ezb', 'id': 'fake_iden_2'},
-                                                   {'type': 'sigel', 'id': 'fake_iden_1'}]}
-        ]
-        mock_alli_pull.return_value = td_alli
-
-        # mock Account.pull_all_by_key
-        td_acc_1 = Account()
-        td_acc_1.id = 'fake_acc_id_1'
-        td_acc_1.add_role("repository")
-        td_acc_1.save()
-        mock_acc_pull.return_value = [td_acc_1, ]
-
-        # mock RepositoryConfig.pull_by_repo
-        mock_repo_conf_pull.return_value = test_data.repo_conf_1
+                                  mock_pm_extract: MagicMock, ):
 
         date_before_run = datetime.now() - timedelta(seconds=1)
 
-        test_data_unrouted = models.UnroutedNotification(test_data.unrouted_dict_1)
+        test_data_unrouted = test_data.create_unrouted_noti__1()
 
         def _count_prov():
             return esprit_utils.size_by_query_result(MatchProvenance.query('*'))
