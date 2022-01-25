@@ -5,11 +5,14 @@ Blueprint for providing account management
 import uuid, json, time, requests
 
 from flask import Blueprint, request, url_for, flash, redirect, render_template, abort, send_file
+
+from service.__utils import jper_view_utils
 from service.forms.adduser import AdduserForm
 from flask_login import login_user, logout_user, current_user
 from octopus.core import app
 from octopus.lib import dates
 from service.api import JPER, ParameterException
+from service.models import Account
 from service.views.webapi import _bad_request
 from service.repository_licenses import get_matching_licenses
 import math
@@ -21,6 +24,8 @@ from io import StringIO, TextIOWrapper, BytesIO
 from datetime import timedelta
 
 blueprint = Blueprint('account', __name__)
+
+# @formatter:off    turn OFF pycharm formatter
 
 # Notification table/csv for repositories
 ntable = {
@@ -76,6 +81,8 @@ ctable = {
       "Keywords" : "repoconfig[0].keywords[*]",
 }
 
+# @formatter:on   turn ON pycharm formatter
+
 
 def _list_failrequest(provider_id=None, bulk=False):
     """
@@ -102,7 +109,7 @@ def _list_failrequest(provider_id=None, bulk=False):
     return flist.json()
 
 
-def _list_matchrequest(repo_id=None, provider=False, bulk=False):
+def _list_matchrequest(repo_id=None, provider: bool = False, bulk: bool = False):
     """
     Process a list request, either against the full dataset or the specific repo_id supplied
     This function will pull the arguments it requires out of the Flask request object.  See the API documentation
@@ -371,32 +378,43 @@ def download(account_id):
     return send_file(mem, as_attachment=True, attachment_filename=fname, mimetype='text/csv')
 
 
+def _get_req_date_str(key: str, default_date='01/06/2019') -> str:
+    date = request.args.get(key)
+    if date == '':
+        date = default_date
+    return date
+
+
+def _create_acc_link(date: str, acc: Account):
+    api_key = current_user.data['api_key'] if current_user.has_role('admin') else acc.data['api_key']
+    return f'{acc.id}?since={date}&api_key={api_key}'
+
+
+def _get_num_of_pages(results: dict) -> int:
+    num_of_pages = int(math.ceil(results.get('total', 1) / results.get('pageSize', 1)))
+    return num_of_pages
+
+
 @blueprint.route('/details/<repo_id>', methods=["GET", "POST"])
 def details(repo_id):
     acc = models.Account.pull(repo_id)
     if acc is None:
         abort(404)
-    #
-    provider = acc.has_role('publisher')
+
+    provider: bool = acc.has_role('publisher')
     if provider:
         data = _list_matchrequest(repo_id=repo_id, provider=provider)
     else:
         data = _list_request(repo_id=repo_id, provider=provider)
-    #
-    link = '/account/details'
-    date = request.args.get('since')
-    if date == '':
-        date = '01/06/2019'
-    if current_user.has_role('admin'):
-        link += '/' + acc.id + '?since=' + date + '&api_key=' + current_user.data['api_key']
-    else:
-        link += '/' + acc.id + '?since=01/06/2019&api_key=' + acc.data['api_key']
+
+    date = _get_req_date_str('since')
+    link = f'/account/details/{_create_acc_link(date, acc)}'
 
     results = json.loads(data)
     data_to_display = _notifications_for_display(results, ntable)
 
-    page_num = int(request.values.get("page", app.config.get("DEFAULT_LIST_PAGE_START", 1)))
-    num_of_pages = int(math.ceil(results['total'] / results['pageSize']))
+    page_num = jper_view_utils.get_req_page_num()
+    num_of_pages = _get_num_of_pages(results)
     if provider:
         return render_template('account/matching.html', repo=data, tabl=[json.dumps(mtable)],
                                num_of_pages=num_of_pages, page_num=page_num, link=link, date=date)
@@ -410,25 +428,16 @@ def matching(repo_id):
     acc = models.Account.pull(repo_id)
     if acc is None:
         abort(404)
-    #
+
     provider = acc.has_role('publisher')
     data = _list_matchrequest(repo_id=repo_id, provider=provider)
-    #
-    link = '/account/matching'
-    date = request.args.get('since')
-    if date == '':
-        date = '01/06/2019'
-    if current_user.has_role('admin'):
-        link += '/' + acc.id + '?since=' + date + '&api_key=' + current_user.data['api_key']
-    else:
-        link += '/' + acc.id + '?since=01/06/2019&api_key=' + acc.data['api_key']
 
-    results = json.loads(data)
-
-    page_num = int(request.values.get("page", app.config.get("DEFAULT_LIST_PAGE_START", 1)))
-    num_of_pages = int(math.ceil(results['total'] / results['pageSize']))
+    date = _get_req_date_str('since')
     return render_template('account/matching.html', repo=data, tabl=[json.dumps(mtable)],
-                           num_of_pages=num_of_pages, page_num=page_num, link=link, date=date)
+                           num_of_pages=_get_num_of_pages(json.loads(data)),
+                           page_num=jper_view_utils.get_req_page_num(),
+                           link=f'/account/matching/{_create_acc_link(date, acc)}',
+                           date=date)
 
 
 @blueprint.route('/failing/<provider_id>', methods=["GET", "POST"])
@@ -440,22 +449,13 @@ def failing(provider_id):
     # provider = acc.has_role('publisher')
     # 2016-10-19 TD : not needed here for the time being
     data = _list_failrequest(provider_id=provider_id)
-    #
-    link = '/account/failing'
-    date = request.args.get('since')
-    if date == '':
-        date = '01/06/2019'
-    if current_user.has_role('admin'):
-        link += '/' + acc.id + '?since=' + date + '&api_key=' + current_user.data['api_key']
-    else:
-        link += '/' + acc.id + '?since=01/06/2019&api_key=' + acc.data['api_key']
 
-    results = json.loads(data)
-
-    page_num = int(request.values.get("page", app.config.get("DEFAULT_LIST_PAGE_START", 1)))
-    num_of_pages = int(math.ceil(results['total'] / results['pageSize']))
-    return render_template('account/failing.html', repo=data, tabl=[json.dumps(ftable)], num_of_pages=num_of_pages,
-                           page_num=page_num, link=link, date=date)
+    date = _get_req_date_str('since')
+    return render_template('account/failing.html', repo=data, tabl=[json.dumps(ftable)],
+                           num_of_pages=_get_num_of_pages(json.loads(data)),
+                           page_num=jper_view_utils.get_req_page_num(),
+                           link=f'/account/failing/{_create_acc_link(date, acc)}',
+                           date=date)
 
 
 @blueprint.route('/sword_logs/<repo_id>', methods=["GET"])
@@ -487,7 +487,8 @@ def sword_logs(repo_id):
     if not to_date:
         to_date = dates.format(dates.parse(from_date) + timedelta(days=1))
     logs_data, deposit_record_logs = _sword_logs(repo_id, from_date, to_date)
-    return render_template('account/sword_log.html', last_updated=last_updated, status=latest_log.status, logs_data=logs_data, deposit_record_logs=deposit_record_logs,
+    return render_template('account/sword_log.html', last_updated=last_updated, status=latest_log.status,
+                           logs_data=logs_data, deposit_record_logs=deposit_record_logs,
                            account=acc, api_base_url=app.config.get("API_BASE_URL"), from_date=from_date_display,
                            to_date=to_date_display, deposit_dates=deposit_dates, )
 

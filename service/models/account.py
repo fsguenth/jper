@@ -225,10 +225,10 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
             self.add_role('passive')
 
     @property
-    def is_super(self):
+    def is_super(self) -> bool:
         return self.has_role(app.config["ACCOUNT_SUPER_USER_ROLE"])
 
-    def has_role(self, role):
+    def has_role(self, role) -> bool:
         return role in self.role
 
     @property
