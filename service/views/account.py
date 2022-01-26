@@ -341,7 +341,6 @@ def download(account_id):
         abort(404)
 
     provider = acc.has_role('publisher')
-    data = None
 
     if provider:
         if request.args.get('rejected', False):
@@ -364,7 +363,7 @@ def download(account_id):
         rows.append((m.value for m in parse(xtable[hdr]).find(res)), )
 
     rows = list(zip_longest(*rows, fillvalue=''))
-    #
+
     # Python 3 you need to use StringIO with csv.write. send_file requires BytesIO, so you have to do both.
     strm = StringIO()
     writer = csv.writer(strm, delimiter=',', quoting=csv.QUOTE_ALL)
@@ -613,36 +612,25 @@ def pubinfo(username):
         acc.data['embargo'] = {}
     # 2016-07-12 TD: proper handling of two independent forms using hidden input fields
     if request.values.get('embargo_form', False):
-        if request.values.get('embargo_duration', False):
-            acc.data['embargo']['duration'] = request.values['embargo_duration']
-        else:
-            acc.data['embargo']['duration'] = 0
+        acc.data['embargo']['duration'] = request.values.get('embargo_duration') or 0
 
     if 'license' not in acc.data:
         acc.data['license'] = {}
     # 2016-07-12 TD: proper handling of two independent forms using hidden input fields
     if request.values.get('license_form', False):
-        if request.values.get('license_title', False):
-            acc.data['license']['title'] = request.values['license_title']
-        else:
-            acc.data['license']['title'] = ""
-        if request.values.get('license_type', False):
-            acc.data['license']['type'] = request.values['license_type']
-        else:
-            acc.data['license']['type'] = ""
-        if request.values.get('license_url', False):
-            acc.data['license']['url'] = request.values['license_url']
-        else:
-            acc.data['license']['url'] = ""
-        if request.values.get('license_version', False):
-            acc.data['license']['version'] = request.values['license_version']
-        else:
-            acc.data['license']['version'] = ""
-
+        acc.data['license'].update(
+        {
+            key: request.values.get(f'license_{key}') or ''
+            for key in ['title', 'type', 'url', 'version']
+        }
+        )
     acc.save()
     time.sleep(2)
     flash('Thank you. Your publisher details have been updated.', "success")
     return redirect(url_for('.username', username=username))
+
+def _get_req_values_split(values, split_key=','):
+    return values.split(split_key) if values else []
 
 
 @blueprint.route('/<username>/repoinfo', methods=['POST'])
@@ -655,52 +643,29 @@ def repoinfo(username):
         acc.data['repository'] = {}
     # 2016-10-04 TD: proper handling of two independent forms using hidden input fields
     # if request.values.get('repo_profile_form',False):
-    if request.values.get('repository_software', False):
-        acc.data['repository']['software'] = request.values['repository_software']
-    else:
-        acc.data['repository']['software'] = ''
-    if request.values.get('repository_url', False):
-        acc.data['repository']['url'] = request.values['repository_url'].strip()
-    else:
-        acc.data['repository']['url'] = ''
-    if request.values.get('repository_name', False):
-        acc.data['repository']['name'] = request.values['repository_name']
-    else:
-        acc.data['repository']['name'] = ''
-    if request.values.get('repository_sigel', False):
-        acc.data['repository']['sigel'] = request.values['repository_sigel'].split(',')
-    else:
-        acc.data['repository']['sigel'] = []
-    if request.values.get('repository_bibid', False):
-        acc.data['repository']['bibid'] = request.values['repository_bibid'].strip().upper()
-    else:
-        acc.data['repository']['bibid'] = ''
+
+    acc.data['repository'].update({
+        'software': request.values.get('repository_software') or '',
+        'url': (request.values.get('repository_url') or  '').strip(),
+        'name': request.values.get('repository_name') or '',
+        'sigel': _get_req_values_split(request.values.get('repository_sigel')),
+        'bibid': (request.values.get('repository_bibid')or'').strip().upper(),
+    })
+
 
     if 'sword' not in acc.data:
         acc.data['sword'] = {}
     # 2016-10-04 TD: proper handling of two independent forms using hidden input fields
     # if request.values.get('repo_sword_form',False):
-    if request.values.get('sword_username', False):
-        acc.data['sword']['username'] = request.values['sword_username']
-    else:
-        acc.data['sword']['username'] = ''
-    if request.values.get('sword_password', False):
-        acc.data['sword']['password'] = request.values['sword_password']
-    else:
-        acc.data['sword']['password'] = ''
-    if request.values.get('sword_collection', False):
-        acc.data['sword']['collection'] = request.values['sword_collection'].strip()
-    else:
-        acc.data['sword']['collection'] = ''
-    if request.values.get('sword_deposit_method', False):
-        acc.data['sword']['deposit_method'] = request.values['sword_deposit_method'].strip()
-    else:
-        acc.data['sword']['deposit_method'] = ''
 
-    if request.values.get('packaging', False):
-        acc.data['packaging'] = [s.strip() for s in request.values['packaging'].split(',')]
-    else:
-        acc.data['packaging'] = []
+    acc.data['sword'].update({
+        'username': request.values.get(f'sword_username') or '',
+        'password':request.values.get(f'sword_password') or '',
+        'collection':(request.values.get(f'sword_collection') or '').strip(),
+        'deposit_method':(request.values.get(f'sword_deposit_method') or '').strip(),
+    })
+
+    acc.data['packaging'] = [s.strip() for s in  _get_req_values_split(request.values.get('packaging'))]
 
     acc.save()
     time.sleep(2)
