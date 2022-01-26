@@ -495,23 +495,10 @@ def sword_logs(repo_id):
 @blueprint.route("/configview", methods=["GET", "POST"])
 @blueprint.route("/configview/<repoid>", methods=["GET", "POST"])
 def configView(repoid=None):
-    app.logger.debug(current_user.id + " " + request.method + " to config route")
-    if repoid is None:
-        if current_user.has_role('repository'):
-            repoid = current_user.id
-        elif current_user.has_role('admin'):
-            return ''  # the admin cannot do anything at /config, but gets a 200 so it is clear they are allowed
-        else:
-            abort(400)
-    elif not current_user.has_role('admin'):  # only the superuser can set a repo id directly
-        abort(401)
-    rec = models.RepositoryConfig().pull_by_repo(repoid)
+    rec = jper_view_utils.find_repo_config(repoid)
     if rec is None:
-        rec = models.RepositoryConfig()
-        rec.repo = repoid
-        # rec.repository = repoid
-        # 2016-09-16 TD : The field 'repository' has changed to 'repo' due to
-        #                 a bug fix coming with a updated version ES 2.3.3 
+        return ''
+
     if request.method == 'GET':
         # get the config for the current user and return it
         # this route may not actually be needed, but is convenient during development
@@ -520,10 +507,10 @@ def configView(repoid=None):
         return render_template('account/configview.html', repo=json_data)
     elif request.method == 'POST':
         if request.json:
-            saved = rec.set_repo_config(jsoncontent=request.json, repository=repoid)
+            saved = rec.set_repo_config(jsoncontent=request.json, repository=rec.repo)
         else:
             try:
-                saved = jper_view_utils.set_repo_config_by_req_files(rec, repoid)
+                saved = jper_view_utils.set_repo_config_by_req_files(rec, rec.repo)
             except:
                 saved = False
         if saved:
