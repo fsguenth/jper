@@ -220,7 +220,7 @@ def _sword_logs(repo_id, from_date, to_date):
                     if msg.get('deposit_record', None) and msg['deposit_record'] != "None")
         deposit_keys: set[str] = {msg['deposit_record'] for msg in messages}
         deposit_key_obj_list = ((_id, models.DepositRecord.pull(_id))
-                               for _id in deposit_keys)
+                                for _id in deposit_keys)
         deposit_record_logs = {_id: _log.messages
                                for _id, _log in deposit_key_obj_list
                                if _log and _log.messages}
@@ -751,31 +751,36 @@ def changerole(username, role):
 
 
 @blueprint.route('/<username>/sword_activate', methods=['POST'])
-def sword_activate(username):
-    if current_user.id != username and not current_user.is_super:
-        abort(401)
-    acc = models.Account.pull(username)
-    sword_status = models.sword.RepositoryStatus.pull(acc.id)
-    if sword_status and sword_status.status == 'failing':
-        sword_status.activate()
-        sword_status.save()
-    time.sleep(2)
+def sword_activate(uname):
+    redirect_to = _sword_change_status(uname)
     flash('The sword connection has been activated.', "success")
-    return redirect(url_for('.username', username=username))
+    return redirect_to
 
 
 @blueprint.route('/<username>/sword_deactivate', methods=['POST'])
-def sword_deactivate(username):
-    if current_user.id != username and not current_user.is_super:
-        abort(401)
-    acc = models.Account.pull(username)
-    sword_status = models.sword.RepositoryStatus.pull(acc.id)
-    if sword_status and sword_status.status in ['succeeding', 'problem']:
-        sword_status.deactivate()
-        sword_status.save()
-    time.sleep(2)
+def sword_deactivate(uname):
+    redirect_to = _sword_change_status(uname)
     flash('The sword connection has been deactivated.', "success")
-    return redirect(url_for('.username', username=username))
+    return redirect_to
+
+
+def _sword_change_status(uname):
+    if current_user.id != uname and not current_user.is_super:
+        abort(401)
+    acc = models.Account.pull(uname)
+    sword_status = models.sword.RepositoryStatus.pull(acc.id)
+
+    handler = {
+        'succeeding': sword_status.deactivate,
+        'problem': sword_status.deactivate,
+        'failing': sword_status.activate,
+    }
+    handler_fn = handler.get((sword_status and sword_status.status))
+    if handler_fn:
+        handler_fn()
+        sword_status.save()
+        time.sleep(2)
+    return redirect(url_for('.username', username=uname))
 
 
 @blueprint.route('/<username>/matches')
