@@ -9,6 +9,8 @@ from octopus.core import app
 from octopus.lib import webapp
 from octopus.lib import dates
 from flask_login import login_user, current_user
+
+from service.__utils import jper_view_utils
 from service.api import JPER, ValidationException, ParameterException, UnauthorisedException
 from service import models
 from werkzeug.routing import BuildError
@@ -374,10 +376,7 @@ def config(repoid=None):
             saved = rec.set_repo_config(jsoncontent=request.json,repository=repoid)
         else:
             try:
-                if request.files['file'].filename.endswith('.csv'):
-                    saved = rec.set_repo_config(csvfile=TextIOWrapper(request.files['file'], encoding='utf-8'), repository=repoid)
-                elif request.files['file'].filename.endswith('.txt'):
-                    saved = rec.set_repo_config(textfile=TextIOWrapper(request.files['file'], encoding='utf-8'), repository=repoid)
+                saved = jper_view_utils.set_repo_config_by_req_files(rec, repoid)
             except:
                 saved = False
         if saved:

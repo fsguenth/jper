@@ -523,12 +523,7 @@ def configView(repoid=None):
             saved = rec.set_repo_config(jsoncontent=request.json, repository=repoid)
         else:
             try:
-                if request.files['file'].filename.endswith('.csv'):
-                    saved = rec.set_repo_config(csvfile=TextIOWrapper(request.files['file'], encoding='utf-8'),
-                                                repository=repoid)
-                elif request.files['file'].filename.endswith('.txt'):
-                    saved = rec.set_repo_config(textfile=TextIOWrapper(request.files['file'], encoding='utf-8'),
-                                                repository=repoid)
+                saved = jper_view_utils.set_repo_config_by_req_files(rec, repoid)
             except:
                 saved = False
         if saved:
@@ -732,12 +727,9 @@ def config(username):
                     elif fn.endswith('.txt'):
                         saved = rec.set_repo_config(textfile=strm, repository=username)
             else:
-                if request.files['file'].filename.endswith('.csv'):
-                    saved = rec.set_repo_config(csvfile=TextIOWrapper(request.files['file'], encoding='utf-8'),
-                                                repository=username)
-                elif request.files['file'].filename.endswith('.txt'):
-                    saved = rec.set_repo_config(textfile=TextIOWrapper(request.files['file'], encoding='utf-8'),
-                                                repository=username)
+                _saved = jper_view_utils.set_repo_config_by_req_files(rec, username)
+                if _saved is not None:
+                    saved = _saved
             if saved:
                 flash('Thank you. Your match config has been updated.', "success")
             else:
