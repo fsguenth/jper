@@ -20,7 +20,7 @@ import csv
 from jsonpath_rw_ext import parse
 from itertools import zip_longest
 from service import models
-from io import StringIO, TextIOWrapper, BytesIO
+from io import StringIO, BytesIO
 from datetime import timedelta
 
 blueprint = Blueprint('account', __name__)
@@ -29,39 +29,39 @@ blueprint = Blueprint('account', __name__)
 
 # Notification table/csv for repositories
 ntable = {
-            "screen" : ["Send Date", ["DOI","Publisher"], ["Publication Date", "Embargo"], "Title", "Analysis Date"],
-            "header" : ["Send Date", "DOI", "Publisher", "Publication Date", "Embargo", "Title", "Analysis Date"],
-     "Analysis Date" : "notifications[*].analysis_date",
-         "Send Date" : "notifications[*].created_date",
-           "Embargo" : "notifications[*].embargo.duration",
-               "DOI" : "notifications[*].metadata.identifier[?(@.type=='doi')].id",
-         "Publisher" : "notifications[*].metadata.publisher",
-             "Title" : "notifications[*].metadata.title",
-  "Publication Date" : "notifications[*].metadata.publication_date"
+            "screen": ["Send Date", ["DOI","Publisher"], ["Publication Date", "Embargo"], "Title", "Analysis Date"],
+            "header": ["Send Date", "DOI", "Publisher", "Publication Date", "Embargo", "Title", "Analysis Date"],
+     "Analysis Date": "notifications[*].analysis_date",
+         "Send Date": "notifications[*].created_date",
+           "Embargo": "notifications[*].embargo.duration",
+               "DOI": "notifications[*].metadata.identifier[?(@.type=='doi')].id",
+         "Publisher": "notifications[*].metadata.publisher",
+             "Title": "notifications[*].metadata.title",
+  "Publication Date": "notifications[*].metadata.publication_date"
 }
 
 # Matching table/csv for providers (with detailed reasoning)
 mtable = {
-         "screen" : ["Analysis Date", "ISSN or EISSN", "DOI", "License", "Forwarded to {EZB-Id}", "Term", "Appears in {notification_field}"],
-         "header" : ["Analysis Date", "ISSN or EISSN", "DOI", "License", "Forwarded to", "Term", "Appears in"],
-  "Analysis Date" : "matches[*].created_date",
-  "ISSN or EISSN" : "matches[*].alliance.issn",
-            "DOI" : "matches[*].alliance.doi",
-        "License" : "matches[*].alliance.link",
-   "Forwarded to" : "matches[*].bibid",
-           "Term" : "matches[*].provenance[0].term",
-     "Appears in" : "matches[*].provenance[0].notification_field"
+         "screen": ["Analysis Date", "ISSN or EISSN", "DOI", "License", "Forwarded to {EZB-Id}", "Term", "Appears in {notification_field}"],
+         "header": ["Analysis Date", "ISSN or EISSN", "DOI", "License", "Forwarded to", "Term", "Appears in"],
+  "Analysis Date": "matches[*].created_date",
+  "ISSN or EISSN": "matches[*].alliance.issn",
+            "DOI": "matches[*].alliance.doi",
+        "License": "matches[*].alliance.link",
+   "Forwarded to": "matches[*].bibid",
+           "Term": "matches[*].provenance[0].term",
+     "Appears in": "matches[*].provenance[0].notification_field"
 }
 
 # Rejected table/csv for providers
 ftable = {
-         "screen" : ["Send Date", "ISSN or EISSN", "DOI", "Reason", "Analysis Date"],
-         "header" : ["Send Date", "ISSN or EISSN", "DOI", "Reason", "Analysis Date"],
-      "Send Date" : "failed[*].created_date",
-  "Analysis Date" : "failed[*].analysis_date",
-  "ISSN or EISSN" : "failed[*].issn_data",
-            "DOI" : "failed[*].metadata.identifier[?(@.type=='doi')].id",
-         "Reason" : "failed[*].reason"
+         "screen": ["Send Date", "ISSN or EISSN", "DOI", "Reason", "Analysis Date"],
+         "header": ["Send Date", "ISSN or EISSN", "DOI", "Reason", "Analysis Date"],
+      "Send Date": "failed[*].created_date",
+  "Analysis Date": "failed[*].analysis_date",
+  "ISSN or EISSN": "failed[*].issn_data",
+            "DOI": "failed[*].metadata.identifier[?(@.type=='doi')].id",
+         "Reason": "failed[*].reason"
 }
 
 # Config table/csv for repositories
@@ -187,7 +187,7 @@ def _download_request(repo_id=None, provider=False):
 
     try:
         since = dates.reformat(since)
-    except ValueError as e:
+    except ValueError:
         return _bad_request("Unable to understand since date '{x}'".format(x=since))
 
     try:
@@ -358,23 +358,7 @@ def download(account_id):
 
     res = json.loads(html)
 
-    rows = []
-    for hdr in xtable["header"]:
-        rows.append((m.value for m in parse(xtable[hdr]).find(res)), )
-
-    rows = list(zip_longest(*rows, fillvalue=''))
-
-    # Python 3 you need to use StringIO with csv.write. send_file requires BytesIO, so you have to do both.
-    strm = StringIO()
-    writer = csv.writer(strm, delimiter=',', quoting=csv.QUOTE_ALL)
-    writer.writerow(xtable["header"])
-    writer.writerows(rows)
-    mem = BytesIO()
-    mem.write(strm.getvalue().encode('utf-8-sig'))
-    mem.seek(0)
-    strm.close()
-    fname = "{z}_{y}_{x}.csv".format(z=fprefix, y=account_id, x=dates.now())
-    return send_file(mem, as_attachment=True, attachment_filename=fname, mimetype='text/csv')
+    return _send_file_by_xtable(xtable, res, fprefix, account_id, csv.QUOTE_ALL)
 
 
 def _get_req_date_str(key: str, default_date='01/06/2019') -> str:
@@ -667,6 +651,26 @@ def apikey(username):
     return redirect(url_for('.username', username=username))
 
 
+def _send_file_by_xtable(xtable: dict, res: dict, fprefix: str, account_id: str, quoting):
+    rows = (
+        (m.value for m in parse(xtable[hdr]).find(res))
+        for hdr in xtable["header"]
+    )
+    rows = zip_longest(*rows, fillvalue='')
+
+    # Python 3 you need to use StringIO with csv.write and send_file requires BytesIO, so you have to do both.
+    strm = StringIO()
+    writer = csv.writer(strm, delimiter=',', quoting=quoting)
+    writer.writerow(xtable["header"])
+    writer.writerows(rows)
+    mem = BytesIO()
+    mem.write(strm.getvalue().encode('utf-8-sig'))
+    mem.seek(0)
+    strm.close()
+    fname = "{z}_{y}_{x}.csv".format(z=fprefix, y=account_id, x=dates.now())
+    return send_file(mem, as_attachment=True, attachment_filename=fname, mimetype='text/csv')
+
+
 @blueprint.route('/<username>/config', methods=["GET", "POST"])
 def config(username):
     if current_user.id != username and not current_user.is_super:
@@ -676,27 +680,8 @@ def config(username):
         rec = models.RepositoryConfig()
         rec.repository = username
     if request.method == "GET":
-        fprefix = "repoconfig"
-        xtable = ctable
         res = {"repoconfig": [json.loads(rec.json())]}
-
-        rows = []
-        for hdr in xtable["header"]:
-            rows.append((m.value for m in parse(xtable[hdr]).find(res)), )
-
-        rows = list(zip_longest(*rows, fillvalue=''))
-
-        # Python 3 you need to use StringIO with csv.write and send_file requires BytesIO, so you have to do both.
-        strm = StringIO()
-        writer = csv.writer(strm, delimiter=',', quoting=csv.QUOTE_MINIMAL)
-        writer.writerow(xtable["header"])
-        writer.writerows(rows)
-        mem = BytesIO()
-        mem.write(strm.getvalue().encode('utf-8-sig'))
-        mem.seek(0)
-        strm.close()
-        fname = "{z}_{y}_{x}.csv".format(z=fprefix, y=username, x=dates.now())
-        return send_file(mem, as_attachment=True, attachment_filename=fname, mimetype='text/csv')
+        return _send_file_by_xtable(ctable, res, "repoconfig", username, csv.QUOTE_MINIMAL)
 
     elif request.method == "POST":
         try:
