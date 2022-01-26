@@ -643,7 +643,7 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
         return [ cls.pull( res['hits']['hits'][k]['_source']['id'] ) for k in range(n) ]
 
     @classmethod
-    def pull_all_repositories(cls):
+    def pull_all_repositories(cls) -> list[str]:
         q = {
             "query": {
                 "bool": {

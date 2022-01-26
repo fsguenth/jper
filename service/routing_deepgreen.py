@@ -61,7 +61,6 @@ def _yield_part_bibids(issn_data: Iterable[str], doi, publ_date: str) -> Iterabl
         app.logger.debug(f'prepare part_bibid [{lic.type}][{lic.id}] ')
         if lic.type == "gold":
             # All repositories except subject repositories get publications with gold license
-            # KTODO this "bibid" is Account object, should use "bibid.id" instead right??
             yield from ((bibid, lic_data) for bibid in bibids)
 
         if lic.type in ["alliance", "national", "deal", "fid"]:

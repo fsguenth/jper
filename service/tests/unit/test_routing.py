@@ -70,7 +70,7 @@ def data_pm_extract__1() -> tuple[NotificationMetadata, RoutingMetadata]:
     return td_noti_md, td_rout_md
 
 
-def data_license__1(issn_list: list[str] = None) -> License:
+def data_license__1(issn_list: list[str] = None, lic_type="alliance") -> License:
     """ create return_value of License.pull_by_journal_id
     """
 
@@ -78,7 +78,7 @@ def data_license__1(issn_list: list[str] = None) -> License:
 
     td_lic = License()
     td_lic.id = 'mock_lic_id_1'
-    td_lic.type = "alliance"
+    td_lic.type = lic_type
     td_lic._set_list("journal", [
         {
             'name': '_fake_lic_name_',
