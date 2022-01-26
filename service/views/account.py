@@ -1,8 +1,9 @@
 """
 Blueprint for providing account management
 """
-
+import itertools
 import uuid, json, time, requests
+from typing import Iterable
 
 from flask import Blueprint, request, url_for, flash, redirect, render_template, abort, send_file
 
@@ -208,20 +209,22 @@ def _sword_logs(repo_id, from_date, to_date):
 
     :return: Sword log data
     """
-    logs = None
     try:
         logs_raw = models.RepositoryDepositLog().pull_by_date_range(repo_id, from_date, to_date)
         logs = logs_raw.get('hits', {}).get('hits', {})
-        deposit_record_logs = {}
-        if logs and len(logs) > 0:
-            for log in logs:
-                info = log.get('_source', {})
-                if info and info.get('messages', []):
-                    for msg in info['messages']:
-                        if msg.get('deposit_record', None) and msg['deposit_record'] != "None":
-                            detailed_log = models.DepositRecord.pull(msg['deposit_record'])
-                            if detailed_log and detailed_log.messages:
-                                deposit_record_logs[msg['deposit_record']] = detailed_log.messages
+        messages: Iterable[dict] = itertools.chain.from_iterable(
+            (log.get('_source') or {}).get('messages', [])
+            for log in logs
+        )
+        messages = (msg for msg in messages
+                    if msg.get('deposit_record', None) and msg['deposit_record'] != "None")
+        deposit_keys: set[str] = {msg['deposit_record'] for msg in messages}
+        deposit_key_obj_list = ((_id, models.DepositRecord.pull(_id))
+                               for _id in deposit_keys)
+        deposit_record_logs = {_id: _log.messages
+                               for _id, _log in deposit_key_obj_list
+                               if _log and _log.messages}
+
     except ParameterException as e:
         return _bad_request(str(e))
     return logs, deposit_record_logs
