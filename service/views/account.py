@@ -619,15 +619,16 @@ def pubinfo(username):
     # 2016-07-12 TD: proper handling of two independent forms using hidden input fields
     if request.values.get('license_form', False):
         acc.data['license'].update(
-        {
-            key: request.values.get(f'license_{key}') or ''
-            for key in ['title', 'type', 'url', 'version']
-        }
+            {
+                key: request.values.get(f'license_{key}') or ''
+                for key in ['title', 'type', 'url', 'version']
+            }
         )
     acc.save()
     time.sleep(2)
     flash('Thank you. Your publisher details have been updated.', "success")
     return redirect(url_for('.username', username=username))
+
 
 def _get_req_values_split(values, split_key=','):
     return values.split(split_key) if values else []
@@ -646,12 +647,11 @@ def repoinfo(username):
 
     acc.data['repository'].update({
         'software': request.values.get('repository_software') or '',
-        'url': (request.values.get('repository_url') or  '').strip(),
+        'url': (request.values.get('repository_url') or '').strip(),
         'name': request.values.get('repository_name') or '',
         'sigel': _get_req_values_split(request.values.get('repository_sigel')),
-        'bibid': (request.values.get('repository_bibid')or'').strip().upper(),
+        'bibid': (request.values.get('repository_bibid') or '').strip().upper(),
     })
-
 
     if 'sword' not in acc.data:
         acc.data['sword'] = {}
@@ -660,12 +660,12 @@ def repoinfo(username):
 
     acc.data['sword'].update({
         'username': request.values.get(f'sword_username') or '',
-        'password':request.values.get(f'sword_password') or '',
-        'collection':(request.values.get(f'sword_collection') or '').strip(),
-        'deposit_method':(request.values.get(f'sword_deposit_method') or '').strip(),
+        'password': request.values.get(f'sword_password') or '',
+        'collection': (request.values.get(f'sword_collection') or '').strip(),
+        'deposit_method': (request.values.get(f'sword_deposit_method') or '').strip(),
     })
 
-    acc.data['packaging'] = [s.strip() for s in  _get_req_values_split(request.values.get('packaging'))]
+    acc.data['packaging'] = [s.strip() for s in _get_req_values_split(request.values.get('packaging'))]
 
     acc.save()
     time.sleep(2)
