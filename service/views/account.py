@@ -339,9 +339,7 @@ def index():
 # 2016-11-15 TD : enable download option ("csv", for a start...)
 @blueprint.route('/download/<account_id>', methods=["GET", "POST"])
 def download(account_id):
-    acc = models.Account.pull(account_id)
-    if acc is None:
-        abort(404)
+    acc = _pull_acc_or_404(account_id)
 
     provider = acc.has_role('publisher')
 
@@ -364,6 +362,13 @@ def download(account_id):
     return _send_file_by_xtable(xtable, res, fprefix, account_id, csv.QUOTE_ALL)
 
 
+def _pull_acc_or_404(account_id) -> Account:
+    acc = models.Account.pull(account_id)
+    if acc is None:
+        abort(404)
+    return acc
+
+
 def _get_req_date_str(key: str, default_date='01/06/2019') -> str:
     date = request.args.get(key)
     if date == '':
@@ -383,9 +388,7 @@ def _get_num_of_pages(results: dict) -> int:
 
 @blueprint.route('/details/<repo_id>', methods=["GET", "POST"])
 def details(repo_id):
-    acc = models.Account.pull(repo_id)
-    if acc is None:
-        abort(404)
+    acc = _pull_acc_or_404(repo_id)
 
     provider: bool = acc.has_role('publisher')
     if provider:
@@ -411,9 +414,7 @@ def details(repo_id):
 # 2016-10-19 TD : restructure matching and(!!) failing history output (primarily for publishers) -- start --
 @blueprint.route('/matching/<repo_id>', methods=["GET", "POST"])
 def matching(repo_id):
-    acc = models.Account.pull(repo_id)
-    if acc is None:
-        abort(404)
+    acc = _pull_acc_or_404(repo_id)
 
     provider = acc.has_role('publisher')
     data = _list_matchrequest(repo_id=repo_id, provider=provider)
@@ -428,10 +429,8 @@ def matching(repo_id):
 
 @blueprint.route('/failing/<provider_id>', methods=["GET", "POST"])
 def failing(provider_id):
-    acc = models.Account.pull(provider_id)
-    if acc is None:
-        abort(404)
-    #
+    acc = _pull_acc_or_404(provider_id)
+
     # provider = acc.has_role('publisher')
     # 2016-10-19 TD : not needed here for the time being
     data = _list_failrequest(provider_id=provider_id)
@@ -446,9 +445,7 @@ def failing(provider_id):
 
 @blueprint.route('/sword_logs/<repo_id>', methods=["GET"])
 def sword_logs(repo_id):
-    acc = models.Account.pull(repo_id)
-    if acc is None:
-        abort(404)
+    acc = _pull_acc_or_404(repo_id)
     if not acc.has_role('repository'):
         abort(404)
     latest_log = models.RepositoryDepositLog().pull_by_repo(repo_id)
@@ -508,13 +505,11 @@ def configView(repoid=None):
 
 @blueprint.route('/<username>', methods=['GET', 'POST', 'DELETE'])
 def username(username):
-    acc = models.Account.pull(username)
+    acc = _pull_acc_or_404(username)
 
-    if acc is None:
-        abort(404)
-    elif (request.method == 'DELETE' or
-          (request.method == 'POST' and
-           request.values.get('submit', '').split(' ')[0].lower() == 'delete')):
+    if (request.method == 'DELETE' or
+            (request.method == 'POST' and
+             request.values.get('submit', '').split(' ')[0].lower() == 'delete')):
         if not current_user.is_super:
             abort(401)
         else:
