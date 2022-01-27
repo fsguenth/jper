@@ -1,28 +1,32 @@
 """
 Blueprint for providing account management
 """
+import csv
 import itertools
-import uuid, json, time, requests
-from typing import Iterable
+import json
+import math
+import time
+import uuid
+import warnings
+from datetime import timedelta
+from io import StringIO, BytesIO
+from itertools import zip_longest
+from typing import Iterable, Union
 
-from flask import Blueprint, request, url_for, flash, redirect, render_template, abort, send_file
-
-from service.__utils import jper_view_utils
-from service.forms.adduser import AdduserForm
+import requests
+from flask import Blueprint, request, url_for, flash, redirect, render_template, abort, send_file, Response
 from flask_login import login_user, logout_user, current_user
+from jsonpath_rw_ext import parse
+
 from octopus.core import app
 from octopus.lib import dates
-from service.api import JPER, ParameterException
-from service.models import Account
-from service.views.webapi import _bad_request
-from service.repository_licenses import get_matching_licenses
-import math
-import csv
-from jsonpath_rw_ext import parse
-from itertools import zip_longest
 from service import models
-from io import StringIO, BytesIO
-from datetime import timedelta
+from service.__utils import jper_view_utils
+from service.api import JPER, ParameterException
+from service.forms.adduser import AdduserForm
+from service.models import Account
+from service.repository_licenses import get_matching_licenses
+from service.views.webapi import _bad_request
 
 blueprint = Blueprint('account', __name__)
 
@@ -110,7 +114,8 @@ def _list_failrequest(provider_id=None, bulk=False):
     return flist.json()
 
 
-def _list_matchrequest(repo_id=None, provider: bool = False, bulk: bool = False):
+def _list_matchrequest(repo_id=None, provider: bool = False,
+                       bulk: bool = False) -> Union[str, Response]:
     """
     Process a list request, either against the full dataset or the specific repo_id supplied
     This function will pull the arguments it requires out of the Flask request object.  See the API documentation
@@ -121,21 +126,18 @@ def _list_matchrequest(repo_id=None, provider: bool = False, bulk: bool = False)
     :param bulk: (boolean) whether bulk (e.g. *not* paginated) is returned or not
     :return: Flask response containing the list of notifications that are appropriate to the parameters
     """
-    since = _validate_date(param='since')
-    page = _validate_page()
-    page_size = _validate_page_size()
+    since = _validate_date_or_abort(param='since')
+    page = None if bulk else _validate_page()
+    page_size = None if bulk else _validate_page_size()
 
     try:
         # nlist = JPER.list_notifications(current_user, since, page=page, page_size=page_size, repository_id=repo_id)
         # 2016-11-24 TD : bulk switch to decrease the number of different calls
-        if bulk:
-            mlist = JPER.bulk_matches(current_user, since, repository_id=repo_id, provider=provider)
-        else:
-            # 2016-09-07 TD : trial to include some kind of reporting for publishers here!
-            mlist = JPER.list_matches(current_user, since, page=page, page_size=page_size, repository_id=repo_id,
-                                      provider=provider)
+        # 2016-09-07 TD : trial to include some kind of reporting for publishers here!
+        mlist = JPER.list_matches(since, page=page, page_size=page_size,
+                                  repository_id=repo_id, provider=provider)
     except ParameterException as e:
-        return _bad_request(str(e))
+        return _bad_request(str(e))  # KTODO: suggest raise response instead of return
 
     return mlist.json()
 
@@ -230,7 +232,10 @@ def _sword_logs(repo_id, from_date, to_date):
     return logs, deposit_record_logs
 
 
-def _validate_date(param='since'):
+def _validate_date(param='since') -> Union[str, Response]:
+    # KTODO should not return response object in error case, suggest use raise or abort instead
+    warnings.warn('return response will make confused, use suggest _validate_date_or_abort instead',
+                  DeprecationWarning)
     since = request.values.get(param, None)
     if since is None or since == "":
         return _bad_request("Missing required parameter 'since'")
@@ -239,6 +244,19 @@ def _validate_date(param='since'):
         since = dates.reformat(since)
     except ValueError:
         return _bad_request("Unable to understand since date '{x}'".format(x=since))
+
+    return since
+
+
+def _validate_date_or_abort(param='since'):
+    since = request.values.get(param, None)
+    if since is None or since == "":
+        abort(400, "Missing required parameter 'since'")
+
+    try:
+        since = dates.reformat(since)
+    except ValueError:
+        abort(400, "Unable to understand since date '{x}'".format(x=since))
 
     return since
 

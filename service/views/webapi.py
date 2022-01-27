@@ -40,7 +40,7 @@ def _unauthorised():
     resp.status_code = 401
     return resp
 
-def _bad_request(message):
+def _bad_request(message) -> Response:
     """
     Construct a response object to represent a 400 (Bad Request) around the supplied message
 
