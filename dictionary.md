@@ -13,3 +13,4 @@ Dictionary
 | rout | routing              |
 | lic | License              |
 | req | request              |
+| tbl | table |

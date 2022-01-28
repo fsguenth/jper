@@ -421,7 +421,9 @@ def details(repo_id):
     page_num = jper_view_utils.get_req_page_num()
     num_of_pages = _get_num_of_pages(results)
     if provider:
-        return render_template('account/matching.html', repo=data, tabl=[json.dumps(mtable)],
+        return render_template('account/matching.html',
+                               table_headers=mtable['header'],
+                               table_data=_to_table_data(mtable, results),
                                num_of_pages=num_of_pages, page_num=page_num, link=link, date=date)
     return render_template('account/details.html', repo=data,
                            results=_notifications_for_display(results, ntable),
@@ -435,10 +437,13 @@ def matching(repo_id):
 
     provider = acc.has_role('publisher')
     data = _list_matchrequest(repo_id=repo_id, provider=provider)
+    data_obj: dict = json.loads(data)
 
     date = _get_req_date_str('since')
-    return render_template('account/matching.html', repo=data, tabl=[json.dumps(mtable)],
-                           num_of_pages=_get_num_of_pages(json.loads(data)),
+    return render_template('account/matching.html',
+                           table_headers=mtable['header'],
+                           table_data=_to_table_data(mtable, data_obj),
+                           num_of_pages=_get_num_of_pages(data_obj),
                            page_num=jper_view_utils.get_req_page_num(),
                            link=f'/account/matching/{_create_acc_link(date, acc)}',
                            date=date)
@@ -451,10 +456,13 @@ def failing(provider_id):
     # provider = acc.has_role('publisher')
     # 2016-10-19 TD : not needed here for the time being
     data = _list_failrequest(provider_id=provider_id)
+    data_obj: dict = json.loads(data)
 
     date = _get_req_date_str('since')
-    return render_template('account/failing.html', repo=data, tabl=[json.dumps(ftable)],
-                           num_of_pages=_get_num_of_pages(json.loads(data)),
+    return render_template('account/failing.html',
+                           table_headers=ftable['header'],
+                           table_data=_to_table_data(mtable, data_obj),
+                           num_of_pages=_get_num_of_pages(data_obj),
                            page_num=jper_view_utils.get_req_page_num(),
                            link=f'/account/failing/{_create_acc_link(date, acc)}',
                            date=date)
@@ -666,12 +674,17 @@ def apikey(username):
     return redirect(url_for('.username', username=username))
 
 
-def _send_file_by_xtable(xtable: dict, res: dict, fprefix: str, account_id: str, quoting):
+def _to_table_data(tbl_schema: dict, data: dict, default_val='') -> Iterable[tuple]:
     rows = (
-        (m.value for m in parse(xtable[hdr]).find(res))
-        for hdr in xtable["header"]
+        (m.value for m in parse(tbl_schema[hdr]).find(data))
+        for hdr in tbl_schema["header"]
     )
-    rows = zip_longest(*rows, fillvalue='')
+    rows = zip_longest(*rows, fillvalue=default_val)
+    return rows
+
+
+def _send_file_by_xtable(xtable: dict, res: dict, fprefix: str, account_id: str, quoting):
+    rows = _to_table_data(xtable, res)
 
     # Python 3 you need to use StringIO with csv.write and send_file requires BytesIO, so you have to do both.
     strm = StringIO()
