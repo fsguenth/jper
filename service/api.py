@@ -560,7 +560,10 @@ class JPER(object):
         if page_size is not None:
             mpl.page_size = page_size
         mpl.timestamp = dates.now()
-        mpl.matches = [mp.data for mp in models.MatchProvenance.iterate(q=qr)]
+
+        query_result = models.MatchProvenance.query(q=qr)
+        mpl.matches = [models.MatchProvenance(i['_source']).data
+                       for i in query_result.get('hits', {}).get('hits', [])]
         mpl.total = len(mpl.matches)
         return mpl
 
