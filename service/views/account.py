@@ -418,14 +418,13 @@ def details(repo_id):
     link = f'/account/details/{_create_acc_link(date, acc)}'
 
     results = json.loads(data)
-    data_to_display = _notifications_for_display(results, ntable)
-
     page_num = jper_view_utils.get_req_page_num()
     num_of_pages = _get_num_of_pages(results)
     if provider:
         return render_template('account/matching.html', repo=data, tabl=[json.dumps(mtable)],
                                num_of_pages=num_of_pages, page_num=page_num, link=link, date=date)
-    return render_template('account/details.html', repo=data, results=data_to_display,
+    return render_template('account/details.html', repo=data,
+                           results=_notifications_for_display(results, ntable),
                            num_of_pages=num_of_pages, page_num=page_num, link=link, date=date)
 
 
