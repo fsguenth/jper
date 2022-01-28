@@ -461,7 +461,7 @@ def failing(provider_id):
     date = _get_req_date_str('since')
     return render_template('account/failing.html',
                            table_headers=ftable['header'],
-                           table_data=_to_table_data(mtable, data_obj),
+                           table_data=_to_table_data(ftable, data_obj),
                            num_of_pages=_get_num_of_pages(data_obj),
                            page_num=jper_view_utils.get_req_page_num(),
                            link=f'/account/failing/{_create_acc_link(date, acc)}',
