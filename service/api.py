@@ -496,7 +496,8 @@ class JPER(object):
         return nl
 
     @classmethod
-    def list_matches(cls, since, page=None, page_size=None, repository_id=None,
+    def list_matches(cls, since: str,
+                     page=None, page_size=None, repository_id=None,
                      provider=False) -> models.MatchProvenanceList:
         """
         List match provenances which meet the criteria specified by the parameters
@@ -505,12 +506,14 @@ class JPER(object):
         :param page: page number in result set to return (which results appear will also depend on the page_size parameter)
         :param page_size: number of results to return in this page of results
         :param repository_id: the id of the repository whose matches to return.  If no id is provided, all matches for all repositories will be queried.
+        :param provider: flag to identify publisher
         :return: models.MatchProvenanceList containing the parameters and results
         """
         try:
             since = dates.parse(since)
         except ValueError as e:
             raise ParameterException("Unable to understand since date '{x}'".format(x=since))
+        since: str = dates.format(since)  # reformat
 
         if page == 0:
             raise ParameterException("'page' parameter must be greater than or equal to 1")
@@ -519,19 +522,13 @@ class JPER(object):
             raise ParameterException("page size must be between 1 and {x}"
                                      .format(x=app.config.get("MAX_LIST_PAGE_SIZE")))
 
-        mpl = models.MatchProvenanceList()
-        mpl.since = dates.format(since)
-        mpl.page = -1 if page is None else page
-        if page_size is not None:
-            mpl.page_size = page_size
-        mpl.timestamp = dates.now()
         qr = {
             "query": {
                 "bool": {
                     "filter": {
                         "range": {
                             "created_date": {
-                                "gte": mpl.since
+                                "gte": since
                             }
                         }
                     }
@@ -557,6 +554,12 @@ class JPER(object):
         else:
             app.logger.debug('List all matches for query ' + json.dumps(qr))
 
+        mpl = models.MatchProvenanceList()
+        mpl.since = since
+        mpl.page = -1 if page is None else page
+        if page_size is not None:
+            mpl.page_size = page_size
+        mpl.timestamp = dates.now()
         mpl.matches = [mp.data for mp in models.MatchProvenance.iterate(q=qr)]
         mpl.total = len(mpl.matches)
         return mpl
