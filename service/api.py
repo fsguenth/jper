@@ -429,13 +429,12 @@ class JPER(object):
                 return None
 
     @classmethod
-    def list_notifications(cls, account, since, page=None, page_size=None, repository_id=None, provider=False):
+    def list_notifications(cls, since, page=None, page_size=None, repository_id=None, provider=False):
         # def list_notifications(cls, account, since, page=None, page_size=None, repository_id=None):
         # 2016-09-07 TD : trial to make some publisher's reporting available
         """
         List notification which meet the criteria specified by the parameters
 
-        :param account: user Account as which to carry out this action (all users can request notifications, so this is primarily for logging purposes)
         :param since: date string for the earliest notification date requested.  Should be of the form YYYY-MM-DDTHH:MM:SSZ, though other sensible formats may also work
         :param page: page number in result set to return (which results appear will also depend on the page_size parameter)
         :param page_size: number of results to return in this page of results
@@ -446,35 +445,35 @@ class JPER(object):
             since = dates.parse(since)
         except ValueError as e:
             raise ParameterException("Unable to understand since date '{x}'".format(x=since))
+        since: str = dates.format(since)  # reformat
 
-        if page == 0:
+        if page is not None and page == 0:
             raise ParameterException("'page' parameter must be greater than or equal to 1")
 
-        if page_size == 0 or page_size > app.config.get("MAX_LIST_PAGE_SIZE"):
+        if page_size is not None and (page_size == 0 or page_size > app.config.get("MAX_LIST_PAGE_SIZE")):
             raise ParameterException("page size must be between 1 and {x}"
                                      .format(x=app.config.get("MAX_LIST_PAGE_SIZE")))
 
-        nl = models.NotificationList()
-        nl.since = dates.format(since)
-        nl.page = page
-        nl.page_size = page_size
-        nl.timestamp = dates.now()
         qr = {
             "query": {
                 "bool": {
                     "filter": {
                         "range": {
                             "created_date": {
-                                "gte": nl.since
+                                "gte": since
                             }
                         }
                     }
                 }
             },
             "sort": [{"created_date": {"order": "desc"}}],
-            "from": (page - 1) * page_size,
-            "size": page_size
         }
+        if page_size is not None and page is not None:
+            qr.update({
+                # 2016-09-06 TD : change of sort order newest first
+                "from": (page - 1) * page_size,
+                "size": page_size
+            })
 
         if repository_id is not None:
             # 2016-09-07 TD : trial to filter for publisher's reporting
@@ -490,6 +489,13 @@ class JPER(object):
             types = 'routed20*'
         res = models.RoutedNotification.query(q=qr, types=types)
         app.logger.debug('List notifications query resulted ' + json.dumps(res))
+
+        nl = models.NotificationList()
+        nl.since = since
+        nl.page = -1 if page is None else page
+        if page_size is not None:
+            nl.page_size = page_size
+        nl.timestamp = dates.now()
         nl.notifications = [models.RoutedNotification(i['_source']).make_outgoing(provider=provider).data
                             for i in res.get('hits', {}).get('hits', [])]
         nl.total = res.get('hits', {}).get('total', {}).get('value', 0)
@@ -515,10 +521,10 @@ class JPER(object):
             raise ParameterException("Unable to understand since date '{x}'".format(x=since))
         since: str = dates.format(since)  # reformat
 
-        if page == 0:
+        if page is not None and page == 0:
             raise ParameterException("'page' parameter must be greater than or equal to 1")
 
-        if page_size == 0 or page_size > app.config.get("MAX_LIST_PAGE_SIZE"):
+        if page_size is not None and (page_size == 0 or page_size > app.config.get("MAX_LIST_PAGE_SIZE")):
             raise ParameterException("page size must be between 1 and {x}"
                                      .format(x=app.config.get("MAX_LIST_PAGE_SIZE")))
 
@@ -568,11 +574,10 @@ class JPER(object):
         return mpl
 
     @classmethod
-    def list_failed(cls, account, since, page=None, page_size=None, provider_id=None):
+    def list_failed(cls, since, page=None, page_size=None, provider_id=None):
         """
         List failed notifications which meet the criteria specified by the parameters
 
-        :param account: user Account as which to carry out this action (all users can request failed notifications, so this is primarily for logging purposes)
         :param since: date string for the earliest failed analysis date requested.  Should be of the form YYYY-MM-DDTHH:MM:SSZ, though other sensible formats may also work
         :param page: page number in result set to return (which results appear will also depend on the page_size parameter)
         :param page_size: number of results to return in this page of results
@@ -583,26 +588,22 @@ class JPER(object):
             since = dates.parse(since)
         except ValueError as e:
             raise ParameterException("Unable to understand since date '{x}'".format(x=since))
+        since: str = dates.format(since)  # reformat
 
-        if page == 0:
+        if page is not None and page == 0:
             raise ParameterException("'page' parameter must be greater than or equal to 1")
 
-        if page_size == 0 or page_size > app.config.get("MAX_LIST_PAGE_SIZE"):
+        if page_size is not None and (page_size == 0 or page_size > app.config.get("MAX_LIST_PAGE_SIZE")):
             raise ParameterException("page size must be between 1 and {x}"
                                      .format(x=app.config.get("MAX_LIST_PAGE_SIZE")))
 
-        fnl = models.FailedNotificationList()
-        fnl.since = dates.format(since)
-        fnl.page = page
-        fnl.page_size = page_size
-        fnl.timestamp = dates.now()
         qr = {
             "query": {
                 "bool": {
                     "filter": {
                         "range": {
                             "created_date": {
-                                "gte": fnl.since
+                                "gte": since
                             }
                         }
                     }
@@ -611,10 +612,13 @@ class JPER(object):
             "sort": [{"created_date": {"order": "desc"}}],
             ## "sort": [{"analysis_date":{"order":"desc"}}],
             ## 2018-03-07 TD : change of sort key to 'created_date', but still newest first
-            # 2016-09-06 TD : change of sort order newest first
-            "from": (page - 1) * page_size,
-            "size": page_size
         }
+        if page_size is not None and page is not None:
+            qr.update({
+                # 2016-09-06 TD : change of sort order newest first
+                "from": (page - 1) * page_size,
+                "size": page_size
+            })
 
         if provider_id is not None:
             qr['query']['bool']["must"] = {"match": {"provider.id.exact": provider_id}}
@@ -625,113 +629,15 @@ class JPER(object):
 
         res = models.FailedNotification.query(q=qr)
         app.logger.debug('List failed notifications query resulted ' + json.dumps(res))
+
+        fnl = models.FailedNotificationList()
+        fnl.since = since
+        fnl.page = -1 if page is None else page
+        if page_size is not None:
+            fnl.page_size = page_size
+
+        fnl.timestamp = dates.now()
         fnl.failed = [models.FailedNotification(i['_source']).data
                       for i in res.get('hits', {}).get('hits', [])]
         fnl.total = res.get('hits', {}).get('total', {}).get('value', 0)
-        return fnl
-
-    @classmethod
-    def bulk_notifications(cls, account, since, repository_id=None, provider=False):
-        # 2016-09-07 TD : trial to make some publisher's reporting available
-        """
-        Bulk list notification which meet the criteria specified by the parameters
-
-        :param account: user Account as which to carry out this action (all users can request notifications, so this is primarily for logging purposes)
-        :param since: date string for the earliest notification date requested.  Should be of the form YYYY-MM-DDTHH:MM:SSZ, though other sensible formats may also work
-        :param repository_id: the id of the repository whose notifications to return.  If no id is provided, all notifications for all repositories will be queried.
-        :return: models.NotificationList containing the parameters and results
-        """
-        try:
-            since = dates.parse(since)
-        except ValueError as e:
-            raise ParameterException("Unable to understand since date '{x}'".format(x=since))
-
-        nl = models.NotificationList()
-        nl.since = dates.format(since)
-        nl.page = -1
-        nl.timestamp = dates.now()
-        qr = {
-            "query": {
-                "bool": {
-                    "filter": {
-                        "range": {
-                            "created_date": {
-                                "gte": nl.since
-                            }
-                        }
-                    }
-                }
-            },
-            "sort": [{"created_date": {"order": "desc"}}],
-            ## "sort": [{"analysis_date":{"order":"desc"}}],
-            ## 2018-03-07 TD : change of sort key to 'created_date', but still newest first
-            # "sort": [{"analysis_date":{"order":"asc"}}],
-            # 2016-09-06 TD : change of sort order newest first
-        }
-
-        if repository_id is not None:
-            # 2016-09-07 TD : trial to filter for publisher's reporting
-            if provider:
-                qr['query']['bool']["must"] = {"match": {"provider.id.exact": repository_id}}
-            else:
-                qr['query']['bool']["must"] = {"match": {"repositories.exact": repository_id}}
-
-            app.logger.debug(str(repository_id) + ' bulk notifications for query ' + json.dumps(qr))
-        else:
-            app.logger.debug('Bulk all notifications for query ' + json.dumps(qr))
-
-        nl.notifications = []
-        types = None
-        if models.RoutedNotification.__conn__.index_per_type:
-            types = 'routed20*'
-        for rn in models.RoutedNotification.iterate(q=qr, types=types):
-            nl.notifications.append(rn.make_outgoing(provider=provider).data)
-        nl.total = len(nl.notifications)
-        return nl
-
-    @classmethod
-    def bulk_failed(cls, account, since, provider_id=None):
-        """
-        Bulk failed notifications which meet the criteria specified by the parameters
-
-        :param account: user Account as which to carry out this action (all users can request failed notifications, so this is primarily for logging purposes)
-        :param since: date string for the earliest failed analysis date requested.  Should be of the form YYYY-MM-DDTHH:MM:SSZ, though other sensible formats may also work
-        :param provider_id: the id of the provider whose failed notifications to return.  If no id is provided, all failed notifications for all providers will be queried.
-        :return: models.FailedNotificationList containing the parameters and results
-        """
-        try:
-            since = dates.parse(since)
-        except ValueError as e:
-            raise ParameterException("Unable to understand since date '{x}'".format(x=since))
-
-        fnl = models.FailedNotificationList()
-        fnl.since = dates.format(since)
-        fnl.page = -1
-        fnl.timestamp = dates.now()
-        qr = {
-            "query": {
-                "bool": {
-                    "filter": {
-                        "range": {
-                            "created_date": {
-                                "gte": fnl.since
-                            }
-                        }
-                    }
-                }
-            },
-            "sort": [{"created_date": {"order": "desc"}}],
-        }
-
-        if provider_id is not None:
-            qr['query']['bool']["must"] = {"match": {"provider.id.exact": provider_id}}
-
-            app.logger.debug(str(provider_id) + ' bulk failed notifications for query ' + json.dumps(qr))
-        else:
-            app.logger.debug('Bulk all failed notifications for query ' + json.dumps(qr))
-
-        fnl.failed = []
-        for fn in models.FailedNotification.iterate(q=qr):
-            fnl.failed.append(fn.data)
-        fnl.total = len(fnl.failed)
         return fnl

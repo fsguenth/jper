@@ -11,7 +11,7 @@ import warnings
 from datetime import timedelta
 from io import StringIO, BytesIO
 from itertools import zip_longest
-from typing import Iterable, Union
+from typing import Iterable, Union, Callable
 
 import requests
 from flask import Blueprint, request, url_for, flash, redirect, render_template, abort, send_file, Response
@@ -26,179 +26,50 @@ from service.api import JPER, ParameterException
 from service.forms.adduser import AdduserForm
 from service.models import Account
 from service.repository_licenses import get_matching_licenses
+from service.views.utils.acc_table_template import AccTableTemplate, FailedNotificationTableTemplate, \
+    MatchedTableTemplate, NotificationTableTemplate
 from service.views.webapi import _bad_request
 
 blueprint = Blueprint('account', __name__)
 
-# @formatter:off    turn OFF pycharm formatter
-
-# Notification table/csv for repositories
-ntable = {
-            "screen": ["Send Date", ["DOI","Publisher"], ["Publication Date", "Embargo"], "Title", "Analysis Date"],
-            "header": ["Send Date", "DOI", "Publisher", "Publication Date", "Embargo", "Title", "Analysis Date"],
-     "Analysis Date": "notifications[*].analysis_date",
-         "Send Date": "notifications[*].created_date",
-           "Embargo": "notifications[*].embargo.duration",
-               "DOI": "notifications[*].metadata.identifier[?(@.type=='doi')].id",
-         "Publisher": "notifications[*].metadata.publisher",
-             "Title": "notifications[*].metadata.title",
-  "Publication Date": "notifications[*].metadata.publication_date"
-}
-
-# Matching table/csv for providers (with detailed reasoning)
-mtable = {
-         "screen": ["Analysis Date", "ISSN or EISSN", "DOI", "License", "Forwarded to {EZB-Id}", "Term", "Appears in {notification_field}"],
-         "header": ["Analysis Date", "ISSN or EISSN", "DOI", "License", "Forwarded to", "Term", "Appears in"],
-  "Analysis Date": "matches[*].created_date",
-  "ISSN or EISSN": "matches[*].alliance.issn",
-            "DOI": "matches[*].alliance.doi",
-        "License": "matches[*].alliance.link",
-   "Forwarded to": "matches[*].bibid",
-           "Term": "matches[*].provenance[0].term",
-     "Appears in": "matches[*].provenance[0].notification_field"
-}
-
-# Rejected table/csv for providers
-ftable = {
-         "screen": ["Send Date", "ISSN or EISSN", "DOI", "Reason", "Analysis Date"],
-         "header": ["Send Date", "ISSN or EISSN", "DOI", "Reason", "Analysis Date"],
-      "Send Date": "failed[*].created_date",
-  "Analysis Date": "failed[*].analysis_date",
-  "ISSN or EISSN": "failed[*].issn_data",
-            "DOI": "failed[*].metadata.identifier[?(@.type=='doi')].id",
-         "Reason": "failed[*].reason"
-}
-
 # Config table/csv for repositories
 ctable = {
-        # "screen" : ["Name Variants", "Domains", "Grant Numbers", "ORCIDs", "Author Emails", "Keywords"],
-        # "header" : ["Name Variants", "Domains", "Grant Numbers", "ORCIDs", "Author Emails", "Keywords"],
-        "screen" : ["Name Variants", "Domains", "Grant Numbers", "Keywords"],
-        "header" : ["Name Variants", "Domains", "Grant Numbers", "Dummy1", "Dummy2", "Keywords"],
- "Name Variants" : "repoconfig[0].name_variants[*]",
-       "Domains" : "repoconfig[0].domains[*]",
-#     "Postcodes" : "repoconfig[0].postcodes[*]",
- "Grant Numbers" : "repoconfig[0].grants[*]",
-        "Dummy1" : "repoconfig[0].author_ids[?(@.type=='xyz1')].id",
-        "Dummy2" : "repoconfig[0].author_ids[?(@.type=='xyz2')].id",
-#        "ORCIDs" : "repoconfig[0].author_ids[?(@.type=='orcid')].id",
-# "Author Emails" : "repoconfig[0].author_ids[?(@.type=='email')].id",
-      "Keywords" : "repoconfig[0].keywords[*]",
+    # "screen" : ["Name Variants", "Domains", "Grant Numbers", "ORCIDs", "Author Emails", "Keywords"],
+    # "header" : ["Name Variants", "Domains", "Grant Numbers", "ORCIDs", "Author Emails", "Keywords"],
+    "screen": ["Name Variants", "Domains", "Grant Numbers", "Keywords"],
+    "header": ["Name Variants", "Domains", "Grant Numbers", "Dummy1", "Dummy2", "Keywords"],
+    "Name Variants": "repoconfig[0].name_variants[*]",
+    "Domains": "repoconfig[0].domains[*]",
+    #     "Postcodes" : "repoconfig[0].postcodes[*]",
+    "Grant Numbers": "repoconfig[0].grants[*]",
+    "Dummy1": "repoconfig[0].author_ids[?(@.type=='xyz1')].id",
+    "Dummy2": "repoconfig[0].author_ids[?(@.type=='xyz2')].id",
+    #        "ORCIDs" : "repoconfig[0].author_ids[?(@.type=='orcid')].id",
+    # "Author Emails" : "repoconfig[0].author_ids[?(@.type=='email')].id",
+    "Keywords": "repoconfig[0].keywords[*]",
 }
 
-# @formatter:on   turn ON pycharm formatter
 
-
-def _list_failrequest(provider_id=None, bulk=False):
-    """
-    Process a list request, either against the full dataset or the specific provider_id supplied
-    This function will pull the arguments it requires out of the Flask request object.  See the API documentation
-    for the parameters of these kinds of requests.
-
-    :param provider_id: the provider id to limit the request to
-    :param bulk: (boolean) whether bulk (e.g. *not* paginated) is returned or not
-    :return: Flask response containing the list of notifications that are appropriate to the parameters
-    """
-    since = _validate_date(param='since')
-    page = _validate_page()
-    page_size = _validate_page_size()
-
-    try:
-        if bulk is True:
-            flist = JPER.bulk_failed(current_user, since, provider_id=provider_id)
-        else:
-            flist = JPER.list_failed(current_user, since, page=page, page_size=page_size, provider_id=provider_id)
-    except ParameterException as e:
-        return _bad_request(str(e))
-
-    return flist.json()
-
-
-def _list_matchrequest(repo_id=None, provider: bool = False,
-                       bulk: bool = False) -> Union[str, Response]:
+def _list_data_by_table_template(table_template: AccTableTemplate, bulk=False) -> dict:
     """
     Process a list request, either against the full dataset or the specific repo_id supplied
     This function will pull the arguments it requires out of the Flask request object.  See the API documentation
     for the parameters of these kinds of requests.
 
-    :param repo_id: the repo id to limit the request to
-    :param provider: (boolean) whether the repo_id belongs to a publisher or not
+    :param table_template: table_template object for generate table rows as dict
     :param bulk: (boolean) whether bulk (e.g. *not* paginated) is returned or not
-    :return: Flask response containing the list of notifications that are appropriate to the parameters
+    :return: dict which contain table rows
     """
     since = _validate_date_or_abort(param='since')
     page = None if bulk else _validate_page()
     page_size = None if bulk else _validate_page_size()
 
     try:
-        # nlist = JPER.list_notifications(current_user, since, page=page, page_size=page_size, repository_id=repo_id)
-        # 2016-11-24 TD : bulk switch to decrease the number of different calls
-        # 2016-09-07 TD : trial to include some kind of reporting for publishers here!
-        mlist = JPER.list_matches(since, page=page, page_size=page_size,
-                                  repository_id=repo_id, provider=provider)
+        table_data = table_template.list_data(since, page=page, page_size=page_size)
+        return table_data
     except ParameterException as e:
-        return _bad_request(str(e))  # KTODO: suggest raise response instead of return
-
-    return mlist.json()
-
-
-def _list_request(repo_id=None, provider=False, bulk=False):
-    """
-    Process a list request, either against the full dataset or the specific repo_id supplied
-    This function will pull the arguments it requires out of the Flask request object.  See the API documentation
-    for the parameters of these kinds of requests.
-
-    :param repo_id: the repo id to limit the request to
-    :param provider: (boolean) whether the repo_id belongs to a publisher or not
-    :param bulk: (boolean) whether bulk (e.g. *not* paginated) is returned or not
-    :return: Flask response containing the list of notifications that are appropriate to the parameters
-    """
-    since = _validate_date(param='since')
-    page = _validate_page()
-    page_size = _validate_page_size()
-
-    try:
-        # nlist = JPER.list_notifications(current_user, since, page=page, page_size=page_size, repository_id=repo_id)
-        # 2016-11-24 TD : bulk switch to decrease the number of different calls
-        if bulk is True:
-            nlist = JPER.bulk_notifications(current_user, since, repository_id=repo_id, provider=provider)
-        else:
-            # 2016-09-07 TD : trial to include some kind of reporting for publishers here!
-            nlist = JPER.list_notifications(current_user, since, page=page, page_size=page_size, repository_id=repo_id,
-                                            provider=provider)
-    except ParameterException as e:
-        return _bad_request(str(e))
-
-    return nlist.json()
-
-
-# 2016-11-24 TD : *** DEPRECATED: this function shall not be called anymore! ***
-# 2016-11-15 TD : process a download request of a notification list -- start --
-def _download_request(repo_id=None, provider=False):
-    """
-    Process a download request, either against the full dataset or the specific repo_id supplied
-    This function will pull the arguments it requires out of the Flask request object. 
-    See the API documentation for the parameters of these kinds of requests.
-
-    :param repo_id: the repo id to limit the request to
-    :return: StringIO containing the list of notifications that are appropriate to the parameters
-    """
-    since = request.values.get("since")
-
-    if since is None or since == "":
-        return _bad_request("Missing required parameter 'since'")
-
-    try:
-        since = dates.reformat(since)
-    except ValueError:
-        return _bad_request("Unable to understand since date '{x}'".format(x=since))
-
-    try:
-        nbulk = JPER.bulk_notifications(current_user, since, repository_id=repo_id)
-    except ParameterException as e:
-        return _bad_request(str(e))
-
-    return nbulk.json()
+        app.logger.debug(str(e))
+        abort(400, "Invalid parameter")
 
 
 def _sword_logs(repo_id, from_date, to_date):
@@ -359,25 +230,15 @@ def index():
 def download(account_id):
     acc = _pull_acc_or_404(account_id)
 
-    provider = acc.has_role('publisher')
+    table_template = _choice_table_template(is_provider=acc.has_role('publisher'),
+                                            is_rejected=request.args.get('rejected', False),
+                                            account_id=account_id)
 
-    if provider:
-        if request.args.get('rejected', False):
-            fprefix = "failed"
-            xtable = ftable
-            html = _list_failrequest(provider_id=account_id, bulk=True)
-        else:
-            fprefix = "matched"
-            xtable = mtable
-            html = _list_matchrequest(repo_id=account_id, provider=provider, bulk=True)
-    else:
-        fprefix = "routed"
-        xtable = ntable
-        html = _list_request(repo_id=account_id, provider=provider, bulk=True)
+    res = _list_data_by_table_template(table_template, bulk=True)
 
-    res = json.loads(html)
-
-    return _send_file_by_xtable(xtable, res, fprefix, account_id, csv.QUOTE_ALL)
+    return _send_file_by_xtable(table_template.get_table_schema(), res,
+                                table_template.get_fprefix(),
+                                account_id, csv.QUOTE_ALL)
 
 
 def _pull_acc_or_404(account_id) -> Account:
@@ -404,30 +265,57 @@ def _get_num_of_pages(results: dict) -> int:
     return num_of_pages
 
 
+def _choice_table_template(is_provider: bool, is_rejected: bool,
+                           account_id: str) -> AccTableTemplate:
+    if is_provider:
+        if is_rejected:
+            table_template = FailedNotificationTableTemplate(provider_id=account_id, )
+        else:
+            table_template = MatchedTableTemplate(is_provider=is_provider, repository_id=account_id)
+    else:
+        table_template = NotificationTableTemplate(is_provider=is_provider, repository_id=account_id)
+    return table_template
+
+
 @blueprint.route('/details/<repo_id>', methods=["GET", "POST"])
 def details(repo_id):
     acc = _pull_acc_or_404(repo_id)
 
     provider: bool = acc.has_role('publisher')
-    if provider:
-        data = _list_matchrequest(repo_id=repo_id, provider=provider)
-    else:
-        data = _list_request(repo_id=repo_id, provider=provider)
+    table_template = _choice_table_template(is_provider=provider,
+                                            is_rejected=False,
+                                            account_id=repo_id)
 
     date = _get_req_date_str('since')
     link = f'/account/details/{_create_acc_link(date, acc)}'
 
-    results = json.loads(data)
+    results = _list_data_by_table_template(table_template)
     page_num = jper_view_utils.get_req_page_num()
     num_of_pages = _get_num_of_pages(results)
+    table_schema = table_template.get_table_schema()
     if provider:
         return render_template('account/matching.html',
-                               table_headers=mtable['header'],
-                               table_data=_to_table_data(mtable, results),
+                               table_headers=table_schema['header'],
+                               table_data=_to_table_data(table_schema, results),
                                num_of_pages=num_of_pages, page_num=page_num, link=link, date=date)
-    return render_template('account/details.html', repo=data,
-                           results=_notifications_for_display(results, ntable),
+    return render_template('account/details.html', repo=json.dumps(results),
+                           results=_notifications_for_display(results, table_schema),
                            num_of_pages=num_of_pages, page_num=page_num, link=link, date=date)
+
+
+def _render_table_template(table_template, template_path,
+                           link_factory: Callable[[str], str]):
+    data_obj: dict = _list_data_by_table_template(table_template)
+
+    date = _get_req_date_str('since')
+    table_schema = table_template.get_table_schema()
+    return render_template(template_path,
+                           table_headers=table_schema['header'],
+                           table_data=_to_table_data(table_schema, data_obj),
+                           num_of_pages=_get_num_of_pages(data_obj),
+                           page_num=jper_view_utils.get_req_page_num(),
+                           link=link_factory(date),
+                           date=date)
 
 
 # 2016-10-19 TD : restructure matching and(!!) failing history output (primarily for publishers) -- start --
@@ -435,37 +323,27 @@ def details(repo_id):
 def matching(repo_id):
     acc = _pull_acc_or_404(repo_id)
 
-    provider = acc.has_role('publisher')
-    data = _list_matchrequest(repo_id=repo_id, provider=provider)
-    data_obj: dict = json.loads(data)
+    table_template = MatchedTableTemplate(repository_id=repo_id,
+                                          is_provider=acc.has_role('publisher'))
 
-    date = _get_req_date_str('since')
-    return render_template('account/matching.html',
-                           table_headers=mtable['header'],
-                           table_data=_to_table_data(mtable, data_obj),
-                           num_of_pages=_get_num_of_pages(data_obj),
-                           page_num=jper_view_utils.get_req_page_num(),
-                           link=f'/account/matching/{_create_acc_link(date, acc)}',
-                           date=date)
+    return _render_table_template(
+        table_template,
+        'account/matching.html',
+        lambda _date: f'/account/matching/{_create_acc_link(_date, acc)}'
+    )
 
 
 @blueprint.route('/failing/<provider_id>', methods=["GET", "POST"])
 def failing(provider_id):
     acc = _pull_acc_or_404(provider_id)
 
-    # provider = acc.has_role('publisher')
     # 2016-10-19 TD : not needed here for the time being
-    data = _list_failrequest(provider_id=provider_id)
-    data_obj: dict = json.loads(data)
-
-    date = _get_req_date_str('since')
-    return render_template('account/failing.html',
-                           table_headers=ftable['header'],
-                           table_data=_to_table_data(ftable, data_obj),
-                           num_of_pages=_get_num_of_pages(data_obj),
-                           page_num=jper_view_utils.get_req_page_num(),
-                           link=f'/account/failing/{_create_acc_link(date, acc)}',
-                           date=date)
+    table_template = FailedNotificationTableTemplate(provider_id=provider_id)
+    return _render_table_template(
+        table_template,
+        'account/failing.html',
+        lambda _date: f'/account/failing/{_create_acc_link(_date, acc)}'
+    )
 
 
 @blueprint.route('/sword_logs/<repo_id>', methods=["GET"])

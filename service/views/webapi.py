@@ -310,7 +310,7 @@ def _list_request(repo_id=None):
         return _bad_request("'pageSize' parameter is not an integer")
 
     try:
-        nlist = JPER.list_notifications(current_user, since, page=page, page_size=page_size, repository_id=repo_id)
+        nlist = JPER.list_notifications(since, page=page, page_size=page_size, repository_id=repo_id)
     except ParameterException as e:
         return _bad_request(str(e))
 
