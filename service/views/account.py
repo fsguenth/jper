@@ -390,8 +390,8 @@ def configView(repoid=None):
         # get the config for the current user and return it
         # this route may not actually be needed, but is convenient during development
         # also it should be more than just the strings data once complex configs are accepted
-        json_data = json.dumps(rec.data, ensure_ascii=False)
-        return render_template('account/configview.html', repo=json_data)
+        return render_template('account/configview.html',
+                                config_data=rec.data)
     elif request.method == 'POST':
         if request.json:
             saved = rec.set_repo_config(jsoncontent=request.json, repository=rec.repo)
