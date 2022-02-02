@@ -528,8 +528,7 @@ class TestRouting(ESTestCase):
 
         prov = models.MatchProvenance()
 
-        m = routing.match(md, rc, prov, create_test_acc__resp_1().id)
-        assert m is True
+        routing.add_all_provenance(prov, routing.match(md, rc, create_test_acc__resp_1().id))
         assert len(prov.provenance) == 13
         check = [0] * 13
 
@@ -623,8 +622,7 @@ class TestRouting(ESTestCase):
 
         prov = models.MatchProvenance()
 
-        m = routing.match(md, rc, prov, create_test_acc__resp_1().id)
-        assert m is True
+        routing.add_all_provenance(prov, routing.match(md, rc, create_test_acc__resp_1().id))
         assert len(prov.provenance) == 15
         check = [0] * 15
 
@@ -724,11 +722,8 @@ class TestRouting(ESTestCase):
         source2 = fixtures.RepositoryFactory.useless_repo_config()
         rc = models.RepositoryConfig(source2)
 
-        prov = models.MatchProvenance()
-
-        m = routing.match(md, rc, prov, create_test_acc__resp_1().id)
-        assert m is False
-        assert len(prov.provenance) == 0
+        prov_list = list(routing.match(md, rc, create_test_acc__resp_1().id))
+        assert len(prov_list) == 0
 
     def test_match__normal_cases(self):
 
@@ -740,12 +735,12 @@ class TestRouting(ESTestCase):
         self.assertEqual(len(provenance.provenance), 0)
 
         # run
-        result = routing.match(test_data.create_rout_meta__1(),
-                               test_data.create_repo_conf__1(),
-                               provenance, acc1.id)
+        prov_list = routing.match(test_data.create_rout_meta__1(),
+                                  test_data.create_repo_conf__1(),
+                                  acc1.id)
+        routing.add_all_provenance(provenance, prov_list)
 
         # assert after run
-        self.assertTrue(result)
         self.assertEqual(len(provenance.provenance), 2)
         self.assertEqual(provenance.provenance[0]['notification_field'], 'affiliations', )
         self.assertEqual(provenance.provenance[0]['matched'], "111 __key__ 111", )
@@ -765,18 +760,11 @@ class TestRouting(ESTestCase):
             'name_variants': ['__key__', ],
         })
 
-        provenance: models.MatchProvenance = models.MatchProvenance()
-
-        # assert before run
-        self.assertEqual(len(provenance.provenance), 0)
-
         # run
-        result = routing.match(notification_data, repository_config, provenance,
-                               create_test_acc__resp_1().id)
+        prov_list = routing.match(notification_data, repository_config, create_test_acc__resp_1().id)
 
         # assert after run
-        self.assertFalse(result)
-        self.assertEqual(len(provenance.provenance), 0)
+        self.assertEqual(len(list(prov_list)), 0)
 
     @patch.object(packages.PackageManager, 'extract', return_value=data_pm_extract__1())
     @patch.object(models.RepositoryConfig, 'pull_by_repo', return_value=test_data.create_repo_conf__1())

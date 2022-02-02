@@ -147,10 +147,12 @@ def _match_and_save_provenances(al_repos: Iterable[AlRepo],
         prov.alliance = lic_data
         prov.bibid = bibid
         prov.notification = unrouted.id
-        match(match_data, rc, prov, repo)
-        if len(prov.provenance) > 0:
+        prov_list = list(match(match_data, rc, repo))
+        if len(prov_list) > 0:
             app.logger.debug("Routing - Notification:{y} successfully matched Repository:{x}"
                              .format(y=unrouted.id, x=repo))
+            add_all_provenance(prov, prov_list)
+
             prov.save()
             match_ids.append(repo)
             app.logger.debug("Routing - Provenance:{z} written for Notification:{y} for match to Repisitory:{x}"
@@ -388,8 +390,7 @@ def _yield_match_algorithm() -> Iterable[MatchAlgorithm]:
 
 def match(noti_data: models.RoutingMetadata,
           repo_conf: models.RepositoryConfig,
-          provenance: models.MatchProvenance,
-          acc_id: str):
+          acc_id: str) -> Iterable[MatchedProvenanceData]:
     """
     Match the incoming notification data, to the repository config and determine
     if there is a match.
@@ -399,7 +400,6 @@ def match(noti_data: models.RoutingMetadata,
 
     :param noti_data:   models.RoutingMetadata
     :param repo_conf:   models.RepositoryConfig
-    :param provenance:          models.MatchProvenance
     :param acc_id:              Account id matching the bib_id
     :return:  True if there was a match, False if not
     """
@@ -433,10 +433,10 @@ def match(noti_data: models.RoutingMetadata,
     # if none of the required matches hit, then no need to look at the optional refinements
     if new_prov_list:
         # record the provenance
-        add_all_provenance(provenance, new_prov_list)
+        yield from new_prov_list
     else:
         app.logger.debug('stop matching [general], none of the required matches hit ')
-        return False
+        return
 
     # -------- do the match refinements --------------------
     # if the configuration specifies a keyword, it must match the notification data, otherwise
@@ -450,12 +450,10 @@ def match(noti_data: models.RoutingMetadata,
                                                          prop, prop, exact)
         prov_list = list(prov_list)
         if prov_list:
-            add_all_provenance(provenance, prov_list)
+            yield from prov_list
         else:
             app.logger.debug(f'stop matching [{prop}], none of the required matches hit ')
-            return False  # exit function rather than continue the for loop
-
-    return len(provenance.provenance) > 0
+            return  # exit function rather than continue the for loop
 
 
 def _create_matched_provenance_data_list(noti_data: models.RoutingMetadata,
