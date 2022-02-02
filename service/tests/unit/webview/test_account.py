@@ -113,6 +113,8 @@ class TestModels(ESTestCase):
 
         self.assert_reset_buttons_exist(soup)
         self.assert_selector_exist(soup, [f'a[href^="/account/details/{acc.id}"]', ])
+        # TODO assert "Filter" licenses
+        # TODO assert repo config
 
         self.assert_account_details(acc, soup)
 
