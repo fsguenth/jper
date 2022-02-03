@@ -366,7 +366,7 @@ def config(repoid=None):
             saved = rec.set_repo_config(jsoncontent=request.json,repository=rec.repo)
         else:
             try:
-                saved = jper_view_utils.set_repo_config_by_req_files(rec, rec.repo)
+                saved = jper_view_utils.save_repo_config_by_req_files(rec, rec.repo)
             except:
                 saved = False
         if saved:

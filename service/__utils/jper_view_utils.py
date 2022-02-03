@@ -13,7 +13,7 @@ def get_req_page_num() -> int:
     return page_num
 
 
-def set_repo_config_by_req_files(rec: models.RepositoryConfig, repo: str, encoding='utf-8') -> bool:
+def save_repo_config_by_req_files(rec: models.RepositoryConfig, repo: str, encoding='utf-8') -> bool:
     saved = None
     io_wrapper = TextIOWrapper(request.files['file'], encoding=encoding)
     if request.files['file'].filename.endswith('.csv'):

@@ -397,7 +397,7 @@ def configView(repoid=None):
             saved = rec.set_repo_config(jsoncontent=request.json, repository=rec.repo)
         else:
             try:
-                saved = jper_view_utils.set_repo_config_by_req_files(rec, rec.repo)
+                saved = jper_view_utils.save_repo_config_by_req_files(rec, rec.repo)
             except:
                 saved = False
         if saved:
@@ -605,7 +605,7 @@ def config(username):
                     elif fn.endswith('.txt'):
                         saved = rec.set_repo_config(textfile=strm, repository=username)
             else:
-                _saved = jper_view_utils.set_repo_config_by_req_files(rec, username)
+                _saved = jper_view_utils.save_repo_config_by_req_files(rec, username)
                 if _saved is not None:
                     saved = _saved
             if saved:
