@@ -297,7 +297,9 @@ class RepositoryConfig(dataobj.DataObj, dao.RepositoryConfigDAO):
         elif textfile is not None:
             app.logger.debug("Extracted simple config from .txt file for repo: {x}".format(x=repoid))
             # app.logger.debug("Extracted simple config from .txt file for repo: {x}".format(x=self.id))
-            self.data['strings'] = [line.rstrip('\n').rstrip('\r').strip() for line in textfile if len(line.rstrip('\n').rstrip('\r').strip()) > 1]
+            _strings = (line.rstrip('\n').rstrip('\r').strip() for line in textfile)
+            _strings = (s for s in _strings if len(s) > 1)
+            self.data['strings'] = list(_strings)
             self.data['repo'] = repoid
             # self.data['repository'] = repository
             # 2016-06-29 TD : index mapping exception fix for ES 2.3.3
