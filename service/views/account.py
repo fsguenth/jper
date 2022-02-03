@@ -605,9 +605,8 @@ def config(username):
                     elif fn.endswith('.txt'):
                         saved = rec.set_repo_config(textfile=strm, repository=username)
             else:
-                _saved = jper_view_utils.save_repo_config_by_req_files(rec, username)
-                if _saved is not None:
-                    saved = _saved
+                saved = jper_view_utils.save_repo_config_by_req_files(rec, username)
+
             if saved:
                 flash('Thank you. Your match config has been updated.', "success")
             else:
