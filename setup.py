@@ -10,7 +10,7 @@ setup(
         "Flask-Login==0.5.0",
         "requests==2.25.1",
         "simplejson==3.17.2",
-        "lxml==4.6.2",
+        "lxml==4.6.3",
         "Flask-WTF==0.14.3",
         "nose==1.3.7",
         "Flask-Mail==0.9.1",
