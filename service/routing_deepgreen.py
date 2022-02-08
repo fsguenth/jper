@@ -9,7 +9,7 @@ import unicodedata
 import uuid
 from copy import deepcopy
 from datetime import datetime
-from typing import Callable, Union, Iterable
+from typing import Callable, Union, Iterable, NoReturn
 
 from flask import url_for
 from werkzeug.routing import BuildError
@@ -17,7 +17,7 @@ from werkzeug.routing import BuildError
 from octopus.core import app
 from octopus.lib import dates
 from service import packages, models
-from service.models import RoutingMetadata, NotificationMetadata, License, RoutedNotification
+from service.models import RoutingMetadata, NotificationMetadata, License, RoutedNotification, UnroutedNotification
 
 MatchResult = Union[str, bool]
 MatchFn = Callable[[str, any], MatchResult]
@@ -166,25 +166,24 @@ def _match_and_save_provenances(al_repos: Iterable[AlRepo],
     return match_ids
 
 
-def _save_routed(unrouted: models.UnroutedNotification,
-                 match_ids: list,
+def _save_routed(unrouted: UnroutedNotification,
+                 match_ids: list[str],
                  issn_data: list[str],
-                 metadata):
-    routing_reason = "Matched to {x} qualified repositories.".format(x=len(match_ids))
-    # repackage the content that came with the unrouted notification (if necessary) into
-    # the formats required by the repositories for which there was a match
-    pack_links = repackage(unrouted, match_ids)
+                 metadata) -> NoReturn:
 
     # update the record with the information, and then
     # write it to the index
     routed: RoutedNotification = unrouted.make_routed()
-    routed.reason = routing_reason
+    routed.reason = "Matched to {x} qualified repositories.".format(x=len(match_ids))
     # 2016-11-24 TD : collecting all available ISSN data of this notifiction
     if issn_data is not None and len(issn_data) > 0:
         routed.issn_data = " ; ".join(issn_data)
     else:
         routed.issn_data = "None"
-    for pl in pack_links:
+
+    # repackage the content that came with the unrouted notification (if necessary) into
+    # the formats required by the repositories for which there was a match
+    for pl in repackage(unrouted, match_ids):
         routed.add_link(pl.get("url"), pl.get("type"), pl.get("format"), pl.get("access"), pl.get("packaging"))
     routed.repositories = list(set(match_ids))  # make them unique
     routed.analysis_date = dates.now()
@@ -494,7 +493,7 @@ def add_all_provenance(provenance: models.MatchProvenance,
                                   p.match_msg)
 
 
-def enhance(routed, metadata):
+def enhance(routed, metadata) -> NoReturn:
     """
     Enhance the routed notification with the extracted metadata
 
@@ -633,7 +632,7 @@ def _merge_entities(e1, e2, primary_property, other_properties=None):
     return False
 
 
-def repackage(unrouted, repo_ids):
+def repackage(unrouted: UnroutedNotification, repo_ids: list[str]) -> list[dict]:
     """
     Repackage any binary content associated with the notification for consumption by
     the repositories identified by the list of repo_ids.
@@ -713,7 +712,7 @@ def repackage(unrouted, repo_ids):
     return links
 
 
-def modify_public_links(routed):
+def modify_public_links(routed) -> NoReturn:
     # Modify the url and type of all public access links
     newlinks = []
     for link in routed.links:
@@ -1064,7 +1063,8 @@ def author_id_string(aob):
     return "{x}: {y}".format(x=aob.get("type"), y=aob.get("id"))
 
 
-def notify_failure(unrouted, routing_reason, issn_data=None, metadata=None, label=''):
+def notify_failure(unrouted, routing_reason, issn_data=None, metadata=None,
+                   label='') -> NoReturn:
     # if config says so, convert the unrouted notification to a failed notification,
     # (enhance and) save for later diagnosis
     if app.config.get("KEEP_FAILED_NOTIFICATIONS", False):
@@ -1080,4 +1080,3 @@ def notify_failure(unrouted, routing_reason, issn_data=None, metadata=None, labe
         failed.save()
         app.logger.debug(
             "Routing - Notification:{y} stored as a {z} Failed Notification".format(y=unrouted.id, z=label))
-    return

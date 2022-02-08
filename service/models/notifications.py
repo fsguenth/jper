@@ -1171,7 +1171,7 @@ class UnroutedNotification(BaseNotification, dao.UnroutedNotificationDAO):
     #        stalled = StalledNotification(d)
     #        return stalled
 
-    def make_failed(self):
+    def make_failed(self) -> "FailedNotification":
         """
         Create an instance of a FailedNotification from this object.
 
