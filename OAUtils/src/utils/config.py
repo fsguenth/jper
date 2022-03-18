@@ -4,6 +4,7 @@ Created on 26 Oct 2015
 @author: Ruben.Alonso
 '''
 import json
+import os
 
 ROUTER_ADDR = 'http://127.0.0.1'
 ROUTER_PORT = '5998'
@@ -111,4 +112,4 @@ configMySQL = {
 
 #configES = [{'host': 'gateway', 'port': 9200, 'timeout': 300}]
 # TODO: SE 2021-03-17 - has this always been misconfigured and never used?
-configES = [{'host': 'localhost', 'port': 9200, 'timeout': 300}]
+configES = [{'host': os.environ.get('ES_HOST', 'localhost'), 'port': 9200, 'timeout': 300}]
