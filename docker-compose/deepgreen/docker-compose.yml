@@ -26,7 +26,7 @@ services:
       - jper_net
 
   store:
-    build: 
+    build:
       context: .
       dockerfile: store.Dockerfile
     expose:
@@ -36,24 +36,42 @@ services:
     networks:
       - jper_net
 
-  jper:
+  # jper-base can be used on pycharm as Python Interpreter
+  jper-base: &jper_base
     build:
       context: ../../
       dockerfile: docker-compose/deepgreen/jper.Dockerfile
-    expose:
-      - 5998
-    ports:
-      - 5998:5998
     volumes:
       - ../../:/opt/jper
+      - jper_etc:/etc
+      - deepgree_home:/opt/deepgreen
+      - tmp_home:/tmp
+      - sftpuser:/home/sftpusers
+      - data_home:/data
     env_file:
       - .env
     networks:
       - jper_net
 
+  jper-web:
+    <<: *jper_base
+    command:
+      - bash
+      - "/opt/jper/docker-compose/deepgreen/jper.entrypoint.sh"
+    expose:
+      - 5998
+    ports:
+      - 5998:5998
+
+
 volumes:
   odfe-data:
   odfe-log:
+  deepgree_home:
+  tmp_home:
+  sftpuser:
+  data_home:
+  jper_etc:
 
 networks:
   jper_net:

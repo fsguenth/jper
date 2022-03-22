@@ -163,6 +163,7 @@ def moveftp():
         userdirs = os.listdir(userdir)
         fl = os.path.dirname(os.path.abspath(__file__)) + '/models/moveFTPfiles.sh'
         app.logger.info("Scheduler - from FTP folders found " + str(len(userdirs)) + " user directories")
+        # breakpoint()
         for dir in userdirs:
             if not os.path.isdir(os.path.join(userdir, dir)):
                 continue
@@ -190,6 +191,8 @@ def moveftp():
             if founditems is False:
                 app.logger.debug('Scheduler - found nothing to move for Account:' + dir)
     except:
+        import traceback
+        print(traceback.format_exc())
         app.logger.error("Scheduler - move from FTP failed")
 
 
@@ -321,6 +324,8 @@ def processftp():
                               ignore_errors=True)  # 2019-12-02 TD : kill "udir" folder no matter what status
 
     except Exception as e:
+        import traceback
+        print(traceback.format_exc())
         app.logger.error('Scheduler - failed scheduled process for FTP temp directories: "{x}"'.format(x=str(e)))
 
 

@@ -3,7 +3,7 @@
 set -e
 
 wait_until_up () {
-  until curl $1; do
+  until curl -s $1; do
     >&2 echo "$2 is unavailable - sleeping...."
     sleep $3
   done
