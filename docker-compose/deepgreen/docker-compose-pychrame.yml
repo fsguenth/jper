@@ -1,0 +1,22 @@
+# extending docker-compose.yml
+
+version: '3.9'
+services:
+  jper-pychrame:
+    build:
+      context: ../../
+      dockerfile: docker-compose/deepgreen/jper.Dockerfile
+    volumes:
+      - ../../:/opt/jper
+      - jper_etc:/etc
+      - deepgreen_home:/opt/deepgreen
+      - tmp_home:/tmp
+      - sftpuser:/home/sftpusers
+      - data_home:/data
+    env_file:
+      - .env
+    networks:
+      - jper_net
+    command:
+      - echo
+      - "should be used by pychrame"
