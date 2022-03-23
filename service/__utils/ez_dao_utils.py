@@ -31,12 +31,12 @@ def wait_unit(cond_fn: Callable[[], bool], timeout=10, sleep_sec=0.1):
         time.sleep(sleep_sec)
 
 
-def wait_unit_id_found(domain_obj_cls: Type[DomainObject], _id: str):
-    wait_unit(lambda: domain_obj_cls.count(ez_query_maker.by_id(_id)) > 0)
+def wait_unit_id_found(domain_obj_cls: Type[DomainObject], _id: str, timeout=10):
+    return wait_unit(lambda: domain_obj_cls.count(ez_query_maker.by_id(_id)) > 0, timeout=timeout)
 
 
 def wait_unit_id_not_found(domain_obj_cls: Type[DomainObject], _id: str):
-    wait_unit(lambda: domain_obj_cls.count(ez_query_maker.by_id(_id)) == 0)
+    return wait_unit(lambda: domain_obj_cls.count(ez_query_maker.by_id(_id)) == 0)
 
 
 def pull_all_by_key(domain_obj_cls: Type[DomainObject], key, value, wrap=True) -> Iterable:

@@ -10,50 +10,52 @@ import pkg_resources
 from octopus.core import app
 from service import models
 from service.__utils import ez_dao_utils
-from service.models import Account, RepositoryConfig
+from service.models import Account, RepositoryConfig, License, Alliance
 from service.scripts import loadcsvjournals, loadezbparticipants
 
 log: logging.Logger = app.logger
 for h in log.handlers:
     h.setFormatter(logging.Formatter('%(asctime)s %(levelname).1s [%(module)s:%(lineno)d] - %(message)s'))
 
-account_data_list = [
-    {'email': 'MDPI@deepgreen.org', 'role': 'publisher', 'password': 'publisher1_MDPI'},
-    {'email': 'Karger@deepgreen.org', 'role': 'publisher', 'password': 'publisher1_Karger'},
-    {'email': 'Frontiers@deepgreen.org', 'role': 'publisher', 'password': 'publisher1_Frontiers'},
-    {'email': 'SAGE@deepgreen.org', 'role': 'publisher', 'password': 'publisher1_SAGE'},
-    {'email': 'wiley@deepgreen.org', 'role': 'publisher', 'password': 'publisher1_Wiley'},
-    {
-        'email': 'UBR@deepgreen.org', 'role': 'repository', 'password': 'repository1_UBR',
-        'repository_name': 'Universität Regensburg',
-        'repository_bibid': 'UBR',
-        'packaging': 'http://purl.org/net/sword/package/METSMODS',
-    },
-    {
-        'email': 'UBEN@deepgreen.org', 'role': 'repository', 'password': 'repository1_UBEN',
-        'repository_name': 'Friedrich-Alexander-Universität Erlangen-Nürnberg',
-        'repository_bibid': 'UBEN',
-        'packaging': 'http://purl.org/net/sword/package/OPUS4Zip'
-    },
-    {
-        'email': 'UBK@deepgreen.org', 'role': 'repository', 'password': 'repository1_UBK',
-        'repository_name': 'Christian-Albrechts-Universität zu Kiel',
-        'repository_bibid': 'UBK',
-        'packaging': 'http://purl.org/net/sword/package/SimpleZip'
-    },
-    {
-        'email': 'TUBB@deepgreen.org', 'role': 'repository', 'password': 'repository1_TUBB',
-        'repository_name': 'Technische Universität Berlin',
-        'repository_bibid': 'TUBB',
-        'packaging': 'http://purl.org/net/sword/package/SimpleZip'
-    },
-    {
-        'email': 'TFRD@deepgreen.org', 'role': ['repository', 'subject_repository', 'match_all'],
-        'password': 'repository1_TFRD',
-        'repository_name': 'Fachrepositorium Test',
-        'repository_bibid': 'TFRD',
-    },
-]
+
+def create_account_data_list():
+    return [
+        {'email': 'MDPI@deepgreen.org', 'role': 'publisher', 'password': 'publisher1_MDPI'},
+        {'email': 'Karger@deepgreen.org', 'role': 'publisher', 'password': 'publisher1_Karger'},
+        {'email': 'Frontiers@deepgreen.org', 'role': 'publisher', 'password': 'publisher1_Frontiers'},
+        {'email': 'SAGE@deepgreen.org', 'role': 'publisher', 'password': 'publisher1_SAGE'},
+        {'email': 'wiley@deepgreen.org', 'role': 'publisher', 'password': 'publisher1_Wiley'},
+        {
+            'email': 'UBR@deepgreen.org', 'role': 'repository', 'password': 'repository1_UBR',
+            'repository_name': 'Universität Regensburg',
+            'repository_bibid': 'UBR',
+            'packaging': 'http://purl.org/net/sword/package/METSMODS',
+        },
+        {
+            'email': 'UBEN@deepgreen.org', 'role': 'repository', 'password': 'repository1_UBEN',
+            'repository_name': 'Friedrich-Alexander-Universität Erlangen-Nürnberg',
+            'repository_bibid': 'UBEN',
+            'packaging': 'http://purl.org/net/sword/package/OPUS4Zip'
+        },
+        {
+            'email': 'UBK@deepgreen.org', 'role': 'repository', 'password': 'repository1_UBK',
+            'repository_name': 'Christian-Albrechts-Universität zu Kiel',
+            'repository_bibid': 'UBK',
+            'packaging': 'http://purl.org/net/sword/package/SimpleZip'
+        },
+        {
+            'email': 'TUBB@deepgreen.org', 'role': 'repository', 'password': 'repository1_TUBB',
+            'repository_name': 'Technische Universität Berlin',
+            'repository_bibid': 'TUBB',
+            'packaging': 'http://purl.org/net/sword/package/SimpleZip'
+        },
+        {
+            'email': 'TFRD@deepgreen.org', 'role': ['repository', 'subject_repository', 'match_all'],
+            'password': 'repository1_TFRD',
+            'repository_name': 'Fachrepositorium Test',
+            'repository_bibid': 'TFRD',
+        },
+    ]
 
 
 def create_acc(acc_dict: dict):
@@ -66,16 +68,21 @@ def create_acc(acc_dict: dict):
     account.save()
     if 'publisher' in acc_dict['role']:
         account.become_publisher()
+    return account
 
 
 def prepare_accounts():
     log.info('[START] prepare accounts')
-    for acc_data in account_data_list:
+    for acc_data in create_account_data_list():
         log.info(f'create acc for {acc_data["email"]}')
         if Account.pull_by_email(acc_data['email']) is not None:
             log.warning(f'skip create acc for [{acc_data["email"]}] --- already exist')
             continue
-        create_acc(acc_data)
+        acc = create_acc(acc_data)
+
+        # check acc created
+        assert (ez_dao_utils.wait_unit_id_found(Account, acc.id),
+                f'account[{acc.id}] not found ??')
 
 
 def _find_acc_by_email(email, timeout_sec=10):
@@ -89,19 +96,27 @@ def _find_acc_by_email(email, timeout_sec=10):
     return None
 
 
-def _path_aff_file(acc) -> Path:
+def _path_aff_file(filename) -> Path:
     return Path(pkg_resources.resource_filename(
-        'service', f'scripts/test_data/Affiliations files/{acc.data["repository"]["bibid"]}.csv'))
+        'service', f'scripts/test_data/Affiliations files/{filename}'))
 
 
 def _path_lic_file(file_name) -> Path:
     return Path(pkg_resources.resource_filename('service', f'scripts/test_data/Test License Files/{file_name}'))
 
 
+def _get_path_aff_files(acc) -> Iterable[Path]:
+    bibid = acc.data["repository"]["bibid"]
+    paths = [_path_aff_file(f'{bibid}.csv')]
+    if bibid == 'UBEN':
+        paths.append(_path_aff_file(f'{bibid}_with_test_id.csv'))
+    return (p for p in paths if filter_not_file(p))
+
+
 def upload_affiliation_files():
     log.info('[START] upload affiliation files ')
-    acc_email_list = (acc['email'] for acc in account_data_list if 'repository_name' in acc)
-    acc_list: Iterable[Account] = (_find_acc_by_email(email) for email in acc_email_list)
+    acc_email_list = [acc['email'] for acc in create_account_data_list() if 'repository_name' in acc]
+    acc_list: Iterable[Account] = [_find_acc_by_email(email) for email in acc_email_list]
     acc_list = filter(None, acc_list)
 
     # filter bibid not found
@@ -115,23 +130,26 @@ def upload_affiliation_files():
             _acc_list.append(acc)
     acc_list = _acc_list
 
-    data_list = ((acc, _path_aff_file(acc)) for acc in acc_list)
-    data_list = ((acc, path) for acc, path in data_list if filter_not_file(path))
+    for acc in acc_list:
+        for aff_path in _get_path_aff_files(acc):
+            log.info(f'working for acc -- [{acc.email}]')
 
-    for acc, aff_path in data_list:
-        log.info(f'working for acc -- [{acc.email}]')
+            # prepare repository config
+            rec = RepositoryConfig().pull_by_repo(acc.id)
+            if rec is None:
+                log.info(f'repo config not found [{acc.id}], new repo config created.')
+                rec = RepositoryConfig()
+                rec.repository = acc.id
 
-        # prepare repository config
-        rec = RepositoryConfig().pull_by_repo(acc.id)
-        if rec is None:
-            rec = RepositoryConfig()
-            rec.repository = acc.id
+            # save file
+            saved = rec.set_repo_config(csvfile=aff_path.open(), repository=acc.id)
+            if not saved:
+                log.warning(f'save affiliation files FAIL -- [{aff_path.as_posix()}]')
+            log.info(f'save affiliation files success -- [{aff_path.as_posix()}]')
 
-        # save file
-        saved = rec.set_repo_config(csvfile=aff_path.open(), repository=acc.id)
-        if not saved:
-            log.warning(f'save affiliation files FAIL -- [{aff_path.as_posix()}]')
-        log.info(f'save affiliation files success -- [{aff_path.as_posix()}]')
+            # check repo_config created
+            assert (ez_dao_utils.wait_unit_id_found(RepositoryConfig, rec.id),
+                    f'repo config[{rec.id}] not found ??')
 
 
 def filter_not_file(path: Union[Path, str]) -> bool:
@@ -165,6 +183,11 @@ def add_license_files():
         log.info(f'load_csv_journal for {lic_file_path.as_posix()}')
         loadcsvjournals.load_csv_journal(lic_file_path.as_posix(), lic_type)
 
+        # check lic created
+        ezbid = lic_file_path.name.split('_')[0]
+        assert (ez_dao_utils.wait_unit(lambda: License.pull_by_key('identifier.id.exact', ezbid) is not None),
+                'lic create fail??')
+
 
 def add_participant_files():
     log.info('[START] add participant files ')
@@ -186,8 +209,12 @@ def add_participant_files():
             log.warning(f'invalid participant file name {filename}')
             continue
 
-        alid = filename.split('_')[0].upper()
-        loadezbparticipants.upload_csv(p.as_posix(), alid)
+        alliance_id = filename.split('_')[0].upper()
+        loadezbparticipants.upload_csv(p.as_posix(), alliance_id)
+
+        # check alliance created
+        assert (ez_dao_utils.wait_unit(lambda: Alliance.pull_by_key('identifier.id', alliance_id) is not None),
+                'alliance create fail??')
 
 
 def find_routing_test_data_by_doi(doi) -> Iterable[Path]:
