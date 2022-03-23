@@ -2,18 +2,20 @@ import logging
 import os
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 from typing import Iterable, Union
 
 import pkg_resources
 
+from octopus.core import app
 from service import models
 from service.__utils import ez_dao_utils
 from service.models import Account, RepositoryConfig
 from service.scripts import loadcsvjournals, loadezbparticipants
 
-log = logging.getLogger(__name__)
+log: logging.Logger = app.logger
+for h in log.handlers:
+    h.setFormatter(logging.Formatter('%(asctime)s %(levelname).1s [%(module)s:%(lineno)d] - %(message)s'))
 
 account_data_list = [
     {'email': 'MDPI@deepgreen.org', 'role': 'publisher', 'password': 'publisher1_MDPI'},
@@ -245,25 +247,17 @@ def run_scheduler():
     scheduler.moveftp()
     scheduler.copyftp()
     scheduler.processftp()
-    # scheduler.checkunrouted()
-    # scheduler.monthly_reporting()
+    scheduler.checkunrouted()
+    scheduler.monthly_reporting()
 
 
 def main():
-    logging.basicConfig(format='%(asctime)s %(levelname).1s [%(module)s:%(lineno)d] - %(message)s',
-                        level=logging.INFO, stream=sys.stdout)
-
-    # prepare_accounts()
-    # upload_affiliation_files()
-    # add_license_files()
-    # add_participant_files()
+    prepare_accounts()
+    upload_affiliation_files()
+    add_license_files()
+    add_participant_files()
     copy_test_data_to_sftp()
     run_scheduler()
-
-
-def main2():
-    p = pkg_resources.resource_filename('service', 'scripts/test_data/Affiliations files/TFRD.csv')
-    print(Path(p).is_file())
 
 
 if __name__ == '__main__':
