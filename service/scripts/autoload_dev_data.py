@@ -15,7 +15,7 @@ from service.scripts import loadcsvjournals, loadezbparticipants
 
 log: logging.Logger = app.logger
 for h in log.handlers:
-    h.setFormatter(logging.Formatter('%(asctime)s %(levelname).1s [%(module)s:%(lineno)d] - %(message)s'))
+    h.setFormatter(logging.Formatter('%(asctime)s %(levelname).1s [%(process)d][%(module)s:%(lineno)d] - %(message)s'))
 
 
 def create_account_data_list():

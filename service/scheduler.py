@@ -19,9 +19,14 @@ Or, if scheduled tasks themselves also need to be scaled up, the scheduler can c
 some synchronisation would have to be added to that tasks were not run on every machine. Also, each machine running
 the schedule would need access to any relevant directories.
 """
+import multiprocessing
+from queue import Empty
 
 import schedule, time, os, shutil, requests, datetime, tarfile, zipfile, subprocess, getpass, uuid, json
 from threading import Thread
+
+from service.__utils import debug_utils
+
 from octopus.core import app, initialise
 from service import reports
 from service import models
@@ -333,55 +338,89 @@ if app.config.get('PROCESSFTP_SCHEDULE', 10) != 0:
     schedule.every(app.config.get('PROCESSFTP_SCHEDULE', 10)).minutes.do(processftp)
 
 
-def checkunrouted():
-    urobjids = []
-    robjids = []
-    counter = 0
-    limit = app.config.get('CHECKUNROUTED_SCHEDULE', 10) * 5
-    # 2019-06-13 TD : to cope with mass deliveries, we have to limit the next loop 
-    #                 (factor 10 times the time to the next call seems reasonable...)
-    try:
-        app.logger.debug("Scheduler - check for unrouted notifications")
-        # query the service.models.unroutednotification index
-        # returns a list of unrouted notification from the last three up to four months
-        for obj in models.UnroutedNotification.scroll():
-            counter += 1
-            res = routing.route(obj)
-            if res:
-                robjids.append(obj.id)
-            else:
-                urobjids.append(obj.id)
-            # 2019-06-13 TD : to cope with mass deliveries, we have to limit 
-            #                 the loop over the unrouted notifs
-            if counter >= limit:
+class RoutingWorker(multiprocessing.Process):
+    def __init__(self,
+                 in_queue: multiprocessing.Queue,
+                 out_queue: multiprocessing.Queue):
+        super().__init__()
+        self.in_queue = in_queue
+        self.out_queue = out_queue
+
+    def run(self):
+        while True:
+            try:
+                unrouted_raw: dict = self.in_queue.get(timeout=1)
+            except Empty:
                 break
 
+            unrouted = models.UnroutedNotification(unrouted_raw)
+            result = routing.route(unrouted)
+            self.out_queue.put((result, unrouted.id))
+
+
+@debug_utils.function_timer
+def checkunrouted():
+
+    limit = app.config.get('CHECKUNROUTED_SCHEDULE', 10) * 5
+    # 2019-06-13 TD : to cope with mass deliveries, we have to limit the next loop
+    #                 (factor 10 times the time to the next call seems reasonable...)
+
+    app.logger.debug("Scheduler - check for unrouted notifications")
+
+    # prepare in_queue, out_queue for worker
+    in_queue = multiprocessing.Queue()
+    # query the service.models.unroutednotification index
+    # returns a list of unrouted notification from the last three up to four months
+    counter = 0
+    for counter, u in enumerate(models.UnroutedNotification.scroll(), 1):
+        in_queue.put(u.data)
+
+        # 2019-06-13 TD : to cope with mass deliveries, we have to limit
+        #                 the loop over the unrouted notifs
+        if counter >= limit:
+            break
+    out_queue = multiprocessing.Queue()
+
+
+    # run all routing worker
+    workers = [RoutingWorker(in_queue, out_queue) for _ in range(app.config.get('NUM_ROUTING_WORKER', 2))]
+    for w in workers:
+        w.start()
+
+    for w in workers:
+        w.join()
+
+    # wait for routing result
+    urobjids = []
+    robjids = []
+    while not out_queue.empty():
+        res, unrouted_id = out_queue.get()
+        if res:
+            robjids.append(unrouted_id)
+        else:
+            urobjids.append(unrouted_id)
+
+    # 2017-06-06 TD : replace str() by .format() string interpolation
+    app.logger.debug("Scheduler - routing sent {cnt} notification(s) for routing".format(cnt=counter))
+
+    if app.config.get("DELETE_ROUTED", False) and len(robjids) > 0:
         # 2017-06-06 TD : replace str() by .format() string interpolation
-        app.logger.debug("Scheduler - routing sent {cnt} notification(s) for routing".format(cnt=counter))
+        app.logger.debug(
+            "Scheduler - routing deleting {x} of {cnt} unrouted notification(s) that have been processed and routed".format(
+                x=len(robjids), cnt=counter))
+        models.UnroutedNotification.bulk_delete(robjids)
+        # 2017-05-17 TD :
+        time.sleep(2)  # 2 seconds grace time
 
-        if app.config.get("DELETE_ROUTED", False) and len(robjids) > 0:
-            # 2017-06-06 TD : replace str() by .format() string interpolation
-            app.logger.debug(
-                "Scheduler - routing deleting {x} of {cnt} unrouted notification(s) that have been processed and routed".format(
-                    x=len(robjids), cnt=counter))
-            models.UnroutedNotification.bulk_delete(robjids)
-            # 2017-05-17 TD :
-            time.sleep(2)  # 2 seconds grace time
+    if app.config.get("DELETE_UNROUTED", False) and len(urobjids) > 0:
+        # 2017-06-06 TD : replace str() by .format() string interpolation
+        app.logger.debug(
+            "Scheduler - routing deleting {x} of {cnt} unrouted notifications that have been processed and were unrouted".format(
+                x=len(urobjids), cnt=counter))
+        models.UnroutedNotification.bulk_delete(urobjids)
+        # 2017-05-17 TD :
+        time.sleep(2)  # again, 2 seconds grace
 
-        if app.config.get("DELETE_UNROUTED", False) and len(urobjids) > 0:
-            # 2017-06-06 TD : replace str() by .format() string interpolation
-            app.logger.debug(
-                "Scheduler - routing deleting {x} of {cnt} unrouted notifications that have been processed and were unrouted".format(
-                    x=len(urobjids), cnt=counter))
-            models.UnroutedNotification.bulk_delete(urobjids)
-            # 2017-05-17 TD :
-            time.sleep(2)  # again, 2 seconds grace
-
-    except Exception as e:
-        app.logger.error(
-            "Scheduler - Failed scheduled check for unrouted notifications: cnt={cnt}, len(robjids)={a}, len(urobjids)={b}".format(
-                cnt=counter, a=len(robjids), b=len(urobjids)))
-        app.logger.error("Scheduler - Failed scheduled check for unrouted notifications: '{x}'".format(x=str(e)))
 
 
 if app.config.get('CHECKUNROUTED_SCHEDULE', 10) != 0:

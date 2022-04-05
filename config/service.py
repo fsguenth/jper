@@ -130,6 +130,7 @@ PROCESSFTP_SCHEDULE = 15
 CHECKUNROUTED_SCHEDULE = 20
 DELETE_ROUTED = True
 DELETE_UNROUTED = True
+NUM_ROUTING_WORKER = 4
 
 # Scheduler can also do necessary reporting jobs
 REPORTSDIR = '/home/green/jper_reports'
