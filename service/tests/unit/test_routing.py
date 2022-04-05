@@ -7,10 +7,17 @@ File "jper/src/jper/service/routing_deepgreen.py", line 974, in _normalise
 #                 all sorts of diacritical signs
 # s = unicodedata.normalize('NFD',s)
 """
+import shutil
+from pathlib import Path
+from typing import Iterable
+
+import pkg_resources
 
 from octopus.modules.es.testindex import ESTestCase
 from octopus.lib import paths
 from octopus.modules.store import store
+from octopus.modules.store.store import StoreLocal
+from service.models.ezb import LIC_STATUS_ACTIVE
 from service.web import app
 from flask import url_for
 
@@ -20,6 +27,7 @@ else:
     from service import routing
 from service import models, api, packages
 from service.tests import fixtures
+from service.tests.data import test_data
 
 from datetime import datetime
 import time, os
@@ -30,6 +38,41 @@ from copy import deepcopy
 PACKAGE = "https://datahub.deepgreen.org/FilesAndJATS"
 TEST_FORMAT = "http://datahub.deepgreen.org/packages/OtherTestFormat"
 SIMPLE_ZIP = "http://purl.org/net/sword/package/SimpleZip"
+
+def data_license__20():
+    lic = models.License({
+        'id': 'testdata_license__20',
+        'type': 'alliance',
+        'status': LIC_STATUS_ACTIVE,
+        'journal': [{
+            'link': [{
+                'type': 'ezb',
+                'url': 'fake_url_a'
+            }],
+            'identifier': [
+                {'type': 'issn', 'id': '2296-4185'}
+            ],
+            'embargo': {'duration': 2},
+        }],
+    })
+    return lic
+
+def data_repo_config__20():
+    repo_config = models.RepositoryConfig({
+        'id': 'testdata_repo_config__20',
+        'name_variants': ['__key__', 'fake affiliation 1', 'Cottage Labs'],
+        'repo': 'acc_repo2',
+    })
+    return repo_config
+
+def create_test_acc__resp_1() -> models.Account:
+    """
+    :return account simple_zip + repository
+    """
+    acc1 = test_data.create_acc__1()
+    acc1.save()
+    return acc1
+
 
 class TestRouting(ESTestCase):
     def setUp(self):
@@ -259,7 +302,9 @@ class TestRouting(ESTestCase):
         acc2.add_packaging(TEST_FORMAT)
         acc2.add_packaging(SIMPLE_ZIP)
         acc2.add_role('repository')
-        acc2.save(blocking=True)
+        acc2.save(blocking=False)
+
+        time.sleep(10)
 
         # put an associated package into the store
         # create a custom zip (the package manager will delete it, so don't use the fixed example)
@@ -431,7 +476,6 @@ class TestRouting(ESTestCase):
             elif n.get("name") == "EPSRC":
                 assert len(n.get("identifier", [])) == 1
 
-
     def test_40_match_success_no_postcode(self):
         # example routing metadata from a notification
         if app.config.get("EXTRACT_POSTCODES", None) == True:
@@ -448,7 +492,7 @@ class TestRouting(ESTestCase):
 
         prov = models.MatchProvenance()
 
-        m = routing.match(md, rc, prov)
+        m = routing.match(md, rc, prov, create_test_acc__resp_1().id)
         assert m is True
         assert len(prov.provenance) == 13
         check = [0] * 13
@@ -541,7 +585,7 @@ class TestRouting(ESTestCase):
 
         prov = models.MatchProvenance()
 
-        m = routing.match(md, rc, prov)
+        m = routing.match(md, rc, prov, create_test_acc__resp_1().id)
         assert m is True
         assert len(prov.provenance) == 15
         check = [0] * 15
@@ -642,7 +686,7 @@ class TestRouting(ESTestCase):
 
         prov = models.MatchProvenance()
 
-        m = routing.match(md, rc, prov)
+        m = routing.match(md, rc, prov, create_test_acc__resp_1().id)
         assert m is False
         assert len(prov.provenance) == 0
 
@@ -650,24 +694,70 @@ class TestRouting(ESTestCase):
         # start a timer so we can check the analysed date later
         now = datetime.utcnow()
 
-        # add an account to the index, which will take simplezip, but there should be no repackaging done
-        # as there's no files
-        acc1 = models.Account()
-        acc1.add_packaging(SIMPLE_ZIP)
-        acc1.add_role('repository')
-        acc1.save()
-
-        # add a repository config to the index
-        source = fixtures.RepositoryFactory.repo_config()
-        del source["keywords"]
-        del source["content_types"]
-        rc = models.RepositoryConfig(source)
-        rc.repository = acc1.id
-        rc.save(blocking=True)
-
         # get an unrouted notification
         source2 = fixtures.NotificationFactory.unrouted_notification()
         urn = models.UnroutedNotification(source2)
+
+        ###### prepare data for testing
+
+        # create lic
+        lic = data_license__20()
+        lic.save()
+
+        # create repo_config
+        rc = data_repo_config__20()
+        rc.save()
+
+        # create Alliance
+        alli = models.Alliance({
+            'id': 'testdata_alliance__20',
+            'license_id': lic.id,
+            'status': LIC_STATUS_ACTIVE,
+            'participant': [
+                {'name': 'fake_part_1',
+                 'identifier': [{'type': 'ezb', 'id': 'fake_iden_2'},
+                                {'type': 'sigel', 'id': 'fake_iden_1'}]}
+            ],
+        })
+        alli.save()
+
+        acc = models.Account({
+            'id': urn.provider_id,
+            'role': ['publisher'],
+        })
+        acc.save()
+
+        acc = models.Account({
+            'id':'acc_repo2',
+            'role': ['repository'],
+            'repository': {
+                'bibid': 'fake_iden_2'
+            }
+        })
+        acc.save()
+
+        # prepare store
+        storage_manager: StoreLocal = store.StoreFactory.get()
+        _store_dir = Path(storage_manager.dir)
+        _store_dir.mkdir(parents=True, exist_ok=True)
+
+        _store_a_dir = pkg_resources.resource_filename('service', 'scripts/test_data/store_data/store_a')
+        shutil.copytree(_store_a_dir, _store_dir.joinpath(urn.id))
+
+        # clean up before run
+
+        # cleanup match_provenance
+        for mps in models.MatchProvenance.pull_by_notification(urn.id):
+            mps.delete()
+
+        # cleanup failed_notification
+        fn = models.FailedNotification.pull(urn.id)
+        if fn:
+            fn.delete()
+
+        time.sleep(5)
+        ##### END prepare data for testing
+
 
         # now run the routing algorithm
         routing.route(urn)
@@ -728,7 +818,8 @@ class TestRouting(ESTestCase):
         del source["content_types"]
         rc = models.RepositoryConfig(source)
         rc.repository = acc1.id
-        rc.save(blocking=True)
+        rc.save(blocking=False)
+        time.sleep(10)
 
         # load the unrouted notification
         urn = models.UnroutedNotification.pull(note.id)
@@ -737,7 +828,7 @@ class TestRouting(ESTestCase):
         routing.route(urn)
 
         # give the index a chance to catch up before checking the results
-        time.sleep(2)
+        time.sleep(10)
 
         # check that a match provenance was recorded
         mps = models.MatchProvenance.pull_by_notification(urn.id)
@@ -776,7 +867,8 @@ class TestRouting(ESTestCase):
         # useless (won't match) repo config data
         source = fixtures.RepositoryFactory.useless_repo_config()
         rc = models.RepositoryConfig(source)
-        rc.save(blocking=True)
+        rc.save(blocking=False)
+        time.sleep(5)
 
         # get an unrouted notification
         source2 = fixtures.NotificationFactory.unrouted_notification()

@@ -1,0 +1,103 @@
+<article xmlns:mml="http://www.w3.org/1998/Math/MathML" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" dtd-version="1.1" article-type="research-article" xml:lang="EN">
+	<front>
+		<article-meta>
+		    <article-id pub-id-type="doi">10.3390/polym10101159</article-id>		    
+		    <title-group>
+		        <article-title>Soy Protein-Based Composite Hydrogels: Physico-Chemical Characterization and In Vitro Cytocompatibility</article-title>
+		    </title-group>
+		    <contrib-group>
+		    			    			    			        <contrib contrib-type="author" corresp="yes">
+		            		            <name>
+		                <surname>Tansaz</surname>
+		                <given-names>Samira</given-names>
+		                <prefix>Dr.</prefix>
+		            </name>
+		            		            		            	
+		            <aff>		                
+		                Institute of Biomaterials, Department of Materials Science and Engineering, University of Erlangen-Nuremberg, 91058 Erlangen, Germany, <email>samira.tansaz@fau.de</email></aff>
+		        			        			        </contrib>
+		    			        <contrib contrib-type="author" corresp="no">
+		            		            <name>
+		                <surname>Singh</surname>
+		                <given-names>Raminder</given-names>
+		                <prefix>Dr.</prefix>
+		            </name>
+		            		            		            	
+		            <aff>		                
+		                Section of Experimental Oncology and Nanomedicine, ENT-Department, University Hospital Erlangen University of Erlangen-Nuremberg, 91054 Erlangen, Germany, <email>Raminder.Singh@uk-erlangen.de</email></aff>
+		        		
+		            <aff>		                
+		                Department of Cardiology and Angiology, University Hospital Erlangen, University of Erlangen-Nuremberg, 91054 Erlangen, Germany, <email>Raminder.Singh@uk-erlangen.de</email></aff>
+		        			        			        </contrib>
+		    			        <contrib contrib-type="author" corresp="no">
+		            		            <name>
+		                <surname>Cicha</surname>
+		                <given-names>Iwona</given-names>
+		                <prefix>Dr.</prefix>
+		            </name>
+		            		            		            	
+		            <aff>		                
+		                Section of Experimental Oncology and Nanomedicine, ENT-Department, University Hospital Erlangen University of Erlangen-Nuremberg, 91054 Erlangen, Germany, <email>Iwona.Cicha@uk-erlangen.de</email></aff>
+		        			        			        </contrib>
+		    			        <contrib contrib-type="author" corresp="yes">
+		            		            <contrib-id contrib-id-type="orcid" authenticated="true">http://orcid.org/0000-0002-7377-2955</contrib-id>
+		        			            <name>
+		                <surname>Boccaccini</surname>
+		                <given-names>Aldo R.</given-names>
+		                <prefix>Dr.</prefix>
+		            </name>
+		            		            		            	
+		            <aff>		                
+		                Institute of Biomaterials, Department of Materials Science and Engineering, University of Erlangen-Nuremberg, 91058 Erlangen, Germany, <email>aldo.boccaccini@ww.uni-erlangen.de</email></aff>
+		        			        			        </contrib>
+		    			    		        
+		    </contrib-group>
+		    <pub-date publication-format="electronic" date-type="pub" iso-8601-date="2018-10-17">
+		        <day>17</day>
+		        <month>10</month>
+		        <year>2018</year>
+		    </pub-date>
+		    <volume>10</volume>
+		    <issue>10</issue>
+		    <history>
+		        <date date-type="accepted" iso-8601-date="2018-10-12">
+		            <day>12</day>
+		            <month>10</month>
+		            <year>2018</year>
+		        </date>
+		    </history>		     	        
+						<permissions>
+	            <copyright-statement>
+	            	&#169; 1996-2019 MDPI (Basel, Switzerland)
+	            </copyright-statement>
+	            <copyright-year>2018</copyright-year>
+	            <copyright-holder/>
+	            <license xlink:href="https://creativecommons.org/licenses/by/4.0/">
+	               <license-p>
+	               		This is an open access article distributed under the &lt;a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer"&gt;Creative Commons Attribution License&lt;/a&gt; which permits unrestricted use, distribution, and reproduction in any medium, provided the original work is properly cited
+	               </license-p>
+	            </license>
+			</permissions>
+						<kwd-group kwd-group-type="author-keywords">
+            	<title>Keywords</title>
+            	            	<kwd>soy protein isolate</kwd>
+            	            	<kwd>composite hydrogels</kwd>
+            	            	<kwd>bioactive glass nanoparticles</kwd>
+            	            	<kwd>biocompatibility</kwd>
+            	            	<kwd>human cells</kwd>
+            	            	<kwd>tissue engineering</kwd>
+            		            
+			</kwd-group>
+					</article-meta>
+	    <journal-meta>
+	        <journal-title-group>
+	            <journal-title>Polymers</journal-title>
+	            <abbrev-journal-title>Polymers</abbrev-journal-title>
+	        </journal-title-group>
+	        <issn publication-format="electronic">2073-4360</issn>
+	        <publisher>
+	        	<publisher-name>MDPI</publisher-name>
+	        </publisher>
+	    </journal-meta>	    
+	</front>
+</article>
