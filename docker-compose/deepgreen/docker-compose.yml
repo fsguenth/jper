@@ -35,6 +35,8 @@ services:
       - 5999:5999
     networks:
       - jper_net
+    volumes:
+      - store-green-home:/home/green
 
   jper-web:
     build:
@@ -68,6 +70,7 @@ volumes:
   sftpuser:
   data_home:
   jper_etc:
+  store-green-home:
 
 networks:
   jper_net:
