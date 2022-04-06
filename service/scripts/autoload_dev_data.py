@@ -1,3 +1,4 @@
+import itertools
 import logging
 import os
 import shutil
@@ -232,7 +233,18 @@ def find_routing_test_data_by_doi(doi) -> Iterable[Path]:
             yield from full_paths
 
 
-def copy_test_data_to_sftp():
+def copy_test_data_to_sftp(num_clone=0):
+    """
+
+    Parameters
+    ----------
+    num_clone
+        for load test, if num_clone > 0, copy file with new name
+
+    Returns
+    -------
+
+    """
     data_list = [
         ('Frontiers@deepgreen.org', '3389'),
         ('SAGE@deepgreen.org', '1177'),
@@ -258,15 +270,16 @@ def copy_test_data_to_sftp():
         target_dir = Path(f'/home/sftpusers/{acc.id}/xfer')
         target_dir.mkdir(exist_ok=True, parents=True)
         for test_file_path in find_routing_test_data_by_doi(doi):
-            target_file = target_dir.joinpath(test_file_path.name).as_posix()
+            target_file_paths = (target_dir.joinpath(f'{test_file_path.stem}.{i}{test_file_path.suffix}')
+                                 for i in range(max(0, num_clone) + 1))
+            for target_file in target_file_paths:
+                # copy file
+                shutil.copyfile(test_file_path, target_file)
 
-            # copy file
-            shutil.copyfile(test_file_path, target_file)
-
-            # chown
-            cmd = ['chown', f'{acc.id}:sftpusers', target_file]
-            log.info(f'run cmd {cmd}')
-            subprocess.call(cmd)
+                # chown
+                cmd = ['chown', f'{acc.id}:sftpusers', target_file]
+                log.info(f'run cmd {cmd}')
+                subprocess.call(cmd)
 
 
 def run_scheduler():
