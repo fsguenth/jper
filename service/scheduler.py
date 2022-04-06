@@ -225,8 +225,10 @@ def copyftp():
                 app.logger.info('Scheduler - skipping this copy process because len(transactions)>' + str(
                     maxtransacts) + ' in temp directory for Account:' + dir)
                 continue
-            if len(os.listdir(os.path.join(pubstoredir, dir, 'pending'))):
-                for transact in os.listdir(os.path.join(pubstoredir, dir, 'pending')):
+            pending_transact_list = os.listdir(os.path.join(pubstoredir, dir, 'pending'))
+            if len(pending_transact_list):
+                app.logger.info(f'Scheduler - number of transact[{len(pending_transact_list)}] for account[{dir}]')
+                for transact in pending_transact_list:
                     if len(os.listdir(os.path.join(tmpdir, dir))) > maxtransacts:
                         break
                     app.logger.info('Scheduler - copying folder of transaction ' + transact + ' for Account:' + dir)
@@ -383,7 +385,9 @@ def checkunrouted():
 
 
     # run all routing worker
-    workers = [RoutingWorker(in_queue, out_queue) for _ in range(app.config.get('NUM_ROUTING_WORKER', 2))]
+    workers = [RoutingWorker(in_queue, out_queue)
+               for _ in range(app.config.get('NUM_ROUTING_WORKER', 2))]
+    app.logger.info(f'Number of worker for routing: {len(workers)}')
     for w in workers:
         w.start()
 
