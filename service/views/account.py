@@ -18,6 +18,7 @@ from jsonpath_rw_ext import parse
 from itertools import zip_longest
 from service import models
 from io import StringIO, TextIOWrapper, BytesIO
+from datetime import timedelta
 
 blueprint = Blueprint('account', __name__)
 
@@ -86,7 +87,7 @@ def _list_failrequest(provider_id=None, bulk=False):
     :param bulk: (boolean) whether bulk (e.g. *not* paginated) is returned or not
     :return: Flask response containing the list of notifications that are appropriate to the parameters
     """
-    since = _validate_since()
+    since = _validate_date(param='since')
     page = _validate_page()
     page_size = _validate_page_size()
 
@@ -112,7 +113,7 @@ def _list_matchrequest(repo_id=None, provider=False, bulk=False):
     :param bulk: (boolean) whether bulk (e.g. *not* paginated) is returned or not
     :return: Flask response containing the list of notifications that are appropriate to the parameters
     """
-    since = _validate_since()
+    since = _validate_date(param='since')
     page = _validate_page()
     page_size = _validate_page_size()
 
@@ -142,7 +143,7 @@ def _list_request(repo_id=None, provider=False, bulk=False):
     :param bulk: (boolean) whether bulk (e.g. *not* paginated) is returned or not
     :return: Flask response containing the list of notifications that are appropriate to the parameters
     """
-    since = _validate_since()
+    since = _validate_date(param='since')
     page = _validate_page()
     page_size = _validate_page_size()
 
@@ -190,30 +191,38 @@ def _download_request(repo_id=None, provider=False):
     return nbulk.json()
 
 
-def _sword_logs(repo_id):
+def _sword_logs(repo_id, from_date, to_date):
     """
-    Obtain the sword logs for the latest run along with the logs from each associated deposit record
+    Obtain the sword logs for the date range with the logs from each associated deposit record
 
     :param repo_id: the repo id to limit the request to
+    :param from_date:
+    :param to_date:
+
     :return: Sword log data
     """
     logs = None
     try:
-        logs = models.RepositoryDepositLog().pull_by_id(repo_id)
+        logs_raw = models.RepositoryDepositLog().pull_by_date_range(repo_id, from_date, to_date)
+        # use unpack_json_result in esprit raw.py - raw.unpack_json_result(logs_raw)
+        logs = logs_raw.get('hits', {}).get('hits', [])
         deposit_record_logs = {}
-        if logs and logs.messages:
-            for msg in logs.messages:
-                if msg.get('deposit_record', None) and msg['deposit_record'] != "None":
-                    detailed_log = models.DepositRecord.pull(msg['deposit_record'])
-                    if detailed_log and detailed_log.messages:
-                        deposit_record_logs[msg['deposit_record']] = detailed_log.messages
+        if logs and len(logs) > 0:
+            for log in logs:
+                info = log.get('_source', {})
+                if info and info.get('messages', []):
+                    for msg in info['messages']:
+                        if msg.get('deposit_record', None) and msg['deposit_record'] != "None":
+                            detailed_log = models.DepositRecord.pull(msg['deposit_record'])
+                            if detailed_log and detailed_log.messages:
+                                deposit_record_logs[msg['deposit_record']] = detailed_log.messages
     except ParameterException as e:
         return _bad_request(str(e))
     return logs, deposit_record_logs
 
 
-def _validate_since():
-    since = request.values.get("since", None)
+def _validate_date(param='since'):
+    since = request.values.get(param, None)
     if since is None or since == "":
         return _bad_request("Missing required parameter 'since'")
 
@@ -263,6 +272,14 @@ def _get_notification_value(header, notification):
         return notification.get('metadata', {}).get('title', '')
     elif header == 'Publication Date':
         return notification.get('metadata', {}).get('publication_date', '')
+    elif header == 'deposit_date':
+        return notification.get('deposit_date', '')
+    elif header == 'deposit_count':
+        return notification.get('deposit_count', 0)
+    elif header == 'deposit_status':
+        return notification.get('deposit_status', '')
+    elif header == 'request_status':
+        return notification.get('request_status', '')
     return ''
 
 
@@ -275,13 +292,18 @@ def _notifications_for_display(results, table):
             header_row.append(' / '.join(header))
         else:
             header_row.append(header)
+    # I've appended columns to display sword deposit details
+    header_row.append('deposit_date')
+    header_row.append('deposit_count')
+    header_row.append('deposit_status')
+    header_row.append('request_status')
     notifications.append(header_row)
     # results
     for result in results.get('notifications', []):
         row = {
             'id': _get_notification_value('id', result)
         }
-        for header in table['header']:
+        for header in table['header'] + ['deposit_date', 'deposit_count', 'deposit_status', 'request_status']:
             cell = []
             val = _get_notification_value(header, result)
             cell.append(val)
@@ -368,7 +390,6 @@ def details(repo_id):
     acc = models.Account.pull(repo_id)
     if acc is None:
         abort(404)
-    #
     provider = acc.has_role('publisher')
     if provider:
         data = _list_matchrequest(repo_id=repo_id, provider=provider)
@@ -384,6 +405,9 @@ def details(repo_id):
     else:
         link += '/' + acc.id + '?since=01/06/2019&api_key=' + acc.data['api_key']
 
+    # NOTE: The data is returned is json. I then convert it back to python object
+    #       I have not fixed all notification views.
+    #       So keeping this unnecessary conversion to and from json.
     results = json.loads(data)
     data_to_display = _notifications_for_display(results, ntable)
 
@@ -393,7 +417,7 @@ def details(repo_id):
         return render_template('account/matching.html', repo=data, tabl=[json.dumps(mtable)],
                                num_of_pages=num_of_pages, page_num=page_num, link=link, date=date)
     return render_template('account/details.html', repo=data, results=data_to_display,
-                           num_of_pages=num_of_pages, page_num=page_num, link=link, date=date)
+                           num_of_pages=num_of_pages, page_num=page_num, link=link, date=date, repo_id=repo_id)
 
 
 # 2016-10-19 TD : restructure matching and(!!) failing history output (primarily for publishers) -- start --
@@ -457,11 +481,36 @@ def sword_logs(repo_id):
         abort(404)
     if not acc.has_role('repository'):
         abort(404)
-
-    logs_data, deposit_record_logs = _sword_logs(repo_id)
-
-    return render_template('account/sword_log.html', logs_data=logs_data, deposit_record_logs=deposit_record_logs, account=acc,
-                           api_base_url=app.config.get("API_BASE_URL"))
+    latest_log = models.RepositoryDepositLog().pull_by_repo(repo_id)
+    last_updated = dates.parse(latest_log.last_updated).strftime("%A %d. %B %Y %H:%M:%S")
+    deposit_dates_raw = models.RepositoryDepositLog().pull_deposit_days(repo_id)
+    deposit_dates = deposit_dates_raw.get('aggregations', {}).get('deposits_by_day', {}).get('buckets', [])
+    # get dates for the date range query
+    # To date
+    to_date = None
+    to_date_display = ''
+    if request.args.get('to', None) and len(request.args.get('to')) > 0:
+        to_date = _validate_date(param='to')
+        to_date_display = str(dates.parse(to_date).strftime("%d/%m/%Y"))
+    # From date
+    from_date = None
+    if request.args.get('from', None) and len(request.args.get('from')) > 0:
+        from_date = _validate_date(param='from')
+    # From and to date
+    if request.args.get('date', None) and len(request.args.get('date')) > 0:
+        from_date = _validate_date(param='date')
+        to_date = dates.format(dates.parse(from_date) + timedelta(days=1))
+    # Default from and to dates
+    if not from_date:
+        from_date = deposit_dates[0].get('key_as_string').split('T')[0]
+    from_date_display = str(dates.parse(from_date).strftime("%d/%m/%Y"))
+    if not to_date:
+        to_date = dates.format(dates.parse(from_date) + timedelta(days=1))
+    # get logs for date range
+    logs_data, deposit_record_logs = _sword_logs(repo_id, from_date, to_date)
+    return render_template('account/sword_log.html', last_updated=last_updated, status=latest_log.status, logs_data=logs_data, deposit_record_logs=deposit_record_logs,
+                           account=acc, api_base_url=app.config.get("API_BASE_URL"), from_date=from_date_display,
+                           to_date=to_date_display, deposit_dates=deposit_dates, )
 
 
 @blueprint.route("/configview", methods=["GET", "POST"])
@@ -580,36 +629,26 @@ def pubinfo(username):
     if current_user.id != acc.id and not current_user.is_super:
         abort(401)
 
-    if 'embargo' not in acc.data:
-        acc.data['embargo'] = {}
-    # 2016-07-12 TD: proper handling of two independent forms using hidden input fields
     if request.values.get('embargo_form', False):
         if request.values.get('embargo_duration', False):
-            acc.data['embargo']['duration'] = request.values['embargo_duration']
+            acc.embargo = {'duration': request.values['embargo_duration']}
         else:
-            acc.data['embargo']['duration'] = 0
+            acc.embargo = {'duration': 0}
 
-    if 'license' not in acc.data:
-        acc.data['license'] = {}
-    # 2016-07-12 TD: proper handling of two independent forms using hidden input fields
+    license_details = {}
     if request.values.get('license_form', False):
         if request.values.get('license_title', False):
-            acc.data['license']['title'] = request.values['license_title']
-        else:
-            acc.data['license']['title'] = ""
+            license_details['title'] = request.values['license_title']
         if request.values.get('license_type', False):
-            acc.data['license']['type'] = request.values['license_type']
-        else:
-            acc.data['license']['type'] = ""
+            license_details['type'] = request.values['license_type']
         if request.values.get('license_url', False):
-            acc.data['license']['url'] = request.values['license_url']
-        else:
-            acc.data['license']['url'] = ""
+            license_details['url'] = request.values['license_url']
         if request.values.get('license_version', False):
-            acc.data['license']['version'] = request.values['license_version']
-        else:
-            acc.data['license']['version'] = ""
-
+            license_details['version'] = request.values['license_version']
+        if request.values.get('license_gold_license', False):
+            license_details['gold_license'] = request.values['license_gold_license']
+    if license_details:
+        acc.license = license_details
     acc.save()
     time.sleep(2)
     flash('Thank you. Your publisher details have been updated.', "success")
@@ -836,6 +875,37 @@ def excluded_license(username):
         rec.save()
         time.sleep(1)
     return redirect(url_for('.username', username=username))
+
+
+@blueprint.route('/<username>/request_deposit', methods=["POST"])
+def resend_notification(username):
+    if current_user.id != username and not current_user.is_super:
+        abort(401)
+    acc = models.Account.pull(username)
+    if acc is None:
+        abort(404)
+    # ToDO:
+    # 1. Use bulk api to create notification records
+    # 2. Get the url to return the user to
+    # 3. If all notifications to be resent, get from and to date and redo the query?
+    notification_ids = json.loads(request.form.get('notification_ids'))
+    count = 0
+    duplicate = 0
+    for n_id in list(notification_ids):
+        rec = models.RequestNotification.pull_by_ids(n_id, username, status='queued', size=1)
+        if not rec:
+            rec = models.RequestNotification()
+            rec.account_id = username
+            rec.notification_id = n_id
+            rec.status = 'queued'
+            rec.save()
+            count += 1
+        else:
+            duplicate += 1
+    msg = "Queued {n} notifications for deposit".format(n=count)
+    if duplicate > 0:
+        msg = msg + '<br>' + '{n} notifications are already waiting in queue'.format(n=duplicate)
+    return msg, 201
 
 
 @blueprint.route('/login', methods=['GET', 'POST'])

@@ -55,7 +55,8 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
             "title" : "<license title>",
             "type" : "<license type>",
             "url" : "<license url>",
-            "version" : "<license version>"
+            "version" : "<license version>",
+            "gold_license" : [<license type> | <license url>]
         }
     }
     '''
@@ -276,6 +277,8 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
                 "name" : "<name of repository>",
                 "url" : "<url>",
                 "software" : "<software>",
+                "bibid": "<bibid>",
+                "sigel": ["<seal>"]
             }
 
         :param obj: the repository object as a dict
@@ -550,6 +553,7 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
                 "type" : "<type>",
                 "url" : "<url>",
                 "version" : "<version>",
+                "gold_license": [<license type> | <license url>]
             }
 
         :return: The license information as a python dict object
@@ -577,7 +581,7 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
         :return:
         """
         # validate the object structure quickly
-        allowed = ["title", "type", "url", "version"]
+        allowed = ["title", "type", "url", "version", "gold_license"]
         for k in list(obj.keys()):
             if k not in allowed:
                 raise dataobj.DataSchemaException("License object must only contain the following keys: {x}".format(x=", ".join(allowed)))
@@ -586,13 +590,17 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
         uc = dataobj.to_unicode()
         for k in allowed:
             if k in obj:
-                obj[k] = self._coerce(obj[k], uc)
+                if k == 'gold_license':
+                    obj['gold_license'] = obj['gold_license'].split(',')
+                    obj['gold_license'] = [self._coerce(v.strip(), self._utf8_unicode()) for v in obj['gold_license'] if v is not None]
+                else:
+                    obj[k] = self._coerce(obj[k], uc)
 
         # finally write it
         self._set_single("license", obj)
 
     def add_account(self, account_hash):
-        account_hash = coerce_account_hash(account_hash)
+        account_hash = _coerce_account_hash(account_hash)
         acc_id = account_hash.get('id', None) or account_hash.get('username', None)
         if self.id and acc_id != self.id:
             app.logger.warn("Account params have a different id. Ignoring id in params")
@@ -631,47 +639,55 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
     def can_log_in(self):
         return True
 
-    # 2019-03-21 TD : Sometimes, ALL items of a 'key' are wanted ...
     @classmethod
-    def pull_all_by_key(cls,key,value):
-        res = cls.query(q={"query":{"query_string":{"query":value,"default_field":key,"default_operator":"AND"}}})
-        n = res.get('hits',{}).get('total',{}).get('value', 0)
-        # 2019-06-11 TD : re-query necessary as a precautionary measure because len(res) seems
-        #                 to be restricted to 10 records only per default...
-        if n > 10:
-            res = cls.query(q={"query":{"query_string":{"query":value,"default_field":key,"default_operator":"AND"}}},size=n)
-        return [ cls.pull( res['hits']['hits'][k]['_source']['id'] ) for k in range(n) ]
+    def pull_all(cls, query, size=1000, return_as_object=True):
+        conn = cls.__conn__
+        types = cls.get_read_types(None)
+        total = size
+        n_from = 0
+        ans = []
+        while n_from <= total:
+            query['from'] = n_from
+            r = raw.search(conn, types, query)
+            res = r.json()
+            total = res.get('hits',{}).get('total',{}).get('value', 0)
+            n_from += size
+            for hit in res['hits']['hits']:
+                if return_as_object:
+                    obj_id = hit.get('_source', {}).get('id', None)
+                    if obj_id:
+                        ans.append(cls.pull(obj_id))
+                else:
+                    ans.append(hit.get('_source', {}))
+        return ans
 
     @classmethod
-    def pull_all_repositories(cls):
+    def pull_all_by_key(cls,key,value, return_as_object=True):
+        size = 1000
         q = {
             "query": {
                 "bool": {
                     "must": {
                         "match": {
-                            "role": "repository"
+                            key: value
                         }
                     }
                 }
-            }
+            },
+            "size": size,
+            "from": 0
         }
-        conn = cls.__conn__
-        types = cls.get_read_types(None)
-        r = raw.search(conn, types, q)
-        res = r.json()
-        # res = cls.query(q=q)
-        n = res.get('hits',{}).get('total',{}).get('value', 0)
-        if n > 10:
-            q["size"] = n
-            r = raw.search(conn, types, q)
-            res = r.json()
-        ans = []
-        for hit in res['hits']['hits']:
-            ans.append(hit.get('_source', {}).get('repository', {}).get('bibid', u"*****").lstrip('a'))
+        ans = cls.pull_all(q, size=size, return_as_object=return_as_object)
         return ans
 
     @classmethod
+    def pull_all_repositories(cls):
+        ans = cls.pull_all_by_key("role.exact", "repository", return_as_object=False)
+        return _extract_bibids(ans)
+
+    @classmethod
     def pull_all_subject_repositories(cls):
+        size = 1000
         q = {
             "query": {
                 "bool": {
@@ -684,25 +700,16 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
                         },
                     }
                 }
-            }
+            },
+            "size": size,
+            "from": 0
         }
-        conn = cls.__conn__
-        types = cls.get_read_types(None)
-        r = raw.search(conn, types, q)
-        res = r.json()
-        # res = cls.query(q=q)
-        n = res.get('hits',{}).get('total',{}).get('value', 0)
-        if n > 10:
-            q["size"] = n
-            r = raw.search(conn, types, q)
-            res = r.json()
-        ans = []
-        for hit in res['hits']['hits']:
-            ans.append(hit.get('_source', {}).get('repository', {}).get('bibid', u"*****").lstrip('a'))
-        return ans
+        ans = cls.pull_all(q, size=size, return_as_object=False)
+        return _extract_bibids(ans)
 
     @classmethod
     def pull_all_non_subject_repositories(cls):
+        size = 1000
         q = {
           "query": {
             "bool": {
@@ -723,27 +730,16 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
                 }
               }
             }
-          }
+          },
+          "size": size,
+          "from": 0
         }
-        conn = cls.__conn__
-        types = cls.get_read_types(None)
-        r = raw.search(conn, types, q)
-        res = r.json()
-        # res = cls.query(q=q)
-        n = res.get('hits',{}).get('total',{}).get('value', 0)
-        if n > 10:
-            q["size"] = n
-            r = raw.search(conn, types, q)
-            res = r.json()
-        ans = []
-        for hit in res['hits']['hits']:
-            ans.append(hit.get('_source', {}).get('repository', {}).get('bibid', u"*****").lstrip('a'))
-        return ans
+        ans = cls.pull_all(q, size=size, return_as_object=False)
+        return _extract_bibids(ans)
 
     @classmethod
     def pull_all_by_email(cls,email):
         return cls.pull_all_by_key('email',email)
-    # 2019-03-21 TD : (* end-of-addition *)
 
     @classmethod
     def pull_by_key(cls,key,value):
@@ -805,7 +801,7 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
         self.save()
 
 
-def coerce_account_hash(account_hash):
+def _coerce_account_hash(account_hash):
     if isinstance(account_hash, TypeConversionDict):
         account_hash = account_hash.to_dict()
     # set api_key if missing
@@ -816,7 +812,7 @@ def coerce_account_hash(account_hash):
         'repository': ['repository_name', 'repository_software', 'repository_url', 'repository_bibid', 'repository_sigel'],
         'sword': ['sword_username', 'sword_password', 'sword_collection'],
         'embargo': ['embargo_duration',],
-        'license': ['license_title', 'license_type', 'license_url', 'license_version']
+        'license': ['license_title', 'license_type', 'license_url', 'license_version', 'license_gold_license']
     }
     for parent, props in nested_properties.items():
         parent_hash = account_hash.pop(parent, {})
@@ -828,6 +824,8 @@ def coerce_account_hash(account_hash):
             if label == 'bibid':
                 val = val.upper()
             elif label == 'sigel':
+                val = val.split(',')
+            elif label == 'gold_license':
                 val = val.split(',')
             parent_hash[label] = val
         if parent_hash:
@@ -841,3 +839,12 @@ def coerce_account_hash(account_hash):
     if packaging:
         account_hash['packaging'] = packaging.split(',')
     return account_hash
+
+
+def _extract_bibids(ans):
+    bibids = {}
+    for rec in ans:
+        bibid = rec.get('repository', {}).get('bibid', '').lstrip('a')
+        if bibid:
+            bibids[bibid] = rec['id']
+    return bibids

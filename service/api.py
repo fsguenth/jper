@@ -41,6 +41,7 @@ class UnauthorisedException(Exception):
     """
     pass
 
+
 class JPER(object):
     """
     Main Python API for interacting with the JPER system
@@ -190,29 +191,25 @@ class JPER(object):
         # add a check for default embargo if the account has a non-zero value set for it
         # incoming notification structure is demonstrated in the account model and also documented at:
         # https://github.com/JiscPER/jper/blob/develop/docs/api/IncomingNotification.md
-        if 'embargo' in account.data:
-            if 'duration' in account.data['embargo']:
-                if 'embargo' not in notification: notification['embargo'] = {}
-                if 'duration' not in notification['embargo']: notification['embargo']['duration'] = account.data['embargo']['duration']
+        if notification.get('embargo', {}).get('duration', None) is None:
+            if account.data.get('embargo', {}).get('duration', None) is not None:
+                notification['embargo'] = {'duration': account.data['embargo']['duration']}
 
         # add a check for default license if the account has a non-null value set for it
         # incoming notification structure is demonstrated in the account model and also documented at:
         # https://github.com/JiscPER/jper/blob/develop/docs/api/IncomingNotification.md
-        if 'license' in account.data:
-            if 'title' in account.data['license']:
-                # 2016-06-28 TD : additional safety check for bare-minimum JSON notification
-                if 'metadata' not in notification: notification['metadata'] = {}
-                if 'license_ref' not in notification['metadata']: 
-                    notification['metadata']['license_ref'] = {}
-                    # 2016-10-24 TD : bug fix!
-                    # if 'title' not in notification['metadata']['license_ref']: notification['metadata']['license_ref']['title'] = account.data['license']['title']
-                    # if 'type' not in notification['metadata']['license_ref']: notification['metadata']['license_ref']['type'] = account.data['license']['type']
-                    # if 'url' not in notification['metadata']['license_ref']: notification['metadata']['license_ref']['url'] = account.data['license']['url']
-                    # if 'version' not in notification['metadata']['license_ref']: notification['metadata']['license_ref']['version'] = account.data['license']['version']
-                    if 'title' in account.data['license']: notification['metadata']['license_ref']['title'] = account.data['license']['title']
-                    if 'type' in account.data['license']: notification['metadata']['license_ref']['type'] = account.data['license']['type']
-                    if 'url' in account.data['license']: notification['metadata']['license_ref']['url'] = account.data['license']['url']
-                    if 'version' in account.data['license']: notification['metadata']['license_ref']['version'] = account.data['license']['version']
+        if 'metadata' not in notification:
+            notification['metadata'] = {}
+        if 'license_ref' not in notification['metadata']:
+            notification['metadata']['license_ref'] = {}
+        if not notification['metadata']['license_ref'].get('title', None) and account.data.get('license', {}).get('title', None):
+            notification['metadata']['license_ref']['title'] = account.data['license']['title']
+        if not notification['metadata']['license_ref'].get('type', None) and account.data.get('license', {}).get('type', None):
+            notification['metadata']['license_ref']['type'] = account.data['license']['type']
+        if not notification['metadata']['license_ref'].get('url', None) and account.data.get('license', {}).get('url', None):
+            notification['metadata']['license_ref']['url'] = account.data['license']['url']
+        if not notification['metadata']['license_ref'].get('version', None) and account.data.get('license', {}).get('version', None):
+            notification['metadata']['license_ref']['version'] = account.data['license']['version']
 
         # attempt to serialise the record
         try:
@@ -366,8 +363,8 @@ class JPER(object):
                 if link.get('proxy',False) == pid:
                     lurl = link['url']
             return lurl
-        
-            
+
+
     @classmethod
     def get_public_url(cls, account, notification_id, content_id):
         urn = models.UnroutedNotification.pull(notification_id)
@@ -382,8 +379,8 @@ class JPER(object):
 
     @classmethod
     def list_notifications(cls, account, since, page=None, page_size=None, repository_id=None, provider=False):
-    # def list_notifications(cls, account, since, page=None, page_size=None, repository_id=None):
-    # 2016-09-07 TD : trial to make some publisher's reporting available
+        # def list_notifications(cls, account, since, page=None, page_size=None, repository_id=None):
+        # 2016-09-07 TD : trial to make some publisher's reporting available
         """
         List notification which meet the criteria specified by the parameters
 
@@ -426,7 +423,7 @@ class JPER(object):
             "from": (page - 1) * page_size,
             "size": page_size
         }
-        
+
         if repository_id is not None:
             # 2016-09-07 TD : trial to filter for publisher's reporting
             if provider:
@@ -441,7 +438,16 @@ class JPER(object):
             types = 'routed20*'
         res = models.RoutedNotification.query(q=qr, types=types)
         app.logger.debug('List notifications query resulted ' + json.dumps(res))
-        nl.notifications = [models.RoutedNotification(i['_source']).make_outgoing(provider=provider).data for i in res.get('hits',{}).get('hits',[])]
+        nl.notifications = []
+        for note in res.get('hits',{}).get('hits',[]):
+            data = models.RoutedNotification(note['_source']).make_outgoing(provider=provider).data
+            deposit_count, deposit_date, deposit_status = JperHelper().get_deposit_record(data['id'], repository_id, 1)
+            if deposit_count > 0:
+                data['deposit_count'] = deposit_count
+                data['deposit_date'] = deposit_date
+                data['deposit_status'] = deposit_status
+            data['request_status'] = JperHelper().get_request_status(data['id'], repository_id, 1)
+            nl.notifications.append(data)
         nl.total = res.get('hits',{}).get('total',{}).get('value', 0)
         return nl
 
@@ -492,7 +498,7 @@ class JPER(object):
             "from": (page - 1) * page_size,
             "size": page_size
         }
-        
+
         if repository_id is not None:
             # 2016-09-07 TD : trial to filter for publisher's reporting
             if provider:
@@ -559,7 +565,7 @@ class JPER(object):
             "from": (page - 1) * page_size,
             "size": page_size
         }
-        
+
         if provider_id is not None:
             qr['query']['bool']["must"] = {"match": {"provider.id.exact": provider_id}}
 
@@ -576,7 +582,7 @@ class JPER(object):
 
     @classmethod
     def bulk_notifications(cls, account, since, repository_id=None, provider=False):
-    # 2016-09-07 TD : trial to make some publisher's reporting available
+        # 2016-09-07 TD : trial to make some publisher's reporting available
         """
         Bulk list notification which meet the criteria specified by the parameters
 
@@ -607,12 +613,8 @@ class JPER(object):
                 }
             },
             "sort": [{"created_date":{"order":"desc"}}],
-            ## "sort": [{"analysis_date":{"order":"desc"}}],
-            ## 2018-03-07 TD : change of sort key to 'created_date', but still newest first
-            # "sort": [{"analysis_date":{"order":"asc"}}],
-            # 2016-09-06 TD : change of sort order newest first
         }
-        
+
         if repository_id is not None:
             # 2016-09-07 TD : trial to filter for publisher's reporting
             if provider:
@@ -629,7 +631,13 @@ class JPER(object):
         if models.RoutedNotification.__conn__.index_per_type:
             types = 'routed20*'
         for rn in models.RoutedNotification.iterate(q=qr, types=types):
-            nl.notifications.append(rn.make_outgoing(provider=provider).data)
+            data = rn.make_outgoing(provider=provider).data
+            deposit_count, deposit_date, deposit_status = JperHelper().get_deposit_record(data['id'], repository_id, 1)
+            if deposit_count > 0:
+                data['deposit_count'] = deposit_count
+                data['deposit_date'] = deposit_date
+                data['deposit_status'] = deposit_status
+            nl.notifications.append(data)
         nl.total = len(nl.notifications)
         return nl
 
@@ -669,7 +677,7 @@ class JPER(object):
             "sort": [{"created_date":{"order":"desc"}}],
             # 2016-09-06 TD : change of sort order newest first
         }
-        
+
         if repository_id is not None:
             # 2016-09-07 TD : trial to filter for publisher's reporting
             if provider:
@@ -722,7 +730,7 @@ class JPER(object):
             },
             "sort": [{"created_date":{"order":"desc"}}],
         }
-        
+
         if provider_id is not None:
             qr['query']['bool']["must"] = {"match": {"provider.id.exact": provider_id}}
 
@@ -736,3 +744,25 @@ class JPER(object):
         fnl.total = len(fnl.failed)
         return fnl
 
+
+class JperHelper:
+
+    @classmethod
+    def get_deposit_record(self, notification_id, account_id, size=1):
+        dr = models.DepositRecord().pull_by_ids_raw(notification_id, account_id, size)
+        deposit_count = dr.get('hits',{}).get('total',{}).get('value', 0)
+        deposit_date = None
+        deposit_status = None
+        if deposit_count > 0:
+            dr_info = dr.get('hits', {}).get('hits', [])[0].get('_source', {})
+            deposit_date = dr_info.get('deposit_date', '')
+            deposit_status = dr_info.get('completed_status', '')
+        return deposit_count, deposit_date, deposit_status
+
+    @classmethod
+    def get_request_status(self, notification_id, account_id, size=1):
+        rn = models.RequestNotification().pull_by_ids(notification_id, account_id, size)
+        status = None
+        if rn is not None:
+            status = rn.status
+        return status

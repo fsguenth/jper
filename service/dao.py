@@ -179,18 +179,33 @@ class DepositRecordDAO(dao.ESDAO):
     __type__ = "sword_deposit_record"
 
     @classmethod
-    def pull_by_ids(cls, notification_id, repository_id):
+    def pull_by_ids(cls, notification_id, repository_id, size=None):
         """
         Get exactly one deposit record back associated with the notification_id and the repository_id
 
         :param notification_id:
         :param repository_id:
+        :param size:
         :return:
         """
-        q = DepositRecordQuery(notification_id, repository_id)
+        q = DepositRecordQuery(notification_id, repository_id, size)
         obs = cls.object_query(q=q.query())
         if len(obs) > 0:
             return obs[0]
+
+    @classmethod
+    def pull_by_ids_raw(cls, notification_id, repository_id, size=None):
+        """
+        Get exactly one deposit record back associated with the notification_id and the repository_id
+
+        :param notification_id:
+        :param repository_id:
+        :param size:
+        :return:
+        """
+        q = DepositRecordQuery(notification_id, repository_id, size)
+        obs = cls.query(q=q.query())
+        return obs
 
 
 class DepositRecordQuery(object):
@@ -198,9 +213,10 @@ class DepositRecordQuery(object):
     Query generator for retrieving deposit records by notification id and repository id
     """
 
-    def __init__(self, notification_id, repository_id):
+    def __init__(self, notification_id, repository_id, size=None):
         self.notification_id = notification_id
         self.repository_id = repository_id
+        self.size = size
 
     def query(self):
         """
@@ -208,7 +224,7 @@ class DepositRecordQuery(object):
 
         :return: elasticsearch query
         """
-        return {
+        q = {
             "query": {
                 "bool": {
                     "must": [
@@ -223,6 +239,114 @@ class DepositRecordQuery(object):
             },
             "sort": {"last_updated": {"order": "desc"}}
         }
+        if self.size:
+            q['size'] = self.size
+        return q
+
+
+class RequestNotification(dao.ESDAO):
+    """
+    DAO for RequestNotification
+    """
+
+    __type__ = 'request'
+    """ The index type to use to store these objects """
+
+    @classmethod
+    def pull_by_ids(cls, notification_id, repository_id, status=None, size=None):
+        """
+        Get exactly one deposit record back associated with the notification_id and the repository_id, with a particular status
+
+        :param notification_id:
+        :param repository_id:
+        :param status:
+        :param size:
+        :return:
+        """
+        q = RequestNotificationQuery(notification_id, repository_id, status, size)
+        obs = cls.object_query(q=q.query())
+        if len(obs) > 0:
+            return obs[0]
+
+    @classmethod
+    def pull_by_status(cls, status, size=None):
+        """
+        Get exactly one deposit record back associated with the notification_id and the repository_id
+
+        :param status:
+        :param size:
+        :return:
+        """
+        q = RequestNotificationStatusQuery(status, size)
+        obs = cls.object_query(q=q.query())
+        if len(obs) > 0:
+            return obs
+
+
+class RequestNotificationQuery(object):
+    """
+    Query generator for retrieving deposit records by notification id and repository id
+    """
+
+    def __init__(self, notification_id, repository_id, status=None, size=None):
+        self.notification_id = notification_id
+        self.repository_id = repository_id
+        self.status = status
+        self.size = size
+
+    def query(self):
+        """
+        Return the query as a python dict suitable for json serialisation
+
+        :return: elasticsearch query
+        """
+        q = {
+            "query": {
+                "bool": {
+                    "must": [
+                        {"term": {"account_id.exact": self.repository_id}},
+                        {"term": {"notification_id.exact": self.notification_id}}
+                    ]
+                }
+            },
+            "sort": {"last_updated": {"order": "desc"}}
+        }
+        if self.status:
+            q["query"]["bool"]["must"].append({"term": {"status.exact": self.status}})
+        if self.size:
+            q['size'] = self.size
+        return q
+
+
+class RequestNotificationStatusQuery(object):
+    """
+    Query generator for retrieving deposit records by notification id and repository id
+    """
+
+    def __init__(self, status, size=None):
+        self.status = status
+        self.size = size
+
+    def query(self):
+        """
+        Return the query as a python dict suitable for json serialisation
+
+        :return: elasticsearch query
+        """
+        q = {
+            "query": {
+                "bool": {
+                    "must": [
+                        {"term": {"status.exact": self.status}}
+                    ]
+                }
+            },
+            "sort": {"last_updated": {"order": "desc"}}
+        }
+        if self.size:
+            q['size'] = self.size
+        return q
+
 
 
 class SwordAccountQuery(object):
@@ -255,17 +379,71 @@ class RepositoryDepositLogDAO(dao.ESDAO):
     __type__ = "sword_repository_deposit_log"
 
     @classmethod
-    def pull_by_id(cls, repository_id):
+    def pull_by_repo(cls, repository_id):
         """
-        Get exactly one deposit record back associated with the notification_id and the repository_id
+        Get exactly one repository log associated with the repository_id
 
         :param repository_id:
         :return:
         """
-        q = RepositoryDepositLogQuery(repository_id)
-        obs = cls.object_query(q=q.query())
+        q = RepositoryDepositLogQuery()
+        obs = cls.object_query(q=q.query(repository_id))
         if obs and len(obs) > 0:
             return obs[0]
+
+    @classmethod
+    def pull_by_id(cls, id):
+        """
+        Get exactly one repository log matching the id
+
+        :param id:
+        :return:
+        """
+        q = RepositoryDepositLogQuery()
+        obs = cls.object_query(q=q.get_record_query(id))
+        if obs and len(obs) > 0:
+            return obs[0]
+
+    @classmethod
+    def get_pagination_records(cls, repository_id, page=1, records_per_page=10):
+        """
+        Get repository logs for the page - a list, with each containing id and last_updated date of the repository log
+
+        :param repository_id:
+        :param page
+        :param records_per_page
+        :return:
+        """
+        q = RepositoryDepositLogQuery()
+        obs = cls.query(q=q.get_pagination_records_query(repository_id, page=page,
+                                                                records_per_page=records_per_page))
+        return obs
+
+    @classmethod
+    def pull_by_date_range(cls, repo_id, from_date, to_date):
+        """
+        Get repository logs with last_updated date in the range
+
+        :param repo_id:
+        :param from_date:
+        :param to_date:
+        :return:
+        """
+        q = RepositoryDepositLogQuery()
+        obs = cls.query(q=q.get_date_range_query(repo_id, from_date, to_date))
+        return obs
+
+    @classmethod
+    def pull_deposit_days(cls, repo_id):
+        """
+        Get days repository logs exist for with latest record
+
+        :param repo_id:
+        :return:
+        """
+        q = RepositoryDepositLogQuery()
+        obs = cls.query(q=q.get_deposit_dates_query(repo_id))
+        return obs
 
 
 class RepositoryDepositLogQuery(object):
@@ -273,10 +451,10 @@ class RepositoryDepositLogQuery(object):
     Query generator for retrieving deposit records by notification id and repository id
     """
 
-    def __init__(self, repository_id):
-        self.repository_id = repository_id
+    def __init__(self):
+        return
 
-    def query(self):
+    def query(self, repository_id):
         """
         Return the query as a python dict suitable for json serialisation
 
@@ -286,10 +464,92 @@ class RepositoryDepositLogQuery(object):
             "query": {
                 "bool": {
                     "must": {
-                        "term": {"repo.exact": self.repository_id}
+                        "term": {"repo.exact": repository_id}
                     }
                 }
             },
             "sort": {"last_updated": {"order": "desc"}},
             "size": 1
+        }
+
+    def get_record_query(self, id):
+        """
+        Return the query as a python dict suitable for json serialisation
+
+        :return: elasticsearch query
+        """
+        return {
+            "query": {
+                "bool": {
+                    "must": {
+                        "term": {"_id": id}
+                    }
+                }
+            }
+        }
+
+    def get_pagination_records_query(self, repository_id, page=1, records_per_page=10):
+        """
+        Return the query as a python dict suitable for json serialisation
+
+        :return: elasticsearch query
+        """
+        num_from = (page * records_per_page) - 10
+        return {
+            "query": {
+                "bool": {
+                    "must": {
+                        "term": { "repo.exact": repository_id }
+                    }
+                }
+            },
+            "sort": {"last_updated": {"order": "desc"}},
+            "size": records_per_page,
+            "from": num_from,
+            "fields" : ["id", "last_updated"],
+            "_source": False
+        }
+
+    def get_date_range_query(self, repo_id, from_dt, to_date):
+        return {
+            "query": {
+                "bool": {
+                    "must": [{
+                        "term": { "repo.exact": repo_id }
+                    }, {
+                        "range": {
+                            "last_updated": {
+                                "gte": from_dt,
+                                "lt": to_date
+                            }
+                        }
+                    }]
+
+                }
+            },
+            "sort": {"last_updated": {"order": "desc"}},
+            "size": 100
+        }
+
+    def get_deposit_dates_query(self, repo_id):
+        return {
+            "query": {
+                "bool": {
+                    "must": {
+                        "term": { "repo.exact": repo_id }
+                    }
+                }
+            },
+            "aggs": {
+                "deposits_by_day": {
+                    "date_histogram": {
+                        "field": "last_updated",
+                        "calendar_interval": "day",
+                        "order": { "_key": "desc" },
+                        "min_doc_count": 1
+                    }
+                }
+            },
+            "size": 1,
+            "sort": {"last_updated": {"order": "desc"}}
         }
