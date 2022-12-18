@@ -16,11 +16,7 @@
 
 
             <article class="box box--padding-large box--{{CATEGORY_MAP.get(category, category)}} fade in" data-alert="alert">
-                {% if message_has_url %}
-                    {{ message | safe }}
-                {% else %}
-                    {{ message }}
-                {% endif %}
+                {{ message | safe }}
             </article>
         {% endfor %}
     {% endif %}

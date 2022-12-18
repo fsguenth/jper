@@ -865,3 +865,58 @@ class RepositoryDepositLogQuery(object):
             "size": 1,
             "sort": {"last_updated": {"order": "desc"}}
         }
+
+
+class LicenseManagementDAO(dao.ESDAO):
+    """
+    DAO for LicenseManagement
+    """
+
+    __type__ = "license_management"
+    """ The index type to use to store these objects """
+
+    @classmethod
+    def pull_by_file_path_prefix(cls, file_path_prefix: str):
+        query = {
+            "query": {
+                "match_phrase_prefix": {
+                    "file_name": {
+                        "query": file_path_prefix
+                    }
+                }
+            }
+        }
+        obs = cls.object_query(q=query)
+        if len(obs) > 0:
+            return obs
+
+    @classmethod
+    def pull_by_ezb_id(cls, ezb_id):
+        must_list = [
+            {'term': {'ezb_id.exact': ezb_id}}
+        ]
+
+        query = {
+            'query': {
+                'bool': {
+                    'must': must_list
+                }
+            },
+            "sort": [{"last_updated": {"order": "asc"}}]
+        }
+        obs = cls.object_query(q=query)
+        if len(obs) > 0:
+            return obs
+        return None
+
+    @classmethod
+    def pull_all_records(cls):
+        size = 1000
+        q = {
+            "query": {
+                "match_all": {}
+            },
+            "size": size,
+            "from": 0
+        }
+        return cls.pull_all(q, size=1000, return_as_object=False)
