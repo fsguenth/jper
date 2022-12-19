@@ -89,10 +89,18 @@ app.register_blueprint(reports, url_prefix="/reports")
 from service.views.query import blueprint as query
 app.register_blueprint(query, url_prefix="/query")
 
+from service.views.query_edges import blueprint as query_edges
+app.register_blueprint(query_edges, url_prefix="/query-edges")
+
+from service.views.search_objs import blueprint as search_objs
+app.register_blueprint(search_objs, url_prefix="/search-objs")
+
 if app.config.get("FUNCTIONAL_TEST_MODE", False):
     from service.views.test import blueprint as test
     app.register_blueprint(test, url_prefix="/test")
 
+from service.views import license_manage
+app.register_blueprint(license_manage.blueprint, url_prefix="/license-manage")
 
 # this allows us to override the standard static file handling with our own dynamic version
 @app.route("/static/<path:filename>")

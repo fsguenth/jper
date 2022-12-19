@@ -640,45 +640,20 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
         return True
 
     @classmethod
-    def pull_all(cls, query, size=1000, return_as_object=True):
-        conn = cls.__conn__
-        types = cls.get_read_types(None)
-        total = size
-        n_from = 0
-        ans = []
-        while n_from <= total:
-            query['from'] = n_from
-            r = raw.search(conn, types, query)
-            res = r.json()
-            total = res.get('hits',{}).get('total',{}).get('value', 0)
-            n_from += size
-            for hit in res['hits']['hits']:
-                if return_as_object:
-                    obj_id = hit.get('_source', {}).get('id', None)
-                    if obj_id:
-                        ans.append(cls.pull(obj_id))
-                else:
-                    ans.append(hit.get('_source', {}))
-        return ans
-
-    @classmethod
-    def pull_all_by_key(cls,key,value, return_as_object=True):
+    def pull_all_accounts(cls):
         size = 1000
         q = {
             "query": {
-                "bool": {
-                    "must": {
-                        "match": {
-                            key: value
-                        }
-                    }
-                }
+                "match_all": {}
             },
             "size": size,
             "from": 0
         }
-        ans = cls.pull_all(q, size=size, return_as_object=return_as_object)
-        return ans
+        ans = cls.pull_all(q, size=1000, return_as_object=False)
+        accounts = {}
+        for rec in ans:
+            accounts[rec.get("id")] = rec.get("email", '')
+        return accounts
 
     @classmethod
     def pull_all_repositories(cls):
@@ -691,14 +666,17 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
         q = {
             "query": {
                 "bool": {
-                    "must": {
-                        "match": {
-                            "role": "repository",
-                        },
-                        "match": {
-                            "role": "subject_repository",
-                        },
-                    }
+                    "must": [
+                        {
+                            "match": {
+                                "role": "repository"
+                            }
+                        }, {
+                            "match": {
+                                "role": "subject_repository"
+                            }
+                        }
+                    ]
                 }
             },
             "size": size,
@@ -736,6 +714,65 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
         }
         ans = cls.pull_all(q, size=size, return_as_object=False)
         return _extract_bibids(ans)
+
+    @classmethod
+    def pull_all_active_repositories(cls):
+        size = 1000
+        q = {
+            "query": {
+                "bool": {
+                    "must": {
+                        "match": {
+                            "role": "repository"
+                        }
+                    },
+                    "must_not": [
+                        {
+                            "match": {
+                                "role": "passive"
+                            }
+                        }
+                    ]
+                }
+            },
+            "size": size,
+            "from": 0
+        }
+        ans = cls.pull_all(q, size=size, return_as_object=False)
+        return _extract_bibids(ans)
+
+    @classmethod
+    def pull_all_active_subject_repositories(cls):
+        size = 1000
+        q = {
+            "query": {
+                "bool": {
+                    "must": [
+                        {
+                            "match": {
+                                "role": "repository"
+                            }
+                        }, {
+                            "match": {
+                                "role": "subject_repository"
+                            }
+                        }
+                    ],
+                    "must_not": [
+                        {
+                            "match": {
+                                "role": "passive"
+                            }
+                        }
+                    ]
+                }
+            },
+            "size": size,
+            "from": 0
+        }
+        ans = cls.pull_all(q, size=size, return_as_object=False)
+        return _extract_bibids(ans)
+
 
     @classmethod
     def pull_all_by_email(cls,email):

@@ -97,22 +97,25 @@ def _route(unrouted):
         doi = "unknown"
     else:
         doi = doi[0]
+    app.logger.debug("Article DOI is {x}".format(x=doi))
 
-    bibids = models.Account.pull_all_repositories()
+    bibids = models.Account.pull_all_active_repositories()
     # NEW FEATURE
     # Get all subject repository accounts. Needed for Gold license. 
     # They do not get publications with gold license.
-    subject_repo_bibids = models.Account.pull_all_subject_repositories()
+    subject_repo_bibids = models.Account.pull_all_active_subject_repositories()
 
     # participating repositories - who would like to receive article if matching
     part_bibids = {}
 
     gold_article_license = _is_article_license_gold(metadata, unrouted.provider_id)
     app.logger.debug("Staring get all matching license")
+
     for issn in issn_data:
         # are there licenses stored for this ISSN?
         # 2016-10-12 TD : an ISSN could appear in more than one license !
-        lics = models.License.pull_by_journal_id(issn) # matches issn, eissn, doi, etc.
+        # matches issn, eissn, doi, etc for active licences.
+        lics = models.License.pull_all_by_status_and_issn('active', issn)
         if lics is None: # nothing found at all...
             continue
         for lic in lics:
@@ -122,7 +125,13 @@ def _route(unrouted):
             lic_data = get_current_license_data(lic, publ_year, issn, doi)
             if len(lic_data) == 0:
                 continue
+            app.logger.debug("license type : {x}".format(x=lic.type))
             if lic.type == "gold" or (lic.type == "hybrid" and gold_article_license):
+                if lic.type == "gold":
+                    app.logger.debug("Selecting license based on license type : {x}".format(x = lic.type))
+                else:
+                    app.logger.debug("Selecting license based on license type: {x} and is gold article license: {y}".format(x = lic.type, y=gold_article_license))
+                    
                 for bibid in bibids:
                     # All repositories except subject repositories get publications with gold license
                     if bibid not in subject_repo_bibids.keys():
@@ -130,8 +139,11 @@ def _route(unrouted):
                             part_bibids[bibid] = []
                         part_bibids[bibid].append(lic_data[0])
             elif lic.type in ["alliance", "national", "deal", "fid", "hybrid"]:
-                al = models.Alliance.pull_by_key("license_id", lic.id)
-                if al:
+                al_list = models.Alliance.pull_all_by_status_and_license_id("active", lic.id)
+                if not al_list:
+                    continue
+                app.logger.debug("Selecting license based on license type {x}".format(x = lic.type))
+                for al in al_list:
                     # collect all EZB-Ids of participating institutions of AL
                     for participant in al.participants:
                         for i in participant.get("identifier", []):
@@ -142,22 +154,18 @@ def _route(unrouted):
                                     if bibid not in part_bibids:
                                         part_bibids[bibid] = []
                                     part_bibids[bibid].append(lic_data[0])
+    app.logger.debug("Found {x} repositories that can be matched, based on license".format(x=len(part_bibids)))
 
     # Get only active repository accounts
     # 2019-06-03 TD : yet a level more to differentiate between active and passive
     #                 accounts. A new requirement, at a /very/ early stage... gosh.
-    app.logger.debug("Starting get repo for all matched license")
+    app.logger.debug("Starting get active repositories for all matched license")
     al_repos = []
 
     for bibid, lic_data in part_bibids.items():
-        # 2017-06-06 TD : insert of this safeguard ;
-        #                 although it would be *very* unlikely to be needed here.  Strange.
         if bibid is None:
             continue
-        account = models.Account.pull(bibids[bibid])
-        if account is not None and account.has_role("repository") and not account.is_passive:
-            # extend this to hold all the license data may be?
-            al_repos.append((account.id, lic_data, bibid))
+        al_repos.append((bibids[bibid], lic_data, bibid))
     if len(al_repos) == 0:
         routing_reason = "No (active!) qualified repositories."
         app.logger.debug("Routing - Notification {y} No (active!) qualified repositories currently found to receive this notification.  Notification will not be routed!".format(y=unrouted.id))
@@ -184,6 +192,7 @@ def _route(unrouted):
                     unrouted.embargo = lic.get("embargo", None)
                     break
             if not matched_license:
+                app.logger.debug("All matching license was excluded by repository")
                 continue
             prov = models.MatchProvenance()
             prov.repository = repo
@@ -322,6 +331,7 @@ def match(notification_data, repository_config, provenance, acc_id):
     match_affiliation = True
     for repo_property, sub in match_algorithms.items():
         for match_property, fn in sub.items():
+            # app.logger.debug("Matching against {x}".format(x=match_property))
             # NEW FEATURE
             # Check if repository has role match_all'
             # if yes, do not need to match affiliations
@@ -351,6 +361,7 @@ def match(notification_data, repository_config, provenance, acc_id):
                         provenance.add_provenance(repo_property, rval, match_property, mval, m)
 
     # if none of the required matches hit, then no need to look at the optional refinements
+    # app.logger.debug(" -- matched: {x}".format(x=matched))
     if not matched:
         return False
 
@@ -358,6 +369,7 @@ def match(notification_data, repository_config, provenance, acc_id):
     # if the configuration specifies a keyword, it must match the notification data, otherwise
     # the match fails
     if len(rc.keywords) > 0:
+        # app.logger.debug(" -- Refine with keywords")
         trip = False
         for rk in rc.keywords:
             for mk in md.keywords:
@@ -365,11 +377,13 @@ def match(notification_data, repository_config, provenance, acc_id):
                 if m is not False:  # then it is a string
                     trip = True
                     provenance.add_provenance("keywords", rk, "keywords", mk, m)
+        # app.logger.debug(" ---- matched: {x}".format(x=trip))
         if not trip:
             return False
 
     # as above, if the config requires a content type it must match the notification data or the match fails
     if len(rc.content_types) > 0:
+        # app.logger.debug(" -- Refine with content types")
         trip = False
         for rc in rc.content_types:
             for mc in md.content_types:
@@ -377,6 +391,7 @@ def match(notification_data, repository_config, provenance, acc_id):
                 if m is True:
                     trip = True
                     provenance.add_provenance("content_types", rc, "content_types", mc, m)
+        # app.logger.debug(" ---- matched: {x}".format(x=trip))
         if not trip:
             return False
 
@@ -667,6 +682,8 @@ def get_current_license_data(lic, publ_year, issn, doi):
                     'embargo': embargo
                 })
                 break
+        else:
+            app.logger.debug(f"publication year {publ_year} is not within start {ys} and end {yt} for ISSN {issn} in license {lic.name}")
     return lic_data
 
 
@@ -930,15 +947,20 @@ def _normalise(s):
 
 
 def _is_article_license_gold(metadata, provider_id):
+    app.logger.debug("Checking if license is gold")
     if metadata.license:
         license_typ = metadata.license.get('type', None)
         license_url = metadata.license.get('url', None)
+        app.logger.debug(" -- license typ: {x}".format(x=license_typ))
+        app.logger.debug(" -- license url: {x}".format(x=license_url))
         provider = models.Account.pull(provider_id)
         gold_license = []
         if provider.license and provider.license.get('gold_license', []):
             gold_license = provider.license.get('gold_license')
         if license_typ in gold_license or license_url in gold_license:
+            app.logger.debug(" -- license is gold")
             return True
+    app.logger.debug(" -- license is not gold")
     return False
 
 
