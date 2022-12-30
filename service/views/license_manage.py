@@ -920,3 +920,139 @@ def _update_accounts_with_excluded_license(old_license_id, new_license_id):
         rc.remove_excluded_license(old_license_id)
         rc.add_excluded_license(new_license_id)
         rc.save()
+
+
+def save_production_file(filepath):
+    # load lic_file
+    filename = os.path.basename(filepath)
+
+    with open(filepath, "rb") as f:
+        file_bytes = f.read()
+        csv_str = _decode_csv_bytes(file_bytes)
+        rows = _load_rows_by_csv_str(csv_str)
+
+    lic_file = _load_lic_file_by_rows(rows, filename=filename)
+
+    # save file to hard disk
+    _save_lic_related_file(lic_file.versioned_filename, file_bytes)
+
+    data = {
+        'ezb_id': lic_file.ezb_id,
+        'name': lic_file.name,
+        'filename': lic_file.filename,
+        'version_datetime': lic_file.version_datetime,
+        'versioned_filename': lic_file.versioned_filename,
+    }
+    return data
+
+
+def add_lrf_for_production(data, lic_file_data):
+    # create license by csv file
+    lic = License.pull(data['license_id'])
+    if not lic:
+        print(f"licence not found for {data['license_id']}")
+        return None
+
+    # validate
+    validation_notes = []
+    if data['type'] != lic.type:
+        validation_notes.append(f"Type does not match license record {lic.type}")
+    if data['ezb_id'] != lic.identifiers[0]['id']:
+        validation_notes.append(f"EZB id does not match license record {lic.identifiers[0]['id']}")
+    if lic_file_data.get('type', None) and data['type'] != lic_file_data['type']:
+        validation_notes.append(f"Type does not match license file record {lic_file_data['type']}")
+    if lic_file_data.get('ezb_id', None) and data['ezb_id'] != lic_file_data['ezb_id']:
+        validation_notes.append(f"EZB id does not match license file record {lic_file_data['ezb_id']}")
+
+    lrf_status='active'
+    lic_status = 'active'
+    lic.status = lic_status
+    lic.save()
+
+    # save lic_related_file to db
+    lrf_raw = dict(file_name=lic_file_data.get('versioned_filename', ''),
+                   type=data['type'],
+                   name=data['name'],
+                   ezb_id=data['ezb_id'],
+                   status=lrf_status,
+                   admin_notes=data['admin_note'],
+                   file_type='license',
+                   record_id=data['license_id'],
+                   upload_date=dates.format(lic_file_data.get('version_datetime', datetime.now())))
+    if validation_notes:
+        lrf_raw['validation_notes'] = "\n".join(validation_notes)
+    lrf = LicRelatedFile.save_by_raw(lrf_raw, blocking=False)
+    print(f"Created record {lrf.id}")
+    return lrf.id
+
+
+def read_production_license_csv_file():
+    data = {}
+    lic_ezb_id = {}
+    filename = 'production-participant-ids.csv'
+    with open(filename) as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            data[row['EZB Id']] = {
+                'ezb_id': row['EZB Id'],
+                'license_id': row['License Id'],
+                'participant_id': row['Participant Id']
+            }
+            lic_ezb_id[row['License Id']] = row['EZB Id']
+    filename = 'production_license_files.csv'
+    with open(filename) as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            lic_id = row['License Id']
+            ezb_id = lic_ezb_id.get(lic_id, '')
+            if not ezb_id:
+                print(f"EZB id not found for {lic_id}")
+                continue
+            data[ezb_id]['name'] = row['Name']
+            data[ezb_id]['type'] = row['Type']
+            data[ezb_id]['admin_note'] = row['Admin Note']
+    return data
+
+
+def save_production_participant_file(filepath, ezb_id):
+    filename = os.path.basename(filepath)
+    with open(filepath, "rb") as f:
+        file_bytes = f.read()
+        csv_str = _decode_csv_bytes(file_bytes)
+
+    parti_file = ParticipantFile(ezb_id, csv_str, filename)
+    _save_lic_related_file(parti_file.versioned_filename, file_bytes)
+    data = {
+        'ezb_id': ezb_id,
+        'filename': parti_file.filename,
+        'version_datetime': parti_file.version_datetime,
+        'versioned_filename': parti_file.versioned_filename,
+    }
+    return data
+
+
+def add_parti_lrf_for_production(data, parti_file_data):
+    # update status is participant record
+    participant = Alliance.pull(data['participant_id'])
+    if not participant:
+        print(f"Participant not found for {data['participant_id']}")
+        return
+    lrf_status = 'active'
+    lic_status = 'active'
+    participant.status = lic_status
+    participant.save()
+
+    # save lic_related_file to db
+    lr_file_raw = dict(file_name = parti_file_data.get('versioned_filename', ''),
+                       type = None,
+                       ezb_id = data['ezb_id'],
+                       status = lrf_status,
+                       admin_notes = None,
+                       record_id = participant.id,
+                       upload_date = dates.format(parti_file_data.get('version_datetime', datetime.now())),
+                       file_type = 'participant',
+                       lic_related_file_id = data.get('license_lrf', ''))
+    new_lrf = LicRelatedFile.save_by_raw(lr_file_raw, blocking=False)
+    print(f'Created record {new_lrf.id}')
+
+    return new_lrf
