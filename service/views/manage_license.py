@@ -45,9 +45,9 @@ def details():
 @blueprint.route('/view_raw')
 def view_raw():
     rec_id = request.values.get('record_id')
+    title = "License management record in JSON"
     if rec_id:
         rec = LicenseManagement.pull(rec_id)
-        title = "License management record in JSON"
         if not rec:
             data = {'Error': f"Record {rec_id} not found"}
         else:
@@ -60,8 +60,8 @@ def view_raw():
 @blueprint.route('/view_license')
 def view_license():
     rec_id = request.values.get('record_id')
+    title = "License record in JSON"
     if rec_id:
-        title = "License record in JSON"
         rec = License.pull(rec_id)
         if not rec:
             data = {'Error': f"Record {rec_id} not found"}
@@ -194,6 +194,7 @@ def delete_license():
 
 @blueprint.route('/view_participant')
 def view_participant():
+    title = "Participant record in JSON"
     rec_id = request.values.get('record_id')
     if rec_id:
         rec = Alliance.pull(rec_id)
@@ -203,7 +204,7 @@ def view_participant():
             data = rec.data
     else:
         data = {'Error': f"Please specify a record_id"}
-    return render_template('manage_license/view_participant.html', rec=data)
+    return render_template('manage_license/view_json.html', title=title, rec=data)
 
 
 @blueprint.route('/download_participant_file')
