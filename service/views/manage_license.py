@@ -1,16 +1,9 @@
-import json
-import os
-import io
-import re
-import tempfile
-import csv
+import json, os, io, re, itertools, uuid, time
+import tempfile, csv, chardet, openpyxl
 from datetime import datetime
 from statistics import mean
 from pathlib import Path
-import chardet
-import openpyxl
-import itertools
-import uuid
+from copy import deepcopy
 from octopus.core import app
 from octopus.lib import dates
 from flask import Blueprint, abort, render_template, request, redirect, url_for, send_file, flash
@@ -30,8 +23,9 @@ def pretty_json(value, indent=2):
 @blueprint.app_template_filter()
 def display_order(active_element, list_len):
     reversed_order = list(reversed(range(1, list_len+1)))
-    reversed_order.remove(active_element)
-    reversed_order.insert(0, active_element)
+    if active_element in reversed_order:
+        reversed_order.remove(active_element)
+        reversed_order.insert(0, active_element)
     return reversed_order
 
 
@@ -48,10 +42,26 @@ def details():
                            managed_licenses=managed_licenses)
 
 
+@blueprint.route('/view_raw')
+def view_raw():
+    rec_id = request.values.get('record_id')
+    if rec_id:
+        rec = LicenseManagement.pull(rec_id)
+        title = "License management record in JSON"
+        if not rec:
+            data = {'Error': f"Record {rec_id} not found"}
+        else:
+            data = rec.data
+    else:
+        data = {'Error': f"Please specify a record_id"}
+    return render_template('manage_license/view_json.html', title=title, rec=data)
+
+
 @blueprint.route('/view_license')
 def view_license():
     rec_id = request.values.get('record_id')
     if rec_id:
+        title = "License record in JSON"
         rec = License.pull(rec_id)
         if not rec:
             data = {'Error': f"Record {rec_id} not found"}
@@ -59,7 +69,7 @@ def view_license():
             data = rec.data
     else:
         data = {'Error': f"Please specify a record_id"}
-    return render_template('manage_license/view_license.html', rec=data)
+    return render_template('manage_license/view_json.html', title=title, rec=data)
 
 
 @blueprint.route('/download_license_file')
@@ -72,7 +82,7 @@ def download_license_file():
 
     management_record = LicenseManagement.pull(manager_id)
     for lic in management_record.licenses:
-        if lic['record_id'] == record_id:
+        if lic.get('record_id',None) == record_id:
             dir_path, file_path = _get_file_path(lic['file_name'])
 
             # check file exist
@@ -122,7 +132,7 @@ def update_license():
 
     messages = [f"Updating license file for {management_record.ezb_id}"]
 
-    ans, msg = _update_license_file(management_record.type, uploaded_file, management_record)
+    ans, msg = _update_license(management_record.type, uploaded_file, management_record)
     messages.append(msg)
     if not ans:
         flash("<br/>".join(messages), 'error')
@@ -133,17 +143,53 @@ def update_license():
 
 @blueprint.route("/activate_license", methods=['POST'])
 def activate_license():
-    pass
+    if not current_user.is_super:
+        abort(401)
+    management_id = request.values.get('management_id')
+    version = int(request.values.get('version'))
+    management_record = LicenseManagement.pull(management_id)
+    messages = [f"Activating license file for {management_record.ezb_id} version {version}"]
+    ans, msg = _activate_license(management_record, version)
+    messages.append(msg)
+    if not ans:
+        flash("<br/>".join(messages), 'error')
+    else:
+        flash("<br/>".join(messages), 'success')
+    return redirect(url_for('manage_license.details'))
 
 
-@blueprint.route("/archive_license")
+@blueprint.route("/archive_license", methods=['POST'])
 def archive_license():
-    pass
+    if not current_user.is_super:
+        abort(401)
+    management_id = request.values.get('management_id')
+    version = int(request.values.get('version'))
+    management_record = LicenseManagement.pull(management_id)
+    messages = [f"Archiving license file for {management_record.ezb_id} version {version}"]
+    ans, msg = _archive_license(management_record, version)
+    messages.append(msg)
+    if not ans:
+        flash("<br/>".join(messages), 'error')
+    else:
+        flash("<br/>".join(messages), 'success')
+    return redirect(url_for('manage_license.details'))
 
 
-@blueprint.route("/delete_license")
+@blueprint.route("/delete_license", methods=['POST'])
 def delete_license():
-    pass
+    if not current_user.is_super:
+        abort(401)
+    management_id = request.values.get('management_id')
+    version = int(request.values.get('version'))
+    management_record = LicenseManagement.pull(management_id)
+    messages = [f"Deleting license file for {management_record.ezb_id} version {version}"]
+    ans, msg = _delete_license(management_record, version)
+    messages.append(msg)
+    if not ans:
+        flash("<br/>".join(messages), 'error')
+    else:
+        flash("<br/>".join(messages), 'success')
+    return redirect(url_for('manage_license.details'))
 
 
 @blueprint.route('/view_participant')
@@ -221,11 +267,11 @@ def _upload_new_license_file(lic_type, uploaded_file, license_name, admin_notes,
     if not ans:
         return ans, msg
 
-    ans, msg = _update_license_file(lic_type, uploaded_file, management_record)
+    ans, msg = _update_license(lic_type, uploaded_file, management_record)
     return ans, msg
 
 
-def _update_license_file(lic_type, uploaded_file, management_record):
+def _update_license(lic_type, uploaded_file, management_record):
     # load lic_file
     filename = uploaded_file.filename
     file_bytes = uploaded_file.stream.read()
@@ -233,14 +279,14 @@ def _update_license_file(lic_type, uploaded_file, management_record):
     # save file
     version_datetime = datetime.now()
     versioned_filename = _save_file(filename, file_bytes, version_datetime)
+    license_record = management_record.create_license_hash(version_datetime, versioned_filename)
 
-    license_record = _create_license_hash(version_datetime, versioned_filename)
-
+    # validate the license file
     ans, msg, license_record, rows = _validate_license_file(license_record, lic_type, filename, file_bytes, management_record.ezb_id)
 
     license_record['validation_notes'] = _convert_to_string(license_record['validation_notes'])
-    management_record.add_license(license_record)
     if not ans:
+        management_record.add_license(license_record)
         version_record = {
             'version': management_record.license_version,
             'status': "validation failed"
@@ -251,20 +297,102 @@ def _update_license_file(lic_type, uploaded_file, management_record):
         return False, f"Validation failed for license #{management_record.ezb_id}"
 
     # license is valid
+    # archive current active license
+    management_record = _archive_active_license(management_record)
+
     # create a new license
     license_data = _extract_license_data(rows)
-    license_id = management_record.record_id(management_record.license_version)
+    license_id = management_record.id
     _create_license(license_id, management_record.ezb_id, management_record.name, lic_type, license_data)
+
+    # Add the license record to the list of licenses
+    license_record['record_id'] = management_record.id
+    management_record.add_license(license_record)
+    version_record = {
+        'version': management_record.license_version,
+        'status': "validation passed"
+    }
+    management_record.add_license_version(version_record)
 
     # activate the license
     management_record.activate_license(management_record.license_version)
     management_record.save()
-    return True, f'License #{management_record.ezb_id} has been created and activated'
+    return True, f'License {management_record.ezb_id} version {management_record.license_version} has been created and activated'
+
+
+def _activate_license(management_record, version):
+    if management_record.can_activate_license(version):
+        # archive current active license
+        management_record = _archive_active_license(management_record)
+        # activate requested version
+        management_record = _activate_license_version(management_record, version)
+        management_record.save()
+        return True, f"Activated version {version} of license"
+    return False, f"Cannot activate version {version} of license"
+
+
+def _archive_license(management_record, version):
+    if management_record.can_archive_license(version):
+        # archive current active license
+        management_record = _archive_license_version(management_record, version)
+        management_record.save()
+        return True, f"Archived version {version} of license"
+    return False, f"Cannot archive version {version} of license"
+
+
+def _delete_license(management_record, version):
+    if management_record.can_delete_license(version):
+        msgs = []
+        # delete license record
+        outcome, msg = _delete_license_record(management_record, version)
+        msgs.append(msg)
+        # delete file
+        ans,msg = _delete_license_file(management_record, version)
+        outcome = outcome and ans
+        msgs.append(msg)
+        # delete license version
+        ans2 = management_record.delete_license(version)
+        outcome = outcome and ans2
+        msgs.append(f"Status of license version {version} set to deleted")
+        management_record.save()
+        return outcome, "<br/>".join(msgs)
+    return False, f"Cannot delete version {version} of license"
+
+
+def _delete_license_record(management_record, version_to_delete):
+    for lic in management_record.licenses:
+        if lic['version'] == version_to_delete:
+            if lic.get('record_id', None):
+                lic_record = License.pull(lic['record_id'])
+                if isinstance(lic_record, License):
+                    lic_record.delete()
+                    return True, f"Deleted license record {lic['record_id']}"
+                else:
+                    return True, f"Could not find license record {lic['record_id']}"
+            else:
+                return True, "There was no license record to delete"
+    return False, f"Could not find version record for version {version_to_delete}"
+
+
+def _delete_license_file(management_record, version_to_delete):
+    for lic in management_record.licenses:
+        if lic['version'] == version_to_delete:
+            filename = lic.get("file_name", None)
+            if filename:
+                dir_path, file_path = _get_file_path(filename)
+                if file_path.is_file():
+                    file_path.unlink()
+                    return True, f"Deleted license file {filename}"
+                else:
+                    return True, f"Could not find file {filename}"
+            else:
+                return True, f"There was no license record to delete"
+    return False, f"Could not find version record for version {version_to_delete}"
 
 
 def _save_file(filename, file_bytes, version_datetime):
     versioned_filename = _create_versioned_filename(filename, version_datetime)
-    dir_path, file_path = _get_file_path(filename)
+    dir_path, file_path = _get_file_path(versioned_filename)
     if not dir_path.exists():
         dir_path.mkdir(exist_ok=True, parents=True)
     file_path.write_bytes(file_bytes)
@@ -300,14 +428,60 @@ def _create_management_record(ezb_id, license_name, admin_notes, lic_type):
     return True, '', management_record
 
 
-def _create_license_hash(version_datetime, file_name):
-    return {
-        "file_name": file_name,
-        "name": '',
-        "uploaded_date": dates.format(version_datetime),
-        "validation_notes": [],
-        "validation_status": 'validation failed',
-    }
+def _create_license(license_id, ezb_id, license_name, license_type, license_data, license_status="active"):
+    # create license by csv file
+    lic = License()
+    lic.id = license_id
+    lic.set_license_data(ezb_id, license_name,
+                         type=license_type, csvfile=io.StringIO(license_data['table_str']),
+                         init_status=license_status)
+    lic.save()
+    return
+
+
+def _archive_active_license(management_record):
+    if management_record.active_license > 0:
+        management_record = _archive_license_version(management_record, management_record.active_license)
+    return management_record
+
+
+def _archive_license_version(management_record, version):
+    management_record.archive_license(version)
+    if management_record.active_license == version:
+        # Change license id to include version suffix
+        old_lic = License.pull(management_record.id)
+        if isinstance(old_lic, License):
+            record_id = management_record.record_id(management_record.active_license)
+            old_lic.archive(record_id)
+            old_lic.delete()
+            licenses = deepcopy(management_record.licenses)
+            for license in licenses:
+                if license['version'] == management_record.active_license:
+                    license['record_id'] = record_id
+            management_record.licenses = licenses
+    return management_record
+
+
+def _activate_license_version(management_record, version):
+    # Save license with management record id (without version suffix)
+    # delete license with version suffix in id
+    licenses = deepcopy(management_record.licenses)
+    for license in licenses:
+        if license['version'] == version:
+            # Found matching license record
+            old_record_id = license['record_id']
+            # new record id
+            license['record_id'] = management_record.id
+            # Pull old license
+            old_lic = License.pull(old_record_id)
+            if isinstance(old_lic, License):
+                # Save license with management record id (without version suffix)
+                old_lic.activate(management_record.id)
+                # delete license with version suffix in id
+                old_lic.delete()
+                management_record.activate_license(version)
+                management_record.licenses = licenses
+    return management_record
 
 
 def _validate_license_file(license_record, license_type, filename, file_bytes, ezb_id):
@@ -511,16 +685,6 @@ def _extract_license_data(rows):
     }
 
 
-def _create_license(license_id, ezb_id, license_name, license_type, license_data, license_status="active"):
-    # create license by csv file
-    lic = License()
-    lic.id = license_id
-    lic.set_license_data(ezb_id, license_name,
-                         type=license_type, csvfile=io.StringIO(license_data['table_str']),
-                         init_status=license_status)
-    lic.save()
-
-
 def _get_mime_type(file_path):
     # define mimetype
     _path_str = file_path.as_posix().lower()
@@ -534,6 +698,6 @@ def _get_mime_type(file_path):
 
 
 def _convert_to_string(validation_notes):
-    if not type(validation_notes) == list:
+    if type(validation_notes) != list:
         validation_notes = [validation_notes]
-    return "<br\>".join(validation_notes)
+    return "\n".join([x.strip() for x in validation_notes if x and x.strip() != ''])

@@ -4,6 +4,7 @@ Model objects used to represent interactions with ezb items
 
 import csv
 from typing import Union, Iterable, Type, Optional
+from copy import deepcopy
 
 from octopus.core import app
 from octopus.lib import dataobj
@@ -792,6 +793,22 @@ class License(dataobj.DataObj, dao.LicenseDAO):
         else:
             app.logger.error("Could not save any data for license: {x}".format(x=ezbid))
             return False
+
+    def archive(self, new_id):
+        d = deepcopy(self.data)
+        d['id'] = new_id
+        d['status'] = 'inactive'
+        new_lic = License(d)
+        new_lic.save()
+        return
+
+    def activate(self, new_id):
+        d = deepcopy(self.data)
+        d['id'] = new_id
+        d['status'] = 'active'
+        new_lic = License(d)
+        new_lic.save()
+        return
 
     @classmethod
     def pull_by_key(cls, key, value):

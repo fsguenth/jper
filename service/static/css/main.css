@@ -363,3 +363,11 @@ div.actions div {
     width: 75%;
     vertical-align: top;
 }
+
+.tablesorter-hasChildRow > td {
+    background: #e3e6e2;
+}
+
+.tablesorter-childRow > td {
+    background: #d5d8dc;
+}

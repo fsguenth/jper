@@ -65,7 +65,8 @@
         Display order: {{ lic_display_order }}
         {% for index in (range(1, rowspan + 1)) %}
             {% if licences|length >= index %}
-                {% set _ = lic.update(licences[lic_display_order[index-1] - 1]) %}
+                {#% set _ = lic.update(licences[lic_display_order[index-1] - 1]) %#}
+                {% set lic = licences[lic_display_order[index-1] - 1] %}
             {% endif %}
             {% for v in rec.get('license_versions', []) %}
                 {% if v['version'] == lic.get('version', '') %}
@@ -73,7 +74,8 @@
                 {% endif %}
             {%  endfor %}
             {% if participants|length >= index  %}
-                {% set _ = par.update(participants[index-1]) %}
+                {#% set _ = par.update(participants[index-1]) %#}
+                {% set par = participants[index-1] %}
             {% endif %}
             {% for v in par.get('participant_versions', []) %}
                 {% if v['version'] == par.get('version', '') %}
@@ -87,8 +89,8 @@
             {% else %}
                 {% set cls = "" %}
             {% endif %}
-            {% if lic_status['lic_status'] in ['active', 'validation passed'] or
-                  par_status['par_status'] in ['active', 'validation passed'] %}
+            {% if lic_status['lic_status'] in ['active', 'validation passed', 'validation failed'] or
+                  par_status['par_status'] in ['active', 'validation passed', 'validation failed'] %}
                 {% set collapse_cls = '' %}
             {%  elif index > 1 %}
                 {% set collapse_cls = 'collapse' %}
@@ -107,13 +109,14 @@
                     <td>
                         <dt>Name</dt>
                         <dd>{{ rec.get('name', '') }}</dd>
+                        <dt>Id</dt>
+                        <dd>
+                            <a href="{{ url_for('manage_license.view_raw') }}?record_id={{ rec.id }}">
+                                    {{ rec.id }}</a>
+                        </dd>
                         <dt>Admin notes</dt>
                         <dd>
-                            {% if rec.get('admin_notes', '')|length > 100 %}
-                                <span title="{{ rec.get('admin_notes', '') }}">{{ rec.get('admin_notes', '')[:100] }} ...</span>
-                            {% else %}
-                                <span title="{{ rec.get('admin_notes', '') }}">{{ rec.get('admin_notes', '') }}</span>
-                            {% endif %}
+                             <span title="{{ rec.get('admin_notes', '') }}">{{ rec.get('admin_notes', '') }}</span>
                         </dd>
                         <dd>
                             {% if rowspan > 1 %}
@@ -135,7 +138,7 @@
                             <dd>{{ lic.get('uploaded_date', '') }}</dd>
                             <dt>View license</dt>
                             <dd>
-                                <a href="{{ url_for('manage_license.view_license') }}?management_id={{ rec.id }}&record_id={{ lic.get('record_id', '') }}">
+                                <a href="{{ url_for('manage_license.view_license') }}?record_id={{ lic.get('record_id', '') }}">
                                     {{ lic.get('record_id', '') }}</a>
                             </dd>
                             <dt>Download license file</dt>
@@ -160,19 +163,19 @@
                                     </form>
                                 </div>
                             {% endif %}
-                            {% if lic_status['lic_status'] == 'validation passed' %}
+                            {% if lic_status['lic_status'] in ['validation passed', 'archived'] %}
                                 <div>
                                     <form method="POST" action="{{ url_for('manage_license.activate_license') }}">
-                                        <input type="hidden" name="record_id" value="{{ lic.get('record_id') }}">
+                                        <input type="hidden" name="management_id" value="{{ rec['id'] }}">
                                         <input type="hidden" name="version" value="{{ lic.get('version') }}">
                                         <input class="act_btn" type="submit" value="Activate license"/>
                                     </form>
                                 </div>
                             {% endif %}
-                            {% if lic_status['lic_status'] not in ['archived', 'deleted'] %}
+                            {% if lic_status['lic_status'] in ['active', 'validation pased'] %}
                                 <div>
                                     <form method="POST" action="{{ url_for('manage_license.archive_license') }}">
-                                        <input type="hidden" name="record_id" value="{{ lic.get('record_id') }}">
+                                        <input type="hidden" name="management_id" value="{{ rec['id'] }}">
                                         <input type="hidden" name="version" value="{{ lic.get('version') }}">
                                         <button type="submit" class="btn-warning long_act_btn act_btn">
                                             Archive license
@@ -180,10 +183,10 @@
                                     </form>
                                 </div>
                             {%  endif %}
-                            {% if lic_status['lic_status'] in allowed_del_status %}
+                            {% if lic_status['lic_status'] in ["validation failed", "archived"] %}
                                 <div>
                                     <form method="POST" action="{{ url_for('manage_license.delete_license') }}">
-                                        <input type="hidden" name="record_id" value="{{ lic.get('record_id') }}">
+                                        <input type="hidden" name="management_id" value="{{ rec['id'] }}">
                                         <input type="hidden" name="version" value="{{ lic.get('version') }}">
                                         <input class="act_btn" type="submit" value="Delete license"/>
                                     </form>
@@ -195,11 +198,7 @@
                             <dd>{{ lic.get('validation_status', '') }}</dd>
                             <dt>Validation notes</dt>
                             <dd>
-                                {% if lic.get('validation_notes', '')|length > 100 %}
-                                    <span title="{{ lic.get('validation_notes', '') }}">{{ lic.get('validation_notes', '')[:100] }} ...</span>
-                                {% else %}
-                                    <span title="{{ lic.get('validation_notes', '') }}">{{ lic.get('validation_notes', '') }}</span>
-                                {% endif %}
+                                <span title="{{ lic.get('validation_notes', '') }}">{{ lic.get('validation_notes', '') }}</span>
                             </dd>
                         </dl>
                     {% endif %}
@@ -231,7 +230,7 @@
                                 <form method="POST"
                                       action="{{ url_for('manage_license.upload_participant') }}"
                                       enctype="multipart/form-data">
-                                    <input type="hidden" name="lic_lrf_id" value="{{ rec.id }}">
+                                    <input type="hidden" name="management_id" value="{{ rec['id'] }}">
                                     <input type="file" name="file" class="hide_file_upload submit_on_change"/>
                                     <button class="btn-success trigger_file_btn"> Add participant</button>
                                 </form>
@@ -242,7 +241,7 @@
                                 <form method="POST"
                                       action="{{ url_for('manage_license.update_participant') }}"
                                       enctype="multipart/form-data">
-                                    <input type="hidden" name="lic_lrf_id" value="{{ rec['id'] }}">
+                                    <input type="hidden" name="management_id" value="{{ rec['id'] }}">
                                     <input type="file" name="file" class="hide_file_upload submit_on_change"/>
                                     <button class="btn-primary long_act_btn trigger_file_btn">
                                         Update participant
@@ -253,16 +252,16 @@
                         {% if par_status['par_status'] == 'validation_passed' %}
                             <div>
                                 <form method="POST" action="{{ url_for('manage_license.activate_participant') }}">
-                                    <input type="hidden" name="record_id" value="{{ par.get('record_id') }}">
+                                    <input type="hidden" name="management_id" value="{{ rec['id'] }}">
                                     <input type="hidden" name="version" value="{{ par.get('version') }}">
                                     <input class="act_btn" type="submit" value="Activate participant"/>
                                 </form>
                             </div>
                         {% endif %}
-                        {% if par_status['par_status'] and par_status['par_status'] not in ['archived', 'deleted'] %}
+                        {% if par_status['par_status'] in ["validation passed", "active"] %}
                             <div>
                                 <form method="POST" action="{{ url_for('manage_license.archive_participant') }}">
-                                    <input type="hidden" name="record_id" value="{{ par.get('record_id') }}">
+                                    <input type="hidden" name="management_id" value="{{ rec['id'] }}">
                                     <input type="hidden" name="version" value="{{ par.get('version') }}">
                                     <button type="submit" class="btn-warning long_act_btn act_btn">
                                         Archive participant
@@ -270,10 +269,10 @@
                                 </form>
                             </div>
                         {% endif %}
-                        {% if par_status['par_status'] in allowed_del_status %}
+                        {% if par_status['par_status'] in ["validation failed", "archived"] %}
                             <div>
                                 <form method="POST" action="{{ url_for('manage_license.delete_participant') }}">
-                                    <input type="hidden" name="record_id" value="{{ par.get('record_id') }}">
+                                    <input type="hidden" name="management_id" value="{{ rec['id'] }}">
                                     <input type="hidden" name="version" value="{{ par.get('version') }}">
                                     <input class="act_btn" type="submit" value="Delete license"/>
                                 </form>

@@ -917,6 +917,7 @@ class LicenseManagementDAO(dao.ESDAO):
                 "match_all": {}
             },
             "size": size,
-            "from": 0
+            "from": 0,
+            "sort": [{"last_updated": {"order": "asc"}}]
         }
         return cls.pull_all(q, size=1000, return_as_object=False)
