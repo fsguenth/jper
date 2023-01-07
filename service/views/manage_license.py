@@ -234,14 +234,40 @@ def download_participant_file():
     abort(404)
 
 
-@blueprint.route("/upload_participant")
+@blueprint.route('/upload-participant', methods=['POST'])
 def upload_participant():
-    pass
+    if not current_user.is_super:
+        abort(401)
+    uploaded_file = request.files.get('file')
+    management_id = request.values.get('management_id')
+    messages = [f"Uploading participant file for {management_id}"]
+
+    ans, msg = _upload_participant_file(management_id, uploaded_file)
+    messages.append(msg)
+    if not ans:
+        flash("<br/>".join(messages), 'error')
+    else:
+        flash("<br/>".join(messages), 'success')
+    return redirect(url_for('manage_license.details'))
 
 
 @blueprint.route("/update_participant")
 def update_participant():
-    pass
+    if not current_user.is_super:
+        abort(401)
+
+    uploaded_file = request.files.get('file')
+    management_id = request.values.get('management_id')
+
+    messages = [f"Updating participant file for {management_id}"]
+
+    ans, msg = _upload_participant_file(management_id, uploaded_file)
+    messages.append(msg)
+    if not ans:
+        flash("<br/>".join(messages), 'error')
+    else:
+        flash("<br/>".join(messages), 'success')
+    return redirect(url_for('manage_license.details'))
 
 
 @blueprint.route("/activate_participant")
@@ -270,6 +296,61 @@ def _upload_new_license_file(lic_type, uploaded_file, license_name, admin_notes,
 
     ans, msg = _update_license(lic_type, uploaded_file, management_record)
     return ans, msg
+
+def _upload_participant_file(management_id, uploaded_file):
+    if uploaded_file is None:
+        return False, 'parameter "file" not found'
+
+    management_record = LicenseManagement.pull(management_id)
+    if not management_record:
+        return False, "Could not find management record for #{ezb_id}"
+
+    ezb_id = management_record.ezb_id
+
+    # load participant_file
+    filename = uploaded_file.filename
+    file_bytes = uploaded_file.stream.read()
+
+    # save file
+    version_datetime = datetime.now()
+    versioned_filename = _save_file(filename, file_bytes, version_datetime)
+    participant_record = management_record.create_participant_hash(version_datetime, versioned_filename)
+
+    # validate the participant file
+    ans, msg, participant_record, csv_str = _validate_participant_file(participant_record, filename, file_bytes)
+    participant_record['validation_notes'] = _convert_to_string(participant_record['validation_notes'])
+    if not ans:
+        management_record.add_participant(participant_record)
+        version_record = {
+            'version': management_record.participant_version,
+            'status': "validation failed"
+        }
+        management_record.add_participant_version(version_record)
+        # Save management record with participant details and return
+        management_record.save()
+        return False, f"Validation failed for participant #{ezb_id}"
+
+    # participant is valid
+    # archive current active participant
+    management_record = _archive_active_participant(management_record)
+
+    # create a new participant
+    participant_id = management_record.id
+    _create_participant(participant_id, ezb_id, csv_str, participant_status="active")
+
+    # Add the participant record to the list of participants
+    participant_record['record_id'] = management_record.id
+    management_record.add_participant(participant_record)
+    version_record = {
+        'version': management_record.participant_version,
+        'status': "validation passed"
+    }
+    management_record.add_participant_version(version_record)
+
+    # activate the participant
+    management_record.activate_participant(management_record.participant_version)
+    management_record.save()
+    return True, f'Participant {management_record.ezb_id} version {management_record.participant_version} has been created and activated'
 
 
 def _update_license(lic_type, uploaded_file, management_record):
@@ -440,9 +521,25 @@ def _create_license(license_id, ezb_id, license_name, license_type, license_data
     return
 
 
+def _create_participant(participant_id, ezb_id, participant_data, participant_status="active"):
+    # create license by csv file
+    alliance = Alliance()
+    alliance.id = participant_id
+    alliance.set_alliance_data(participant_id, ezb_id, csvfile=io.StringIO(participant_data),
+                                                               init_status=participant_status)
+    alliance.save()
+    return
+
+
 def _archive_active_license(management_record):
     if management_record.active_license > 0:
         management_record = _archive_license_version(management_record, management_record.active_license)
+    return management_record
+
+
+def _archive_active_participant(management_record):
+    if management_record.active_participant > 0:
+        management_record = _archive_participant_version(management_record, management_record.active_participant)
     return management_record
 
 
@@ -460,6 +557,23 @@ def _archive_license_version(management_record, version):
                 if license['version'] == management_record.active_license:
                     license['record_id'] = record_id
             management_record.licenses = licenses
+    return management_record
+
+
+def _archive_participant_version(management_record, version):
+    management_record.archive_participant(version)
+    if management_record.active_participant == version:
+        # Change license id to include version suffix
+        old_parti = Alliance.pull(management_record.id)
+        if isinstance(old_parti, Alliance):
+            record_id = management_record.record_id(management_record.active_participant)
+            old_parti.archive(record_id)
+            old_parti.delete()
+            participants = deepcopy(management_record.participants)
+            for participant in participants:
+                if participant['version'] == management_record.active_participant:
+                    participant['record_id'] = record_id
+            management_record.participants = participants
     return management_record
 
 
@@ -482,6 +596,28 @@ def _activate_license_version(management_record, version):
                 old_lic.delete()
                 management_record.activate_license(version)
                 management_record.licenses = licenses
+    return management_record
+
+
+def _activate_participant_version(management_record, version):
+    # Save participant with management record id (without version suffix)
+    # delete participant with version suffix in id
+    participants = deepcopy(management_record.participants)
+    for participant in participants:
+        if participant['version'] == version:
+            # Found matching license record
+            old_record_id = participant['record_id']
+            # new record id
+            participant['record_id'] = management_record.id
+            # Pull old participant
+            old_lic = Alliance.pull(old_record_id)
+            if isinstance(old_lic, Alliance):
+                # Save participant with management record id (without version suffix)
+                old_lic.activate(management_record.id)
+                # delete participant with version suffix in id
+                old_lic.delete()
+                management_record.activate_participant(version)
+                management_record.participants = participants
     return management_record
 
 
@@ -517,6 +653,36 @@ def _validate_license_file(license_record, license_type, filename, file_bytes, e
         return False, msg, license_record, None
     license_record["validation_status"] = "validation passed"
     return True, "License file is valid", license_record, rows
+
+
+def _validate_participant_file(participant_record, filename, file_bytes):
+    participant_record['validation_status'] = "validation failed"
+    if not participant_record.get('validation_notes', []):
+        participant_record['validation_notes'] = []
+
+    # check file type is valid (csv, tsv, xls, xlsx)
+    filename_lower = filename.lower().strip()
+    _, file_extension = os.path.splitext(filename_lower)
+
+    if file_extension not in ['.tsv', '.csv', '.xls', '.xlsx']:
+        msg = f"Invalid file format {filename}"
+        participant_record['validation_notes'].append(msg)
+        return False, msg, participant_record, None
+
+    csv_str: str = None
+    if filename.lower().endswith('.csv'):
+        csv_str = _decode_csv_bytes(file_bytes)
+    elif any(filename.lower().endswith(fmt) for fmt in ['xls', 'xlsx']):
+        csv_str = _load_parti_csv_str_by_xls_bytes(file_bytes)
+
+    rows = _load_rows_by_csv_str(csv_str)
+
+    # validate participant file contents
+    ans, msg, participant_record = _validate_parti_lrf(rows, participant_record)
+    if not ans:
+        return False, msg, participant_record, None
+    participant_record["validation_status"] = "validation passed"
+    return True, "Participant file is valid", participant_record, csv_str
 
 
 def _decode_csv_bytes(csv_bytes):
@@ -642,6 +808,35 @@ def _validate_lic_lrf(rows, ezb_id, license_record):
     if err_msgs:
         return False, "Error validating license file", license_record
     return True, "", license_record
+
+
+def _validate_parti_lrf(rows, participant_record):
+    header_row_idx = 0
+    n_cols = 3
+    if len(rows) < header_row_idx + 1:
+        participant_record['validation_notes'].append('header not found')
+        return False, "Error validating participant file", participant_record
+
+    header_row = rows[header_row_idx]
+
+    filtered_header_row = list(filter(None, header_row))
+    if not filtered_header_row:
+        msg = f'Header row is missing. The header should be row {header_row_idx+1}.'
+        participant_record['validation_notes'].append(msg)
+        return False, "Error validating participant file", participant_record
+
+    if len(header_row) < n_cols:
+        msg = f'csv should have {n_cols} columns'
+        participant_record['validation_notes'].append(msg)
+        return False, "Error validating participant file", participant_record
+
+    # check mandatory header
+    missing_headers = {'Institution', 'EZB-Id', 'Sigel'} - set(header_row)
+    if missing_headers:
+        msg = f'missing header {missing_headers}.'
+        participant_record['validation_notes'].append(msg)
+        return False, "Error validating participant file", participant_record
+    return True, "", participant_record
 
 
 def _check_all_lic_rows_exist(rows):

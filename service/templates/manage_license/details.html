@@ -216,7 +216,7 @@
                                     {{ par.get('record_id', '') }}</a>
                             </dd>
                                 <dt>Download participant file</dt>
-                                <dd><a href="{{ url_for('manage_license.download_participant_file', record_id=lic.get('record_id', '')) }}">
+                                <dd><a href="{{ url_for('manage_license.download_participant_file', management_id=rec.id, record_id=par.get('record_id', '')) }}">
                                     {{ par.get('file_name', 'participant file') }}
                                 </a></dd>
                             <dt>Status</dt>
@@ -249,7 +249,7 @@
                                 </form>
                             </div>
                         {% endif %}
-                        {% if par_status['par_status'] == 'validation_passed' %}
+                        {% if par_status['par_status'] in ['validation_passed', 'archived'] %}
                             <div>
                                 <form method="POST" action="{{ url_for('manage_license.activate_participant') }}">
                                     <input type="hidden" name="management_id" value="{{ rec['id'] }}">

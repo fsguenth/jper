@@ -272,6 +272,22 @@ class Alliance(dataobj.DataObj, dao.AllianceDAO):
         self._delete_from_list("participant", matchsub=part_object)
         self._add_to_list("participant", part_object)
 
+    def archive(self, new_id):
+        d = deepcopy(self.data)
+        d['id'] = new_id
+        d['status'] = 'inactive'
+        new_par = Alliance(d)
+        new_par.save()
+        return
+
+    def activate(self, new_id):
+        d = deepcopy(self.data)
+        d['id'] = new_id
+        d['status'] = 'active'
+        new_par = Alliance(d)
+        new_par.save()
+        return
+
     @classmethod
     def pull_by_key(cls, key, value):
         res = cls.query(q={"query": {"term": {key + '.exact': value}}})
