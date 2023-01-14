@@ -35,11 +35,12 @@ def details():
         abort(401)
 
     managed_licenses = LicenseManagement.pull_all_records()
+    ordered_records = _ordered_records(managed_licenses)
 
     return render_template('manage_license/details.html',
                            allowed_lic_types=LICENSE_TYPES,
                            allowed_del_status=ALLOWED_DEL_STATUS,
-                           managed_licenses=managed_licenses)
+                           managed_licenses=ordered_records)
 
 
 @blueprint.route('/view_raw')
@@ -897,3 +898,56 @@ def _convert_to_string(validation_notes):
     if type(validation_notes) != list:
         validation_notes = [validation_notes]
     return "\n".join([x.strip() for x in validation_notes if x and x.strip() != ''])
+
+
+def _ordered_records(managed_licenses):
+    visible_status = ['active', 'validation passed', 'validation failed']
+    ordered_records = []
+    for rec in managed_licenses:
+        rowspan = 1
+        if rec.get('license_version', 0) > 1 or rec.get('participant_version', 0) > 1:
+            rowspan = max([rec.get('license_version', 0), rec.get('participant_version', 0)])
+        rec['rowspan'] = rowspan
+        licences = rec.get('license', [])
+        participants = rec.get('participant', [])
+        ordered_licences = []
+        ordered_participants = []
+        lic_display_order = display_order(rec['active_license'], len(licences))
+        par_display_order = display_order(rec['active_participant'], len(participants))
+        classes = []
+        for index in (range(rowspan)):
+            lic = {'status': ''}
+            par = {'status': ''}
+            if len(licences) >= (index + 1):
+                for l in licences:
+                    if l.get('version', '') == lic_display_order[index]:
+                        lic = l
+                        break
+                for v in rec.get('license_versions', []):
+                    if v['version'] == lic.get('version', ''):
+                      lic['status'] = v['status']
+                ordered_licences.append(lic)
+            if len(participants) >= (index+1):
+                for p in participants:
+                    if p.get('version', '') == par_display_order[index]:
+                        par = p
+                        break
+                for v in rec.get('participant_versions', []):
+                    if v['version'] == par.get('version', ''):
+                        par['status'] = v['status']
+                ordered_participants.append(par)
+            if index == 0 and rowspan > 1:
+                cls = "tablesorter-hasChildRow"
+            elif index > 0:
+                cls = "tablesorter-childRow"
+                if lic['status'] not in visible_status and par['status'] not in visible_status:
+                    cls += ' collapse'
+            else:
+                cls = ""
+            classes.append(cls)
+        rec['class'] = classes
+        rec['license'] = ordered_licences
+        rec['participant'] = ordered_participants
+        ordered_records.append(rec)
+    return ordered_records
+

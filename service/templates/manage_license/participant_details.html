@@ -1,0 +1,56 @@
+<dl>
+    {% if par.get('version', '') %}
+        <dt>Version</dt>
+        <dd>{{ par.get('version', '') }}</dd>
+    {% endif %}
+    {% if par.get('uploaded_date', '') %}
+        <dt>date uploaded</dt>
+        <dd>{{ par.get('uploaded_date', '') }}</dd>
+    {% endif %}
+    <dt>View participant</dt>
+    <dd>
+        {% if par.get('record_id', '') %}
+            <a href="{{ url_for('manage_license.view_participant') }}?record_id={{ par.get('record_id', '') }}">
+                {{ par.get('record_id', '') }}</a>
+        {% else %}
+            <b>No participant record</b>
+        {% endif %}
+    </dl>
+    {% if par.get('record_id', '') or par.get('file_name', '') %}
+        <dt>Download participant file</dt>
+        <dd><a href="{{ url_for('manage_license.download_participant_file', management_id=rec.id, record_id=par.get('record_id', '')) }}">
+            {{ par.get('file_name', 'participant file') }}
+        </a></dd>
+    {% endif %}
+    {% if par.get('status','') %}
+        <dt>Status</dt>
+        <dd> {{ par['status'] }} </dd>
+    {% endif %}
+</dl>
+<div class="actions">
+    <h3>Actions</h3>
+    {% if par['status'] in ['active', 'validation failed'] %}
+        {% include 'manage_license/actions/update_participant.html' %}
+    {% endif %}
+    {% if par['status'] in ['validation_passed', 'archived'] %}
+        {% include 'manage_license/actions/activate_participant.html' %}
+    {% endif %}
+    {% if par['status'] in ["validation passed", "active"] %}
+        {% include 'manage_license/actions/archive_participant.html' %}
+    {% endif %}
+    {% if par['status'] in ["validation failed", "archived"] %}
+        {% include 'manage_license/actions/delete_participant.html' %}
+    {% endif %}
+</div>
+<dl>
+    {% if par.get('validation_status', '') %}
+        <dt>Validation status</dt>
+        <dd>{{ par.get('validation_status', '') }}</dd>
+    {% endif %}
+    {% if par.get('validation_notes', '') %}
+        <dt>Validation notes</dt>
+        <dd>
+            <span title="{{ par.get('validation_notes', '') }}">{{ par.get('validation_notes', '') }}</span>
+        </dd>
+    {% endif %}
+</dl>

@@ -1,0 +1,30 @@
+{% if index == 0 %}
+    <td> {{ rec.get('ezb_id', '') }} </td>
+    <td> {{ rec.get('type', '') }} </td>
+    <td>
+        {% if rec.get('name', '') %}
+            <dt>Name</dt>
+            <dd>{{ rec.get('name', '') }}</dd>
+        {% endif %}
+        <dt>Id</dt>
+        <dd>
+            <a href="{{ url_for('manage_license.view_raw') }}?record_id={{ rec.id }}">
+            {{ rec.id }}</a>
+        </dd>
+        {% if rec.get('admin_notes', '') %}
+            <dt>Admin notes</dt>
+            <dd>
+                 <span title="{{ rec.get('admin_notes', '') }}">{{ rec.get('admin_notes', '') }}</span>
+            </dd>
+        {% endif %}
+        {% if rec['rowspan'] > 1 %}
+            <dd>
+                <a href="#" class="toggle">Show / hide versions</a> <br/>
+            </dd>
+        {% endif %}
+    </td>
+{% else %}
+    <td></td>
+    <td></td>
+    <td></td>
+{% endif %}

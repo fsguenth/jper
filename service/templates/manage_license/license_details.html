@@ -1,0 +1,57 @@
+<dl>
+    {% if lic.get('version', '') %}
+        <dt>Version</dt>
+        <dd>{{ lic.get('version', '') }}</dd>
+    {% endif %}
+    {% if lic.get('uploaded_date', '') %}
+        <dt>Date uploaded</dt>
+        <dd>{{ lic.get('uploaded_date', '') }}</dd>
+    {% endif %}
+    <dt>View license</dt>
+    <dd>
+        {% if lic.get('record_id', '') %}
+            <a href="{{ url_for('manage_license.view_license') }}?record_id={{ lic.get('record_id', '') }}">
+                {{ lic.get('record_id', '') }}</a>
+        {% else %}
+            <b>No license record</b>
+        {% endif %}
+    </dd>
+    {% if lic.get('record_id', '') or lic.get('file_name', '') %}
+        <dt>Download license file</dt>
+        <dd><a href="{{ url_for('manage_license.download_license_file', management_id=rec.id, record_id=lic.get('record_id', '')) }}">
+            {{ lic.get('file_name', 'license file') }}
+        </a></dd>
+    {% endif %}
+    {% if lic.get('status', '') %}
+        <dt>Status</dt>
+        <dd> {{ lic['status'] }} </dd>
+    {% endif %}
+</dl>
+<div class="actions">
+    <h3>Actions</h3>
+    {% if lic['status'] in ['active', 'validation failed'] %}
+        {% include 'manage_license/actions/update_license.html' %}
+    {% endif %}
+    {% if lic['status'] in ['validation passed', 'archived'] %}
+        {% include 'manage_license/actions/activate_license.html' %}
+    {% endif %}
+    {% if lic['status'] in ['active', 'validation pased'] %}
+        {% include 'manage_license/actions/archive_license.html' %}
+    {%  endif %}
+    {% if lic['status'] in ["validation failed", "archived"] %}
+        {% include 'manage_license/actions/delete_license.html' %}
+    {% endif %}
+</div>
+<dl>
+    {% if lic.get('validation_status', '') %}
+        <dt>Validation status</dt>
+        <dd>{{ lic.get('validation_status', '') }}</dd>
+    {% endif %}
+    {% if lic.get('validation_notes', '') %}
+        <dt>Validation notes</dt>
+        <dd>
+            <span title="{{ lic.get('validation_notes', '') }}">{{ lic.get('validation_notes', '') }}</span>
+        </dd>
+    {% endif %}
+</dl>
+

@@ -305,6 +305,10 @@ margin-bottom:0;
     content: "\2796"; /* Unicode character for "minus" sign (-) */
 }
 
+.nav__item.active:after {
+    content: None;
+}
+
 .lic_upload label {
     min-width: 8em;
     display: inline-block;
