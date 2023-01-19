@@ -79,11 +79,11 @@ def download_license_file():
         abort(401)
 
     manager_id = request.values.get('management_id')
-    record_id = request.values.get('record_id')
+    version = int(request.values.get('version'))
 
     management_record = LicenseManagement.pull(manager_id)
     for lic in management_record.licenses:
-        if lic.get('record_id',None) == record_id:
+        if lic.get('version',0) == version and lic.get('file_name', ''):
             dir_path, file_path = _get_file_path(lic['file_name'])
 
             # check file exist
@@ -213,12 +213,12 @@ def download_participant_file():
     if not current_user.is_super:
         abort(401)
 
-    manager_id = request.values.get('id')
-    record_id = request.values.get('record_id')
+    manager_id = request.values.get('management_id')
+    version = int(request.values.get('version'))
 
     management_record = LicenseManagement.pull(manager_id)
     for par in management_record.participants:
-        if par['record_id'] == record_id:
+        if par.get('version', 0) == version and par.get('file_name', ''):
             dir_path, file_path = _get_file_path(par['file_name'])
 
             # check file exist
@@ -252,7 +252,7 @@ def upload_participant():
     return redirect(url_for('manage_license.details'))
 
 
-@blueprint.route("/update_participant")
+@blueprint.route("/update_participant", methods=['POST'])
 def update_participant():
     if not current_user.is_super:
         abort(401)
@@ -271,19 +271,55 @@ def update_participant():
     return redirect(url_for('manage_license.details'))
 
 
-@blueprint.route("/activate_participant")
+@blueprint.route("/activate_participant", methods=['POST'])
 def activate_participant():
-    pass
+    if not current_user.is_super:
+        abort(401)
+    management_id = request.values.get('management_id')
+    version = int(request.values.get('version'))
+    management_record = LicenseManagement.pull(management_id)
+    messages = [f"Activating participant file for {management_record.ezb_id} version {version}"]
+    ans, msg = _activate_participant(management_record, version)
+    messages.append(msg)
+    if not ans:
+        flash("<br/>".join(messages), 'error')
+    else:
+        flash("<br/>".join(messages), 'success')
+    return redirect(url_for('manage_license.details'))
 
 
-@blueprint.route("/archive_participant")
+@blueprint.route("/archive_participant", methods=['POST'])
 def archive_participant():
-    pass
+    if not current_user.is_super:
+        abort(401)
+    management_id = request.values.get('management_id')
+    version = int(request.values.get('version'))
+    management_record = LicenseManagement.pull(management_id)
+    messages = [f"Archiving participant file for {management_record.ezb_id} version {version}"]
+    ans, msg = _archive_participant(management_record, version)
+    messages.append(msg)
+    if not ans:
+        flash("<br/>".join(messages), 'error')
+    else:
+        flash("<br/>".join(messages), 'success')
+    return redirect(url_for('manage_license.details'))
 
 
-@blueprint.route("/delete_participant")
+@blueprint.route("/delete_participant", methods=['POST'])
 def delete_participant():
-    pass
+    if not current_user.is_super:
+        abort(401)
+    management_id = request.values.get('management_id')
+    version = int(request.values.get('version'))
+    management_record = LicenseManagement.pull(management_id)
+    messages = [f"Deleting participant file for {management_record.ezb_id} version {version}"]
+    ans, msg = _delete_participant(management_record, version)
+    messages.append(msg)
+    if not ans:
+        flash("<br/>".join(messages), 'error')
+    else:
+        flash("<br/>".join(messages), 'success')
+    return redirect(url_for('manage_license.details'))
 
 
 def _upload_new_license_file(lic_type, uploaded_file, license_name, admin_notes, ezb_id):
@@ -414,6 +450,17 @@ def _activate_license(management_record, version):
     return False, f"Cannot activate version {version} of license"
 
 
+def _activate_participant(management_record, version):
+    if management_record.can_activate_participant(version):
+        # archive current active participant
+        management_record = _archive_active_participant(management_record)
+        # activate requested version
+        management_record = _activate_participant_version(management_record, version)
+        management_record.save()
+        return True, f"Activated version {version} of participant"
+    return False, f"Cannot activate version {version} of participant"
+
+
 def _archive_license(management_record, version):
     if management_record.can_archive_license(version):
         # archive current active license
@@ -423,16 +470,32 @@ def _archive_license(management_record, version):
     return False, f"Cannot archive version {version} of license"
 
 
+def _archive_participant(management_record, version):
+    if management_record.can_archive_participant(version):
+        # archive current active participant
+        management_record = _archive_participant_version(management_record, version)
+        management_record.save()
+        return True, f"Archived version {version} of participant"
+    return False, f"Cannot archive version {version} of participant"
+
+
 def _delete_license(management_record, version):
     if management_record.can_delete_license(version):
         msgs = []
-        # delete license record
-        outcome, msg = _delete_license_record(management_record, version)
-        msgs.append(msg)
-        # delete file
-        ans,msg = _delete_license_file(management_record, version)
-        outcome = outcome and ans
-        msgs.append(msg)
+        version_found = False
+        for lic in management_record.licenses:
+            if lic['version'] == version:
+                version_found = True
+                # delete license record
+                outcome, msg = _delete_license_record(lic)
+                msgs.append(msg)
+                # delete file
+                ans,msg = _delete_license_file(lic)
+                outcome = outcome and ans
+                msgs.append(msg)
+        if not version_found:
+            outcome = False
+            msgs.append(f"Could not find version record for version {version}")
         # delete license version
         ans2 = management_record.delete_license(version)
         outcome = outcome and ans2
@@ -442,35 +505,80 @@ def _delete_license(management_record, version):
     return False, f"Cannot delete version {version} of license"
 
 
-def _delete_license_record(management_record, version_to_delete):
-    for lic in management_record.licenses:
-        if lic['version'] == version_to_delete:
-            if lic.get('record_id', None):
-                lic_record = License.pull(lic['record_id'])
-                if isinstance(lic_record, License):
-                    lic_record.delete()
-                    return True, f"Deleted license record {lic['record_id']}"
-                else:
-                    return True, f"Could not find license record {lic['record_id']}"
-            else:
-                return True, "There was no license record to delete"
-    return False, f"Could not find version record for version {version_to_delete}"
+def _delete_license_record(lic):
+    if lic.get('record_id', None):
+        lic_record = License.pull(lic['record_id'])
+        if isinstance(lic_record, License):
+            lic_record.delete()
+            return True, f"Deleted license record {lic['record_id']}"
+        else:
+            return True, f"Could not find license record {lic['record_id']}"
+    return True, "There was no license record to delete"
 
 
-def _delete_license_file(management_record, version_to_delete):
-    for lic in management_record.licenses:
-        if lic['version'] == version_to_delete:
-            filename = lic.get("file_name", None)
-            if filename:
-                dir_path, file_path = _get_file_path(filename)
-                if file_path.is_file():
-                    file_path.unlink()
-                    return True, f"Deleted license file {filename}"
-                else:
-                    return True, f"Could not find file {filename}"
-            else:
-                return True, f"There was no license record to delete"
-    return False, f"Could not find version record for version {version_to_delete}"
+def _delete_license_file(lic):
+    filename = lic.get("file_name", None)
+    if filename:
+        ans, msg = _delete_file(filename)
+        return ans, msg
+    else:
+        return True, f"There was no license file to delete"
+
+
+
+def _delete_participant(management_record, version):
+    if management_record.can_delete_participant(version):
+        msgs = []
+        version_found = False
+        for par in management_record.participants:
+            if par['version'] == version:
+                version_found = True
+                # delete participant record
+                outcome, msg = _delete_participant_record(par)
+                msgs.append(msg)
+                # delete file
+                ans,msg = _delete_participant_file(par)
+                outcome = outcome and ans
+                msgs.append(msg)
+        if not version_found:
+            outcome = False
+            msgs.append(f"Could not find version record for version {version}")
+        # delete participant version
+        ans2 = management_record.delete_participant(version)
+        outcome = outcome and ans2
+        msgs.append(f"Status of participant version {version} set to deleted")
+        management_record.save()
+        return outcome, "<br/>".join(msgs)
+    return False, f"Cannot delete version {version} of participant"
+
+
+def _delete_participant_record(par):
+    if par.get('record_id', None):
+        par_record = Alliance.pull(par['record_id'])
+        if isinstance(par_record, Alliance):
+            par_record.delete()
+            return True, f"Deleted participant record {par['record_id']}"
+        else:
+            return True, f"Could not find participant record {par['record_id']}"
+    return True, "There was no participant record to delete"
+
+
+def _delete_participant_file(par):
+    filename = par.get("file_name", None)
+    if filename:
+        ans, msg = _delete_file(filename)
+        return ans, msg
+    else:
+        return True, f"There was no participant file to delete"
+
+
+def _delete_file(filename):
+    dir_path, file_path = _get_file_path(filename)
+    if file_path.is_file():
+        file_path.unlink()
+        return True, f"Deleted file {filename}"
+    else:
+        return True, f"Could not find file {filename}"
 
 
 def _save_file(filename, file_bytes, version_datetime):
@@ -912,8 +1020,8 @@ def _ordered_records(managed_licenses):
         participants = rec.get('participant', [])
         ordered_licences = []
         ordered_participants = []
-        lic_display_order = display_order(rec['active_license'], len(licences))
-        par_display_order = display_order(rec['active_participant'], len(participants))
+        lic_display_order = display_order(rec.get('active_license', 0), len(licences))
+        par_display_order = display_order(rec.get('active_participant', 0), len(participants))
         classes = []
         for index in (range(rowspan)):
             lic = {'status': ''}

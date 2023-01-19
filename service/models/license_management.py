@@ -634,5 +634,6 @@ class LicenseManagement(dataobj.DataObj, dao.LicenseManagementDAO):
         for rec in new_lic_or_parti:
             if rec['version'] == version_to_delete:
                 rec['record_id'] = ''
+                rec['file_name'] = ''
         return new_versions, new_lic_or_parti
 

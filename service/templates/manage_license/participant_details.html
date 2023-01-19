@@ -18,7 +18,7 @@
     </dl>
     {% if par.get('record_id', '') or par.get('file_name', '') %}
         <dt>Download participant file</dt>
-        <dd><a href="{{ url_for('manage_license.download_participant_file', management_id=rec.id, record_id=par.get('record_id', '')) }}">
+        <dd><a href="{{ url_for('manage_license.download_participant_file', management_id=rec.id, version=par.get('version', 0)) }}">
             {{ par.get('file_name', 'participant file') }}
         </a></dd>
     {% endif %}
@@ -29,7 +29,7 @@
 </dl>
 <div class="actions">
     <h3>Actions</h3>
-    {% if par['status'] in ['active', 'validation failed'] %}
+    {% if par['status'] in ['active', 'validation_passed', 'validation failed', 'deleted'] %}
         {% include 'manage_license/actions/update_participant.html' %}
     {% endif %}
     {% if par['status'] in ['validation_passed', 'archived'] %}

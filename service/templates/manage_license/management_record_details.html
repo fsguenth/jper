@@ -14,9 +14,29 @@
         {% if rec.get('admin_notes', '') %}
             <dt>Admin notes</dt>
             <dd>
-                 <span title="{{ rec.get('admin_notes', '') }}">{{ rec.get('admin_notes', '') }}</span>
+                 <span title="{{ rec['admin_notes'] }}">{{ rec['admin_notes'] }}</span>
             </dd>
         {% endif %}
+        {% if rec.get('license_version', '') %}
+            <dt>License versions</dt>
+            <dd>
+                 <span title="{{ rec['license_version'] }}">{{ rec['license_version'] }}</span>
+            </dd>
+        {% endif %}
+        <dt>Active license version</dt>
+        <dd>
+             <span title="{{ rec.get('active_license', 0) }}">{{ rec.get('active_license', 0) }}</span>
+        </dd>
+        {% if rec.get('participant_version', '') %}
+            <dt>Participant versions</dt>
+            <dd>
+                 <span title="{{ rec['participant_version'] }}">{{ rec['participant_version'] }}</span>
+            </dd>
+        {% endif %}
+        <dt>Active participant version</dt>
+        <dd>
+             <span title="{{ rec.get('active_participant', 0) }}">{{ rec.get('active_participant', 0) }}</span>
+        </dd>
         {% if rec['rowspan'] > 1 %}
             <dd>
                 <a href="#" class="toggle">Show / hide versions</a> <br/>
