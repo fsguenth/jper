@@ -29,6 +29,8 @@ class LicenseManagement(dataobj.DataObj, dao.LicenseManagementDAO):
         "admin_notes": "<Any admin notes>",
         "active_license": "<The current active license version number>",
         "active_participant": "<The current active participant version number>",
+        "active_license_versions": ["<All versions that were active at one point or another>"]
+        "active_participant_versions": ["<All versions that were active at one point or another>"]
         "license_version": "<The latest license version number>",
         "participant_version": "<The latest license version number>",
         "license" : [{
@@ -68,7 +70,9 @@ class LicenseManagement(dataobj.DataObj, dao.LicenseManagementDAO):
                 "license": {"contains": "object"},
                 "participant": {"contains": "object"},
                 "license_versions": {"contains": "object"},
-                "participant_versions": {"contains": "object"}
+                "participant_versions": {"contains": "object"},
+                "active_license_versions": {"contains": "field", "coerce": "integer"},
+                "active_participant_versions": {"contains": "field", "coerce": "integer"}
             },
             "fields": {
                 "id": {"coerce": "unicode"},
@@ -164,16 +168,16 @@ class LicenseManagement(dataobj.DataObj, dao.LicenseManagementDAO):
             val = 0
         return val
 
+    def increment_license_version(self):
+        val = self.license_version + 1
+        self._set_single("license_version", val, coerce=dataobj.to_int())
+
     @property
     def participant_version(self):
         val = self._get_single("participant_version", coerce=dataobj.to_int())
         if not val:
             val = 0
         return val
-
-    def increment_license_version(self):
-        val = self.license_version + 1
-        self._set_single("license_version", val, coerce=dataobj.to_int())
 
     def increment_participant_version(self):
         val = self.participant_version + 1
@@ -186,16 +190,16 @@ class LicenseManagement(dataobj.DataObj, dao.LicenseManagementDAO):
             val = 0
         return val
 
+    @active_license.setter
+    def active_license(self, val):
+        self._set_single("active_license", val, coerce=dataobj.to_int())
+
     @property
     def active_participant(self):
         val = self._get_single("active_participant", coerce=dataobj.to_int())
         if not val:
             val = 0
         return val
-
-    @active_license.setter
-    def active_license(self, val):
-        self._set_single("active_license", val, coerce=dataobj.to_int())
 
     @active_participant.setter
     def active_participant(self, val):
@@ -205,17 +209,9 @@ class LicenseManagement(dataobj.DataObj, dao.LicenseManagementDAO):
     def license_versions(self):
         return self._get_list("license_versions")
 
-    @property
-    def participant_versions(self):
-        return self._get_list("participant_versions")
-
     @license_versions.setter
     def license_versions(self, vals):
         self._set_list("license_versions", vals)
-
-    @participant_versions.setter
-    def participant_versions(self, vals):
-        self._set_list("participant_versions", vals)
 
     def add_license_version(self, vals):
         if vals.get('version', None) and vals.get('status', None) and vals['status'] in LRF_STATUS:
@@ -227,6 +223,20 @@ class LicenseManagement(dataobj.DataObj, dao.LicenseManagementDAO):
             return vals
         return False
 
+    def validate_license_versions(self):
+        all_version = []
+        for version_list in self.license_states.values():
+            all_version = all_version + version_list
+        return all_version == list(set(all_version)) and max(all_version) == self.license_version
+
+    @property
+    def participant_versions(self):
+        return self._get_list("participant_versions")
+
+    @participant_versions.setter
+    def participant_versions(self, vals):
+        self._set_list("participant_versions", vals)
+
     def add_participant_version(self, vals):
         if vals.get('version', None) and vals.get('status', None) and vals['status'] in LRF_STATUS:
             do_int = dataobj.to_int()
@@ -237,6 +247,34 @@ class LicenseManagement(dataobj.DataObj, dao.LicenseManagementDAO):
             return vals
         return False
 
+    def validate_participant_versions(self):
+        all_version = []
+        for version_list in self.participant_states.values():
+            all_version = all_version + version_list
+        return all_version == list(set(all_version)) and max(all_version) == self.participant_version
+
+    @property
+    def active_license_versions(self):
+        return self._get_list("active_license_versions")
+
+    @active_license_versions.setter
+    def active_license_versions(self, vals):
+        self._set_list("active_license_versions", vals)
+
+    def add_active_license_version(self, val):
+        self._add_to_list("active_license_versions", self._coerce(val, dataobj.to_int()))
+
+    @property
+    def active_participant_versions(self):
+        return self._get_list("active_participant_versions")
+
+    @active_participant_versions.setter
+    def active_participant_versions(self, vals):
+        self._set_list("active_participant_versions", vals)
+
+    def add_active_participant_version(self, val):
+        self._add_to_list("active_participant_versions", self._coerce(val, dataobj.to_int()))
+
     @property
     def license_states(self):
         return self._version_states(self.license_versions)
@@ -244,18 +282,6 @@ class LicenseManagement(dataobj.DataObj, dao.LicenseManagementDAO):
     @property
     def participant_states(self):
         return self._version_states(self.participant_versions)
-
-    def validate_license_versions(self):
-        all_version = []
-        for version_list in self.license_states.values():
-            all_version = all_version + version_list
-        return all_version == list(set(all_version)) and max(all_version) == self.license_version
-
-    def validate_participant_versions(self):
-        all_version = []
-        for version_list in self.participant_states.values():
-            all_version = all_version + version_list
-        return all_version == list(set(all_version)) and max(all_version) == self.participant_version
 
     @property
     def licenses(self):
@@ -459,6 +485,7 @@ class LicenseManagement(dataobj.DataObj, dao.LicenseManagementDAO):
             versions = self._activate(self.license_versions, version_to_activate)
             self.license_versions = versions
             self.active_license = version_to_activate
+            self.add_active_license_version(version_to_activate)
             return True
         return False
 
@@ -473,6 +500,7 @@ class LicenseManagement(dataobj.DataObj, dao.LicenseManagementDAO):
             versions = self._activate(self.participant_versions, version_to_activate)
             self.participant_versions = versions
             self.active_participant = version_to_activate
+            self.add_active_participant_version(version_to_activate)
             return True
         return False
 
@@ -507,9 +535,11 @@ class LicenseManagement(dataobj.DataObj, dao.LicenseManagementDAO):
         to state: "deleted"
         """
         if self.can_delete_license(version_to_delete):
-            new_versions, new_licenses = self._delete(self.license_versions, self.licenses, version_to_delete)
+            new_versions, new_licenses, new_active_licences = self._delete(
+                self.license_versions, self.licenses, self.active_license_versions, version_to_delete)
             self.license_versions = new_versions
             self.licenses = new_licenses
+            self.active_license_versions = new_active_licences
             return True
         return False
 
@@ -520,9 +550,11 @@ class LicenseManagement(dataobj.DataObj, dao.LicenseManagementDAO):
         to state: "deleted"
         """
         if self.can_delete_participant(version_to_delete):
-            new_versions, new_participants = self._delete(self.participant_versions, self.participants, version_to_delete)
+            new_versions, new_participants, new_active_participants = self._delete(
+                self.participant_versions, self.participants, self.active_participant_versions, version_to_delete)
             self.participant_versions = new_versions
             self.participants = new_participants
+            self.active_participant_versions = new_active_participants
             return True
         return False
 
@@ -625,15 +657,19 @@ class LicenseManagement(dataobj.DataObj, dao.LicenseManagementDAO):
                 rec['status'] = 'archived'
         return new_versions
 
-    def _delete(self, versions, lic_or_parti, version_to_delete):
+    def _delete(self, versions, lic_or_parti, active_versions, version_to_delete):
+        # modify record in list of versions
         new_versions = deepcopy(versions)
         for rec in new_versions:
             if rec['version'] == version_to_delete:
                 rec['status'] = 'deleted'
+        # modify record in list of licenses or participants
         new_lic_or_parti = deepcopy(lic_or_parti)
         for rec in new_lic_or_parti:
             if rec['version'] == version_to_delete:
                 rec['record_id'] = ''
                 rec['file_name'] = ''
-        return new_versions, new_lic_or_parti
+        # remove version from list of active versions
+        new_active_versions = [i for i in active_versions if i != version_to_delete]
+        return new_versions, new_lic_or_parti, new_active_versions
 

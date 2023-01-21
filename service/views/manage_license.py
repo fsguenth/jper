@@ -20,22 +20,13 @@ def pretty_json(value, indent=2):
     return json.dumps(value, indent=indent, ensure_ascii=False)
 
 
-@blueprint.app_template_filter()
-def display_order(active_element, list_len):
-    reversed_order = list(reversed(range(1, list_len+1)))
-    if active_element in reversed_order:
-        reversed_order.remove(active_element)
-        reversed_order.insert(0, active_element)
-    return reversed_order
-
-
 @blueprint.route('/')
 def details():
     if not current_user.is_super:
         abort(401)
 
-    managed_licenses = LicenseManagement.pull_all_records()
-    ordered_records = _ordered_records(managed_licenses)
+    management_records = LicenseManagement.pull_all_records()
+    ordered_records = _order_lic_and_par_in_records(management_records)
 
     return render_template('manage_license/details.html',
                            allowed_lic_types=LICENSE_TYPES,
@@ -1008,54 +999,85 @@ def _convert_to_string(validation_notes):
     return "\n".join([x.strip() for x in validation_notes if x and x.strip() != ''])
 
 
-def _ordered_records(managed_licenses):
-    visible_status = ['active', 'validation passed', 'validation failed']
-    ordered_records = []
-    for rec in managed_licenses:
+def _order_lic_and_par_in_records(management_records):
+    ordered_management_records = []
+    for rec in management_records:
+
+        rec['number_of_active_licences'] = len(list(set(rec.get('active_license_versions', []))))
+        rec['number_of_active_participants'] = len(list(set(rec.get('active_participant_versions', []))))
+
+        # licence versions to be displayed
+        license_versions = rec.get('license_versions', [])
+        licences_to_display = _remove_deleted_version(license_versions)
+
+        # participant versions to be displayed
+        participant_versions = rec.get('participant_versions', [])
+        participants_to_display = _remove_deleted_version(participant_versions)
+
+        # rowspan
         rowspan = 1
-        if rec.get('license_version', 0) > 1 or rec.get('participant_version', 0) > 1:
-            rowspan = max([rec.get('license_version', 0), rec.get('participant_version', 0)])
+        if len(licences_to_display) > 1 or len(participants_to_display) > 1:
+            rowspan = max([len(licences_to_display), len(participants_to_display)])
         rec['rowspan'] = rowspan
+
+        # order to display for licence version numbers and participant version numbers
+        lic_display_order = _display_order(rec.get('active_license', 0), licences_to_display)
+        par_display_order = _display_order(rec.get('active_participant', 0), participants_to_display)
+
+        # order licences for display
         licences = rec.get('license', [])
+        ordered_licences = _order_record_for_display(lic_display_order, licences, license_versions)
+        rec['license'] = ordered_licences
+
+        # order participants for display
         participants = rec.get('participant', [])
-        ordered_licences = []
-        ordered_participants = []
-        lic_display_order = display_order(rec.get('active_license', 0), len(licences))
-        par_display_order = display_order(rec.get('active_participant', 0), len(participants))
+        ordered_participants = _order_record_for_display(par_display_order, participants, participant_versions)
+        rec['participant'] = ordered_participants
+
+        # add class
         classes = []
         for index in (range(rowspan)):
-            lic = {'status': ''}
-            par = {'status': ''}
-            if len(licences) >= (index + 1):
-                for l in licences:
-                    if l.get('version', '') == lic_display_order[index]:
-                        lic = l
-                        break
-                for v in rec.get('license_versions', []):
-                    if v['version'] == lic.get('version', ''):
-                      lic['status'] = v['status']
-                ordered_licences.append(lic)
-            if len(participants) >= (index+1):
-                for p in participants:
-                    if p.get('version', '') == par_display_order[index]:
-                        par = p
-                        break
-                for v in rec.get('participant_versions', []):
-                    if v['version'] == par.get('version', ''):
-                        par['status'] = v['status']
-                ordered_participants.append(par)
             if index == 0 and rowspan > 1:
                 cls = "tablesorter-hasChildRow"
             elif index > 0:
                 cls = "tablesorter-childRow"
-                if lic['status'] not in visible_status and par['status'] not in visible_status:
-                    cls += ' collapse'
             else:
                 cls = ""
             classes.append(cls)
         rec['class'] = classes
-        rec['license'] = ordered_licences
-        rec['participant'] = ordered_participants
-        ordered_records.append(rec)
-    return ordered_records
 
+        ordered_management_records.append(rec)
+    return ordered_management_records
+
+
+def _remove_deleted_version(versions):
+    versions_to_display = []
+    for v in versions:
+        if v['status'] != 'deleted':
+            versions_to_display.append(v['version'])
+    return versions_to_display
+
+
+def _display_order(active_element, versions):
+    reversed_order = deepcopy(versions)
+    reversed_order.reverse()
+    if active_element in reversed_order:
+        reversed_order.remove(active_element)
+        reversed_order.insert(0, active_element)
+    return reversed_order
+
+
+def _order_record_for_display(display_order, records, versions):
+    ordered_records = []
+    for version_to_display in display_order:
+        record = None
+        for p in records:
+            if p.get('version', '') == version_to_display:
+                record = p
+                break
+        for v in versions:
+            if v.get('version', 0) == version_to_display:
+                record['status'] = v.get('status', '')
+                break
+        ordered_records.append(record)
+    return ordered_records

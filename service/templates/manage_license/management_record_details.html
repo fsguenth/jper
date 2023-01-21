@@ -17,26 +17,34 @@
                  <span title="{{ rec['admin_notes'] }}">{{ rec['admin_notes'] }}</span>
             </dd>
         {% endif %}
-        {% if rec.get('license_version', '') %}
-            <dt>License versions</dt>
+        {% if rec.get('number_of_active_licences', 0) > 1 %}
+            <dt>Total number of active license versions</dt>
             <dd>
-                 <span title="{{ rec['license_version'] }}">{{ rec['license_version'] }}</span>
+                 <span title="{{ rec['number_of_active_licences'] }}">{{ rec['number_of_active_licences'] }}</span>
             </dd>
         {% endif %}
-        <dt>Active license version</dt>
-        <dd>
-             <span title="{{ rec.get('active_license', 0) }}">{{ rec.get('active_license', 0) }}</span>
-        </dd>
-        {% if rec.get('participant_version', '') %}
-            <dt>Participant versions</dt>
+        {% if rec.get('active_license', 0) > 0 %}
+            <dt>Current active license version</dt>
             <dd>
-                 <span title="{{ rec['participant_version'] }}">{{ rec['participant_version'] }}</span>
+                 <span title="{{ rec.get('active_license', 0) }}">{{ rec.get('active_license', 0) }}</span>
+            </dd>
+        {% else %}
+            <dd>No active license</dd>
+        {% endif %}
+        {% if rec.get('number_of_active_participants', 0) > 1 %}
+            <dt>Total number of active Participant versions</dt>
+            <dd>
+                 <span title="{{ rec['number_of_active_participant'] }}">{{ rec['number_of_active_participant'] }}</span>
             </dd>
         {% endif %}
-        <dt>Active participant version</dt>
-        <dd>
-             <span title="{{ rec.get('active_participant', 0) }}">{{ rec.get('active_participant', 0) }}</span>
-        </dd>
+        {% if rec.get('active_participant', 0) > 0 %}
+            <dt>Current active participant version</dt>
+            <dd>
+                 <span title="{{ rec.get('active_participant', 0) }}">{{ rec.get('active_participant', 0) }}</span>
+            </dd>
+        {% else %}
+            <dd>No active participant</dd>
+        {% endif %}
         {% if rec['rowspan'] > 1 %}
             <dd>
                 <a href="#" class="toggle">Show / hide versions</a> <br/>
