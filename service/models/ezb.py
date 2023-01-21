@@ -9,7 +9,6 @@ from copy import deepcopy
 from octopus.core import app
 from octopus.lib import dataobj
 from service import dao
-from service.__utils import ez_dao_utils, ez_query_maker
 
 LICENSE_TYPES = ["alliance", "national", "gold", "deal", "fid", "hybrid"]
 LRF_STATUS = ["validation failed", "validation passed", "active", "archived", ]
@@ -17,11 +16,6 @@ LRF_FILE_TYPES = ["license", "participant"]
 
 LIC_STATUS_ACTIVE = 'active'
 LIC_STATUS_INACTIVE = 'inactive'
-
-
-def get_first_ezb_id(lic_like_obj: Union["Alliance", "License"]) -> str:
-    ids = [_id for _id in lic_like_obj.get_identifier('ezb') if _id]
-    return ids[0] if ids else None
 
 
 class Alliance(dataobj.DataObj, dao.AllianceDAO):
@@ -99,9 +93,6 @@ class Alliance(dataobj.DataObj, dao.AllianceDAO):
         }
         self._add_struct(struct)
         super(Alliance, self).__init__(raw=raw)
-
-    def get_first_ezb_id(self):
-        return get_first_ezb_id(self)
 
     def is_active(self) -> bool:
         return self.status == LIC_STATUS_ACTIVE
@@ -511,9 +502,6 @@ class License(dataobj.DataObj, dao.LicenseDAO):
     def is_active(self) -> bool:
         return self.status == LIC_STATUS_ACTIVE
 
-    def get_first_ezb_id(self):
-        return get_first_ezb_id(self)
-
     @property
     def status(self):
         return self._get_single("status", coerce=dataobj.to_unicode())
@@ -861,148 +849,3 @@ class License(dataobj.DataObj, dao.LicenseDAO):
         return res
 
 
-class LicRelatedFile(dataobj.DataObj, dao.LicRelatedFileDAO):
-
-    def __init__(self, raw=None):
-        struct = {
-            "fields": {
-                "id": {"coerce": "unicode"},
-                "created_date": {"coerce": "utcdatetime"},
-                "last_updated": {"coerce": "utcdatetime"},
-                "file_name": {"coerce": "unicode"},
-                "type": {"coerce": "unicode", "allowed_values": LICENSE_TYPES},
-                "ezb_id": {"coerce": "unicode"},
-                "name": {"coerce": "unicode"},
-                "status": {"coerce": "unicode", "allowed_values": LRF_STATUS},
-                "upload_date": {"coerce": "utcdatetime"},
-                "admin_notes": {"coerce": "unicode"},
-                "validation_notes": {"coerce": "unicode"},
-                "record_id": {"coerce": "unicode"},
-                "file_type": {"coerce": "unicode", "allowed_values": LRF_FILE_TYPES},
-                # if this record is for participant, it will contain lic_related_file_id of license
-                "lic_related_file_id": {"coerce": "unicode"},
-            },
-        }
-
-        self._add_struct(struct)
-        super(LicRelatedFile, self).__init__(raw=raw)
-
-    def get_related_record(self) -> Optional[Union[License, Alliance]]:
-        return ez_dao_utils.object_query_first(self.get_record_cls(), self.record_id)
-
-    def get_record_cls(self) -> Type[Union[License, Alliance]]:
-        record_cls = License if self.is_license() else Alliance
-        return record_cls
-
-    def is_license(self) -> bool:
-        return self.data.get("file_type") == "license"
-
-    def is_active(self) -> bool:
-        return self.data.get("status") == 'active'
-
-    @classmethod
-    def pull_all_by_query_str(cls, key, val, size=100) -> Iterable["LicRelatedFile"]:
-        query = ez_query_maker.query_key_by_query_str(key, val)
-        query['size'] = size
-        return ez_dao_utils.query_objs(cls, query)
-
-    @classmethod
-    def pull_all_by_status(cls, status, **kwargs) -> Iterable["LicRelatedFile"]:
-        return cls.pull_all_by_query_str('status', status, **kwargs)
-
-    @classmethod
-    def save_by_raw(cls, lrf_raw: dict, blocking=False) -> "LicRelatedFile":
-        new_lrf = cls(raw=lrf_raw)
-        new_lrf.save()
-        if blocking:
-            ez_dao_utils.wait_unit_id_found(cls, new_lrf.id)
-        return new_lrf
-
-    @property
-    def ezb_id(self):
-        return self._get_single("ezb_id", coerce=dataobj.to_unicode())
-
-    @ezb_id.setter
-    def ezb_id(self, val):
-        self._set_single("ezb_id", val, coerce=dataobj.to_unicode())
-
-    @property
-    def status(self):
-        return self._get_single("status", coerce=dataobj.to_unicode())
-
-    @status.setter
-    def status(self, val):
-        self._set_single("status", val, coerce=dataobj.to_unicode())
-
-    @property
-    def record_id(self):
-        return self._get_single("record_id", coerce=dataobj.to_unicode())
-
-    @record_id.setter
-    def record_id(self, val):
-        self._set_single("record_id", val, coerce=dataobj.to_unicode())
-
-    @property
-    def file_name(self):
-        return self._get_single("file_name", coerce=dataobj.to_unicode())
-
-    @file_name.setter
-    def file_name(self, val):
-        self._set_single("file_name", val, coerce=dataobj.to_unicode())
-
-    @property
-    def name(self):
-        return self._get_single("name", coerce=dataobj.to_unicode())
-
-    @name.setter
-    def name(self, val):
-        self._set_single("name", val, coerce=dataobj.to_unicode())
-
-    @property
-    def admin_notes(self):
-        return self._get_single("admin_notes", coerce=dataobj.to_unicode())
-
-    @admin_notes.setter
-    def admin_notes(self, val):
-        self._set_single("admin_notes", val, coerce=dataobj.to_unicode())
-
-    @property
-    def validation_notes(self):
-        return self._get_single("validation_notes", coerce=dataobj.to_unicode())
-
-    @validation_notes.setter
-    def validation_notes(self, val):
-        self._set_single("validation_notes", val, coerce=dataobj.to_unicode())
-
-    @property
-    def lic_related_file_id(self):
-        return self._get_single("lic_related_file_id", coerce=dataobj.to_unicode())
-
-    @lic_related_file_id.setter
-    def lic_related_file_id(self, val):
-        self._set_single("lic_related_file_id", val, coerce=dataobj.to_unicode())
-
-    @property
-    def upload_date(self):
-        return self._get_single("upload_date", coerce=dataobj.date_str())
-
-    @upload_date.setter
-    def upload_date(self, val):
-        self._set_single("upload_date", val, coerce=dataobj.date_str(), allow_coerce_failure=True,
-                         allow_none=False, ignore_none=True)
-
-    @property
-    def type(self):
-        return self._get_single("type", coerce=dataobj.to_unicode())
-
-    @type.setter
-    def type(self, val):
-        self._set_single("type", val, coerce=dataobj.to_unicode())
-
-    @property
-    def file_type(self):
-        return self._get_single("file_type", coerce=dataobj.to_unicode())
-
-    @file_type.setter
-    def file_type(self, val):
-        self._set_single("file_type", val, coerce=dataobj.to_unicode())

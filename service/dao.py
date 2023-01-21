@@ -12,7 +12,6 @@ from esprit import raw
 from esprit.dao import DomainObject
 
 from octopus.modules.es import dao
-from service.__utils import ez_dao_utils
 
 
 class ContentLogDAO(dao.ESDAO):
@@ -450,7 +449,6 @@ def pull_all_by_status_and_id(domain_obj_cls: Type[DomainObject], status: str,
         "sort": [{"last_updated": {"order": "asc"}}]
     }
 
-    # results = ez_dao_utils.query_objs(domain_obj_cls, query, wrap=True)
     # return results
     obs = domain_obj_cls.object_query(q=query)
     if len(obs) > 0:
@@ -471,7 +469,6 @@ def pull_all_by_id(domain_obj_cls: Type[DomainObject], ezb_id: str) -> Iterable:
         "sort": [{"last_updated": {"order": "asc"}}]
     }
 
-    # results = ez_dao_utils.query_objs(domain_obj_cls, query, wrap=True)
     # return results
     obs = domain_obj_cls.object_query(q=query)
     if len(obs) > 0:
