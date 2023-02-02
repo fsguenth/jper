@@ -168,6 +168,12 @@ class LicenseManagement(dataobj.DataObj, dao.LicenseManagementDAO):
             val = 0
         return val
 
+    @license_version.setter
+    def license_version(self, val):
+        if not val:
+            return
+        self._set_single("license_version", val, coerce=dataobj.to_int())
+
     def increment_license_version(self):
         val = self.license_version + 1
         self._set_single("license_version", val, coerce=dataobj.to_int())
@@ -178,6 +184,12 @@ class LicenseManagement(dataobj.DataObj, dao.LicenseManagementDAO):
         if not val:
             val = 0
         return val
+
+    @participant_version.setter
+    def participant_version(self, val):
+        if not val:
+            return
+        self._set_single("participant_version", val, coerce=dataobj.to_int())
 
     def increment_participant_version(self):
         val = self.participant_version + 1
