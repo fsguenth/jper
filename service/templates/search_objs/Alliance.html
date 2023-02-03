@@ -65,7 +65,7 @@
                     }],
                     [{
                         "pre" : format_result_row_pre("Identifier (EZB)"),
-                        field: "identifier.id.exact",
+                        field: "identifier.id",
                         "post": format_result_row_post(),
                     }],
                     [{
@@ -90,6 +90,7 @@
                     {field: "last_updated", display: "Last updated"},
                 ],
                 fieldOptions: [
+                    {field: "identifier.id.exact", display: "Record EZB id"},
                     {field: "participant.name", display: "Participant name"},
                     {field: "participant.identifier.id.exact", display: "Participant Id (EZB)"},
                     {field: "license_id", display: "License id"},
