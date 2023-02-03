@@ -1,0 +1,7 @@
+<div>
+    <form method="POST" action="{{ url_for('manage_license.delete_participant') }}">
+        <input type="hidden" name="management_id" value="{{ rec['id'] }}">
+        <input type="hidden" name="version" value="{{ par.get('version') }}">
+        <input class="act_btn" type="submit" value="Delete participant"/>
+    </form>
+</div>

@@ -22,7 +22,7 @@
         idField: function (val, resultobj, renderer) {
             var field = '<div><h3>';
             if (resultobj.id) {
-                display = "<a href='/license-manage/view-participant?record_id=" + resultobj.id + "'>" + resultobj.id + "</a>";
+                display = "<a href='/manage_license/view_participant?record_id=" + resultobj.id + "'>" + resultobj.id + "</a>";
                 return display;
             } else {
                 return false;
@@ -31,7 +31,7 @@
         licenseIdField: function (val, resultobj, renderer) {
             var field = '<div><h3>';
             if (resultobj.id) {
-                display = "<a href='/license-manage/view-license?record_id=" + resultobj.license_id + "'>" + resultobj.license_id + "</a>";
+                display = "<a href='/manage_license/view_license?record_id=" + resultobj.license_id + "'>" + resultobj.license_id + "</a>";
                 return display;
             } else {
                 return false;
@@ -65,7 +65,7 @@
                     }],
                     [{
                         "pre" : format_result_row_pre("Identifier (EZB)"),
-                        field: "identifier.id.exact",
+                        field: "identifier.id",
                         "post": format_result_row_post(),
                     }],
                     [{
@@ -90,6 +90,7 @@
                     {field: "last_updated", display: "Last updated"},
                 ],
                 fieldOptions: [
+                    {field: "identifier.id.exact", display: "Record EZB id"},
                     {field: "participant.name", display: "Participant name"},
                     {field: "participant.identifier.id.exact", display: "Participant Id (EZB)"},
                     {field: "license_id", display: "License id"},
