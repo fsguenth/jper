@@ -305,6 +305,10 @@ margin-bottom:0;
     content: "\2796"; /* Unicode character for "minus" sign (-) */
 }
 
+.nav__item.active:after {
+    content: None;
+}
+
 .lic_upload label {
     min-width: 8em;
     display: inline-block;
@@ -362,4 +366,12 @@ div.actions div {
     display: inline-block;
     width: 75%;
     vertical-align: top;
+}
+
+.tablesorter-hasChildRow > td {
+    background: #e3e6e2;
+}
+
+.tablesorter-childRow > td {
+    background: #d5d8dc;
 }

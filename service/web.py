@@ -99,8 +99,8 @@ if app.config.get("FUNCTIONAL_TEST_MODE", False):
     from service.views.test import blueprint as test
     app.register_blueprint(test, url_prefix="/test")
 
-from service.views import license_manage
-app.register_blueprint(license_manage.blueprint, url_prefix="/license-manage")
+from service.views import manage_license
+app.register_blueprint(manage_license.blueprint, url_prefix="/manage_license")
 
 # this allows us to override the standard static file handling with our own dynamic version
 @app.route("/static/<path:filename>")

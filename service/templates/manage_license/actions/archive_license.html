@@ -1,0 +1,9 @@
+<div>
+    <form method="POST" action="{{ url_for('manage_license.archive_license') }}">
+        <input type="hidden" name="management_id" value="{{ rec['id'] }}">
+        <input type="hidden" name="version" value="{{ lic.get('version') }}">
+        <button type="submit" class="btn-warning long_act_btn act_btn">
+            Archive license
+        </button>
+    </form>
+</div>
