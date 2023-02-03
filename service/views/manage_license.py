@@ -657,6 +657,7 @@ def _archive_license_version(management_record, version):
                 if license['version'] == management_record.active_license:
                     license['record_id'] = record_id
             management_record.licenses = licenses
+            management_record.active_license = 0
     return management_record
 
 
@@ -674,6 +675,7 @@ def _archive_participant_version(management_record, version):
                 if participant['version'] == management_record.active_participant:
                     participant['record_id'] = record_id
             management_record.participants = participants
+            management_record.active_participant = 0
     return management_record
 
 
