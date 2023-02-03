@@ -202,10 +202,10 @@ def create_management_records(lic_related_file, testing=True):
                     json.dump(participants_to_archive, f, indent=4)
         elif number_active_license == 1:
             add_management_record(management_record)
-            # if licences_to_archive:
-            #     archive_licences(licences_to_archive)
-            # if participants_to_archive:
-            #     archive_participants(participants_to_archive)
+            if licences_to_archive:
+                archive_licences(licences_to_archive)
+            if participants_to_archive:
+                archive_participants(participants_to_archive)
         print('-' * 10)
 
 
@@ -288,7 +288,7 @@ if __name__ == "__main__":
     }
     """
 
-    create_management_records('lic_related_file_production.json', testing=False)
+    create_management_records('logs/jper-lic_related_file-production.json', testing=False)
 
 
 
