@@ -24,6 +24,8 @@
                     {% if rec.get('license', []) | length >= index + 1 %}
                         {% set lic = rec['license'][index] %}
                         {% include 'manage_license/license_details.html' %}
+                    {% elif index == 0 %}
+                        {% include 'manage_license/actions/update_license.html' %}
                     {% endif %}
                 </td>
                 <td>
