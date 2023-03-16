@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1>Manage license and participant files</h1>
+
+{% include 'manage_license/actions/upload_new_license.html' %}
+
+<h2>License and Participant Files</h2>
+<table id="license_management_table" class="file_tbl tablesorter-green">
+    <thead>
+    <tr>
+        <th>EZB Id</th>
+        <th>Type</th>
+        <th style="width:20%">Details</th>
+        <th>License file details</th>
+        <th>Participant file details</th>
+    </tr>
+    </thead>
+    {% for rec in managed_licenses %}
+        {% for index in range(rec.get('rowspan', 1)) %}
+            <tr class="{{ rec['class'][index] }}">
+                {% include 'manage_license/management_record_details.html' %}
+                <td>
+                    {% if rec.get('license', []) | length >= index + 1 %}
+                        {% set lic = rec['license'][index] %}
+                        {% include 'manage_license/license_details.html' %}
+                    {% elif index == 0 %}
+                        {% include 'manage_license/actions/update_license.html' %}
+                    {% endif %}
+                </td>
+                <td>
+                    {% if rec.get('participant', []) | length >= index + 1 %}
+                        {% set par = rec['participant'][index] %}
+                        {% include 'manage_license/participant_details.html' %}
+                    {% elif index == 0 %}
+                        {% include 'manage_license/actions/upload_new_participant.html' %}
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+    {% endfor %}
+</table>
+
+<script>
+    $('.trigger_file_btn').click((e) => {
+        e.preventDefault()
+        const jq_form = $(e.target.parentElement)
+        const jq_file = jq_form.find('input[type=file]')
+        jq_file.trigger('click')
+    })
+
+    $('.submit_on_change').change((e) => {
+        const jq_file = $(e.target)
+        if (jq_file[0].files.length) {
+            jq_file.parent('form').submit()
+        }
+
+        // disable submit button
+        const jq_submit_btn = jq_file.parent().find('.trigger_file_btn')
+        jq_submit_btn.attr("disabled", true);
+    })
+
+    $('.act_btn').click((e) => {
+        const jq_btn = $(e.target)
+        jq_btn.attr("disabled", true);
+        jq_btn.parent('form').submit()
+    })
+
+    $('.toggle_detail_btn').click((e) => {
+        e.preventDefault()
+        const jq_btn = $(e.target)
+        const jq_detail = $('#' + jq_btn.attr('toggle_detail'))
+        jq_detail.toggle()
+    })
+
+    $("#license_management_table").tablesorter();
+    $("#license_management_table").tablesorter({
+            widgets: ["zebra"],
+            widgetOptions : {
+                zebra : [ "normal-row", "alt-row" ]
+            }
+        });
+    $('.tablesorter-childRow td').hide();
+    $('.tablesorter').delegate('.toggle', 'click' ,function() {
+
+            // use "nextUntil" to toggle multiple child rows
+            // toggle table cells instead of the row
+            // $(this).closest('tr').nextUntil('tr:not(.tablesorter-childRow)').find('td').toggle();
+            // in v2.5.12, the parent row now has the class tablesorter-hasChildRow
+            // so you can use this code as well
+            $(this).closest('tr').nextUntil('tr.tablesorter-hasChildRow').find('td').toggle();
+
+            return false;
+    });
+</script>
+{% endblock %}

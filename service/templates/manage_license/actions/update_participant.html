@@ -1,0 +1,11 @@
+<div>
+    <form method="POST"
+          action="{{ url_for('manage_license.update_participant') }}"
+          enctype="multipart/form-data">
+        <input type="hidden" name="management_id" value="{{ rec['id'] }}">
+        <input type="file" name="file" class="hide_file_upload submit_on_change"/>
+        <button class="btn-primary long_act_btn trigger_file_btn">
+            Update participant
+        </button>
+    </form>
+</div>
