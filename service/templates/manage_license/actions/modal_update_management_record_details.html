@@ -1,0 +1,22 @@
+<div class="modal" id="updateManagementRecordModal">
+  <h2>Updating {{ rec['ezb_id'] }}</h2>
+  <div>
+    <form method="POST" action="{{ url_for('manage_license.update_management_record_details') }}"
+          enctype="multipart/form-data">
+        <input type="hidden" name="record_id" value="{{ rec['id'] }}">
+        <input type="hidden" name="ezb_id" value="{{ rec['ezb_id'] }}">
+        <div>
+            <label for="license_name">License Name:</label>
+            <input type="text" name="license_name" id="license_name"/><br/><br/>
+        </div>
+        <div>
+            <label for="admin_notes">Admin Notes: </label>
+            <textarea name="admin_notes" id="admin_notes"></textarea><br/><br/>
+        </div>
+        <div>
+            <input type="submit" value="Submit"/><br/><br/>
+        </div>
+    </form>
+  </div>
+  <a href="#" rel="modal:close">Close</a>
+</div>
