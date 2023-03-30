@@ -50,6 +50,8 @@
                 <a href="#" class="toggle">Show / hide versions</a> <br/>
             </dd>
         {% endif %}
+        <div><a href="#updateManagementRecordModal" class="btn" rel="modal:open">Update details</a></div>
+        {% include 'manage_license/actions/modal_update_management_record_details.html' %}
     </td>
 {% else %}
     <td></td>

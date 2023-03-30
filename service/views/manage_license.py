@@ -313,6 +313,26 @@ def delete_participant():
     return redirect(url_for('manage_license.details'))
 
 
+@blueprint.route("/update_management_record_details", methods=['POST'])
+def update_management_record_details():
+    if not current_user.is_super:
+        abort(401)
+
+    license_name = request.values.get('license_name', '')
+    ezb_id = request.values.get('ezb_id', '')
+    admin_notes = request.values.get('admin_notes', '')
+    record_id = request.values.get('record_id', '')
+
+    messages = [f"Updating details for {ezb_id}"]
+    ans, msg = _update_management_record(record_id, ezb_id, license_name, admin_notes)
+    messages.append(msg)
+    if not ans:
+        flash("<br/>".join(messages), 'error')
+    else:
+        flash("<br/>".join(messages), 'success')
+    return redirect(url_for('manage_license.details'))
+
+
 def _upload_new_license_file(lic_type, uploaded_file, license_name, admin_notes, ezb_id):
     if uploaded_file is None:
         return False, 'parameter "file" not found'
@@ -608,6 +628,20 @@ def _create_management_record(ezb_id, license_name, admin_notes, lic_type):
     if lic_type in LICENSE_TYPES:
         management_record.type = lic_type
     return True, '', management_record
+
+
+def _update_management_record(record_id, ezb_id, license_name, admin_notes):
+    management_record = LicenseManagement.pull(record_id)
+    if not management_record:
+        return False, f"Record {ezb_id} does not exist"
+    if not license_name and not admin_notes:
+        return False, f"Nothing to update for ezb_id {ezb_id}"
+    if license_name:
+        management_record.name = license_name
+    if admin_notes:
+        management_record.admin_notes = admin_notes
+    management_record.save()
+    return True, f"Record {ezb_id} updated"
 
 
 def _create_license(license_id, ezb_id, license_name, license_type, license_data, license_status="active"):
