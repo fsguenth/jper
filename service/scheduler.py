@@ -265,64 +265,67 @@ def processftp():
             for udir in os.listdir(os.path.join(userdir, dir)):
                 thisdir = os.path.join(userdir, dir, udir)
                 app.logger.debug('Scheduler - processing ' + thisdir + ' for Account:' + dir)
-                for xpub in os.listdir(thisdir):
-                    pub = xpub
-                    # should be a dir per publication notification - that is what they are told to provide
-                    # and at this point there should just be one pub in here, whether it be a file or directory or archive
-                    # if just a file, even an archive, dump it into a directory so it can be zipped easily
-                    thisfile = os.path.join(thisdir, pub)
-                    if os.path.isfile(thisfile):
-                        nf = uuid.uuid4().hex
-                        os.makedirs(os.path.join(thisdir, nf))
-                        newloc = os.path.join(thisdir, nf, '')
-                        shutil.move(thisfile, newloc)
-                        pub = nf
-                        app.logger.debug('Moved ' + thisfile + ' to ' + newloc)
-                    else:
-                        app.logger.error('Did not move file ' + thisfile)
-
-                    # by now this should look like this:
-                    # /Incoming/ftptmp/<useruuid>/<transactionuuid>/<uploadeddirORuuiddir>/<thingthatwasuploaded>
-
-                    # they should provide a directory of files or a zip, but it could just be one file
-                    # but we don't know the hierarchy of the content, so we have to unpack and flatten it all
-                    # unzip and pull all docs to the top level then zip again. Should be jats file at top now
-                    flatten(thisdir + '/' + pub)
-
-                    # 2019-11-18 TD : 'flatten' has been modified to process bulk deliveries
-                    #                 (i.e. more then one pub per zip file!) as well.
-                    #                 If it is bulk, there maybe a lot of zip files, and
-                    #                 we need a loop:
-                    pdir = thisdir
-                    if os.path.isdir(thisdir + '/' + pub + '/' + pub):
-                        pdir = thisdir + '/' + pub + '/' + pub
-                    #
-                    for singlepub in os.listdir(pdir):
-                        # 2016-11-30 TD : Since there are (at least!?) 2 formats now available, we have to find out
-                        # 2019-11-18 TD : original path without loop where zip file is packed
-                        #                 from  source folder "thisdir + '/' + pub"
-                        pkg_fmt = pkgformat(os.path.join(pdir, singlepub))
-                        pkg = os.path.join(pdir, singlepub + '.zip')
-                        zip(os.path.join(pdir, singlepub), pkg)
-
-                        # create a notification and send to the API to join the unroutednotification index
-                        notification = {
-                            "content": {"packaging_format": pkg_fmt}
-                        }
-                        files = [
-                            ("metadata", ("metadata.json", json.dumps(notification), "application/json")),
-                            ("content", ("content.zip", open(pkg, "rb"), "application/zip"))
-                        ]
-                        app.logger.debug('Scheduler - processing POSTing ' + pkg + ' ' + json.dumps(notification))
-                        resp = requests.post(apiurl, files=files, verify=False)
-                        if str(resp.status_code).startswith('4') or str(resp.status_code).startswith('5'):
-                            app.logger.error(
-                                'Scheduler - processing completed with POST failure to ' + apiurl + ' - ' + str(
-                                    resp.status_code) + ' - ' + resp.text)
+                try:
+                    for xpub in os.listdir(thisdir):
+                        pub = xpub
+                        # should be a dir per publication notification - that is what they are told to provide
+                        # and at this point there should just be one pub in here, whether it be a file or directory or archive
+                        # if just a file, even an archive, dump it into a directory so it can be zipped easily
+                        thisfile = os.path.join(thisdir, pub)
+                        if os.path.isfile(thisfile):
+                            nf = uuid.uuid4().hex
+                            os.makedirs(os.path.join(thisdir, nf))
+                            newloc = os.path.join(thisdir, nf, '')
+                            shutil.move(thisfile, newloc)
+                            pub = nf
+                            app.logger.debug('Moved ' + thisfile + ' to ' + newloc)
                         else:
-                            app.logger.info(
-                                'Scheduler - processing completed with POST to ' + apiurl + ' - ' + str(resp.status_code))
+                            app.logger.error('Did not move file ' + thisfile)
 
+                        # by now this should look like this:
+                        # /Incoming/ftptmp/<useruuid>/<transactionuuid>/<uploadeddirORuuiddir>/<thingthatwasuploaded>
+
+                        # they should provide a directory of files or a zip, but it could just be one file
+                        # but we don't know the hierarchy of the content, so we have to unpack and flatten it all
+                        # unzip and pull all docs to the top level then zip again. Should be jats file at top now
+                        flatten(thisdir + '/' + pub)
+
+                        # 2019-11-18 TD : 'flatten' has been modified to process bulk deliveries
+                        #                 (i.e. more then one pub per zip file!) as well.
+                        #                 If it is bulk, there maybe a lot of zip files, and
+                        #                 we need a loop:
+                        pdir = thisdir
+                        if os.path.isdir(thisdir + '/' + pub + '/' + pub):
+                            pdir = thisdir + '/' + pub + '/' + pub
+                        #
+                        for singlepub in os.listdir(pdir):
+                            # 2016-11-30 TD : Since there are (at least!?) 2 formats now available, we have to find out
+                            # 2019-11-18 TD : original path without loop where zip file is packed
+                            #                 from  source folder "thisdir + '/' + pub"
+                            pkg_fmt = pkgformat(os.path.join(pdir, singlepub))
+                            pkg = os.path.join(pdir, singlepub + '.zip')
+                            zip(os.path.join(pdir, singlepub), pkg)
+
+                            # create a notification and send to the API to join the unroutednotification index
+                            notification = {
+                                "content": {"packaging_format": pkg_fmt}
+                            }
+                            files = [
+                                ("metadata", ("metadata.json", json.dumps(notification), "application/json")),
+                                ("content", ("content.zip", open(pkg, "rb"), "application/zip"))
+                            ]
+                            app.logger.debug('Scheduler - processing POSTing ' + pkg + ' ' + json.dumps(notification))
+                            resp = requests.post(apiurl, files=files, verify=False)
+                            if str(resp.status_code).startswith('4') or str(resp.status_code).startswith('5'):
+                                app.logger.error(
+                                    'Scheduler - processing completed with POST failure to ' + apiurl + ' - ' + str(
+                                        resp.status_code) + ' - ' + resp.text)
+                            else:
+                                log_data = f"{apiurl} - {resp.status_code} - {resp.text} - {pkg} - {udir}"
+                                app.logger.info(f"Scheduler - processing completed with POST to {log_data}")
+                except Exception as e:
+                    app.logger.error(
+                        f"Scheduler - failed processing {thisdir} for Account {dir}: \"{str(e)}\"")
                 shutil.rmtree(userdir + '/' + dir + '/' + udir,
                               ignore_errors=True)  # 2019-12-02 TD : kill "udir" folder no matter what status
 
