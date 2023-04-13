@@ -38,6 +38,12 @@
                         {% else %}
                             <td>Subject repository</td>
                         {% endif %}
+                    {% elif 'repository' in user['role'] and 'participant' in user['role'] %}
+                        {% if 'passive' in user['role'] %}
+                            <td>Participant repository (passive)</td>
+                        {% else %}
+                            <td>Participant repository</td>
+                        {% endif %}
                     {% elif 'repository' in user['role'] %}
                         {% if 'passive' in user['role'] %}
                             <td>Repository (passive)</td>
