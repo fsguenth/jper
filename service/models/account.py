@@ -223,8 +223,6 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
     def set_passive(self):
         if self.has_role('active'):
             self.remove_role('active')
-        if self.has_role('participant'):
-            self.remove_role('participant')
         if not self.has_role('passive'):
             self.add_role('passive')
 
