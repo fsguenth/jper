@@ -415,6 +415,20 @@
 							<label for="active_no">Passive</label>
 						</div>
 					</form>
+                    <!-- Participant role check box -->
+                    {% set participant_check = "" %}
+                    {% set participant_action = "become" %}
+                    {% if account.has_role('participant') %}
+                        {% set participant_check = "checked" %}
+                        {% set participant_action = "cease" %}
+                    {% endif %}
+                    <form class="form" method="POST" action="{{request.path}}/{{participant_action}}/participant" id="form_participant">
+                        <div class="form-fields__item--text form-fields__item--single">
+                            <input type="checkbox" id="update_participant" value="participant" name='role' {{participant_check}}
+                                   onclick='document.getElementById("form_participant").submit()'>
+                            <label for="update_participant">Participant</label><br>
+                        </div>
+                    </form>
 				{% endif %}
 				{% set match_check = "" %}
 				{% set match_action = "become" %}
