@@ -1275,12 +1275,16 @@ class XSLT(object):
           <xsl:attribute name="serverState">
             <xsl:text>unpublished</xsl:text>
           </xsl:attribute>
+          <xsl:if test="//article-meta/counts/page-count/@count">
+            <xsl:attribute name="pageNumber">
+              <xsl:value-of select="//article-meta/counts/page-count/@count"/>
+            </xsl:attribute>
+          </xsl:if>
           <!-- 
           language="eng"
           type="article|bachelorthesis|bookpart|book|conferenceobject|contributiontoperiodical|coursematerial|diplom|doctoralthesis|examen|habilitation|image|lecture|magister|masterthesis|movingimage|other|periodical|preprint|report|review|studythesis|workingpaper"
           pageFirst=""
           pageLast=""
-          pageNumber=""
           edition=""
           volume=""
           issue=""
@@ -1296,6 +1300,14 @@ class XSLT(object):
             <xsl:attribute name="language"><xsl:value-of select="$langOut"/></xsl:attribute>
             <xsl:value-of select="//article-meta/title-group/article-title"/>
           </titleMain>
+          <xsl:for-each select="//article-meta/title-group/trans-title-group/trans-title">
+            <titleMain>
+              <xsl:if test="@xml:lang">
+                <xsl:attribute name="language"><xsl:value-of select="@xml:lang"/></xsl:attribute>
+              </xsl:if>
+              <xsl:value-of select="."/>
+            </titleMain>
+          </xsl:for-each>
       </titlesMain>
       <titles>
           <xsl:for-each select="//journal-meta//journal-title">
@@ -1310,13 +1322,21 @@ class XSLT(object):
           <xsl:if test="//article-meta/abstract">
             <abstract>
               <xsl:attribute name="language"><xsl:value-of select="$langOut"/></xsl:attribute>
-              <xsl:value-of select="//article-meta/abstract"/>
+              <xsl:value-of select="//article-meta/abstract" disable-output-escaping="yes" />
             </abstract>
           </xsl:if>
+          <xsl:for-each select="//article-meta/trans-abstract">
+            <abstract>
+              <xsl:if test="@xml:lang">
+                <xsl:attribute name="language"><xsl:value-of select="@xml:lang"/></xsl:attribute>
+              </xsl:if>
+              <xsl:value-of select="." disable-output-escaping="yes" />
+            </titleMain>
+          </xsl:for-each>
       </abstracts>
       <persons>
           <xsl:for-each select="//article-meta/contrib-group/contrib">
-            <xsl:if test="name/surname">
+            <xsl:if test="(name/surname) or (name/string-name/surname)">
             <person>
                 <xsl:attribute name="role">
                   <xsl:choose>
@@ -1328,23 +1348,26 @@ class XSLT(object):
                     </xsl:otherwise>
                   </xsl:choose>
                 </xsl:attribute>
-                <xsl:attribute name="firstName"><xsl:value-of select="name/given-names"/></xsl:attribute>
-                <xsl:attribute name="lastName"><xsl:value-of select="name/surname"/></xsl:attribute>
+                <xsl:attribute name="firstName"><xsl:value-of select="(name/given-names) or (name/string-name/given-names)"/></xsl:attribute>
+                <xsl:attribute name="lastName"><xsl:value-of select="(name/surname) or (name/string-name/surname)"/></xsl:attribute>
                 <!--
                 role="advisor|author|contributor|editor|referee|translator|submitter|other"
-                firstName=""
-                lastName=""
                 academicTitle=""
-                email=""
                 allowEmailContact="true|false"
                 placeOfBirth=""
                 dateOfBirth="1999-12-31"
                 -->
                 <!--
                 <identifiers>
-                  <identifier type="orcid|gnd|intern">?????</identifier>
+                  <identifier type="gnd|intern">?????</identifier>
                 </identifiers>
                 -->
+                <xsl:if test="contains(contrib-id/@contrib-id-type,'orcid')">
+                  <xsl:attribute name="orcid">
+                    <xsl:copy-of select="contrib-id[@contrib-id-type='orcid']/text()"/>
+                  </xsl:attribute>
+                </xsl:if>
+                <xsl:attribute name="email"><xsl:value-of select="(email or address/email)"/></xsl:attribute>  
             </person>
             </xsl:if>
           </xsl:for-each>
@@ -1399,7 +1422,7 @@ class XSLT(object):
         </xsl:for-each>
       </dates>
       <identifiers>
-        <xsl:for-each select="//journal-meta/issn[@pub-type='ppub' or @pub-type='epub' or @publication-format='print' or @publication-format='electronic']">
+        <xsl:for-each select="//journal-meta/issn[@pub-type='ppub' or @pub-type='epub' or @publication-format='ppub' or @publication-format='epub' or @publication-format='print' or @publication-format='electronic']">
           <identifier>
             <xsl:attribute name="type"><xsl:text>issn</xsl:text></xsl:attribute>
             <xsl:value-of select="normalize-space(text())"/>
