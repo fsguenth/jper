@@ -1322,7 +1322,9 @@ class XSLT(object):
           <xsl:if test="//article-meta/abstract">
             <abstract>
               <xsl:attribute name="language"><xsl:value-of select="$langOut"/></xsl:attribute>
-              <xsl:value-of select="//article-meta/abstract" disable-output-escaping="yes" />
+              <xsl:text disable-output-escaping="yes">&lt;![CDATA[</xsl:text>
+              <xsl:copy-of select="//article-meta/abstract/*" disable-output-escaping="yes" />
+              <xsl:text disable-output-escaping="yes">]]&gt;</xsl:text>
             </abstract>
           </xsl:if>
           <xsl:for-each select="//article-meta/trans-abstract">
@@ -1330,46 +1332,46 @@ class XSLT(object):
               <xsl:if test="@xml:lang">
                 <xsl:attribute name="language"><xsl:value-of select="@xml:lang"/></xsl:attribute>
               </xsl:if>
-              <xsl:value-of select="." disable-output-escaping="yes" />
-            </titleMain>
+              <xsl:text disable-output-escaping="yes">&lt;![CDATA[</xsl:text>
+              <xsl:copy-of select="//article-meta/trans-abstract/*" disable-output-escaping="yes" />
+              <xsl:text disable-output-escaping="yes">]]&gt;</xsl:text>
+            </abstract>
           </xsl:for-each>
       </abstracts>
       <persons>
           <xsl:for-each select="//article-meta/contrib-group/contrib">
-            <xsl:if test="(name/surname) or (name/string-name/surname)">
             <person>
-                <xsl:attribute name="role">
-                  <xsl:choose>
-                    <xsl:when test="@contrib-type='guest-editor'">
-                       <xsl:text>editor</xsl:text>
-                    </xsl:when>
-                    <xsl:otherwise>
-                       <xsl:value-of select="@contrib-type"/>
-                    </xsl:otherwise>
-                  </xsl:choose>
+              <xsl:attribute name="role">
+                <xsl:choose>
+                  <xsl:when test="@contrib-type='guest-editor'">
+                     <xsl:text>editor</xsl:text>
+                  </xsl:when>
+                  <xsl:otherwise>
+                     <xsl:value-of select="@contrib-type"/>
+                  </xsl:otherwise>
+                </xsl:choose>
+              </xsl:attribute>
+              <xsl:attribute name="firstName"><xsl:value-of select=".//given-names"/></xsl:attribute>
+              <xsl:attribute name="lastName"><xsl:value-of select=".//surname"/></xsl:attribute>
+              <!--
+              role="advisor|author|contributor|editor|referee|translator|submitter|other"
+              academicTitle=""
+              allowEmailContact="true|false"
+              placeOfBirth=""
+              dateOfBirth="1999-12-31"
+              -->
+              <!--
+              <identifiers>
+                <identifier type="gnd|intern">?????</identifier>
+              </identifiers>
+              -->
+              <xsl:if test="contains(contrib-id/@contrib-id-type,'orcid')">
+                <xsl:attribute name="orcid">
+                  <xsl:copy-of select="contrib-id[@contrib-id-type='orcid']/text()"/>
                 </xsl:attribute>
-                <xsl:attribute name="firstName"><xsl:value-of select="(name/given-names) or (name/string-name/given-names)"/></xsl:attribute>
-                <xsl:attribute name="lastName"><xsl:value-of select="(name/surname) or (name/string-name/surname)"/></xsl:attribute>
-                <!--
-                role="advisor|author|contributor|editor|referee|translator|submitter|other"
-                academicTitle=""
-                allowEmailContact="true|false"
-                placeOfBirth=""
-                dateOfBirth="1999-12-31"
-                -->
-                <!--
-                <identifiers>
-                  <identifier type="gnd|intern">?????</identifier>
-                </identifiers>
-                -->
-                <xsl:if test="contains(contrib-id/@contrib-id-type,'orcid')">
-                  <xsl:attribute name="orcid">
-                    <xsl:copy-of select="contrib-id[@contrib-id-type='orcid']/text()"/>
-                  </xsl:attribute>
-                </xsl:if>
-                <xsl:attribute name="email"><xsl:value-of select="(email or address/email)"/></xsl:attribute>  
+              </xsl:if>
+              <xsl:attribute name="email"><xsl:value-of select="//email"/></xsl:attribute>  
             </person>
-            </xsl:if>
           </xsl:for-each>
       </persons>
       <keywords>
@@ -2110,7 +2112,7 @@ class XSLT(object):
     -->
 
     <!-- (Possible) mapping of affiliation(s) -->
-    <xsl:key name="kAffById" match="//article-meta/aff" use="@id"/>
+    <xsl:key name="kAffById" match="//aff" use="@id"/>
     
     <xsl:template match="/article">
         <mods:mods xmlns:mods="http://www.loc.gov/mods/v3"
@@ -2182,6 +2184,15 @@ class XSLT(object):
                         </mods:title>
                     </xsl:for-each>
                 </mods:titleInfo>
+                <xsl:for-each select="//journal-meta//abbrev-journal-title">
+                  <mods:titleInfo>
+                    <xsl:attribute name="type">abbreviated</xsl:attribute>
+                    <mods:title>
+                      <xsl:call-template name="insert-lang-attribute"/>
+                      <xsl:value-of select="."/>
+                    </mods:title>
+                  </mods:titleInfo>
+                </xsl:for-each>
                 <xsl:if test="//journal-meta/issn[@pub-type='ppub']">
                     <mods:identifier type="issn"><xsl:value-of select="//journal-meta/issn[@pub-type='ppub']"/></mods:identifier>
                 </xsl:if>
@@ -2194,6 +2205,17 @@ class XSLT(object):
                 <xsl:if test="//journal-meta/issn[@publication-format='electronic']">
                     <mods:identifier type="eIssn"><xsl:value-of select="//journal-meta/issn[@publication-format='electronic']"/></mods:identifier>
                 </xsl:if>
+                <xsl:if test="//journal-meta/issn[@publication-format='ppub']">
+                    <mods:identifier type="issn"><xsl:value-of select="//journal-meta/issn[@publication-format='ppub']"/></mods:identifier>
+                </xsl:if>
+                <xsl:if test="//journal-meta/issn[@publication-format='epub']">
+                    <mods:identifier type="issn"><xsl:value-of select="//journal-meta/issn[@publication-format='epub']"/></mods:identifier>
+                </xsl:if>
+                <xsl:for-each select="//journal-meta/issn[not(@pub-type) and not(@publication-format)]">
+                  <mods:identifier type="issn">
+                    <xsl:value-of select="."/>
+                  </mods:identifier>
+                </xsl:for-each>
                 <xsl:for-each select="//journal-meta/journal-id">
                     <mods:identifier>
                         <xsl:attribute name="type"><xsl:value-of select="@journal-id-type"/></xsl:attribute>
@@ -2219,60 +2241,52 @@ class XSLT(object):
                             </xsl:if>
                         </mods:extent>
                     </xsl:if>
+                    <xsl:if test="//article-meta/counts/page-count/@count">
+                      <mods:extent unit="pages">
+                        <mods:total><xsl:value-of select="//article-meta/counts/page-count/@count"/></mods:total>
+                      </mods:extent>
+                    </xsl:if>
                 </mods:part>
             </mods:relatedItem>
 
             <!-- Creator / Contributor (Author, Editor...)-->
             <xsl:for-each select="//article-meta/contrib-group/contrib">
                 <mods:name type="personal">
-                    <mods:namePart type="family"><xsl:value-of select="name/surname"/></mods:namePart>
-                    <xsl:if test="string-length(name/given-names/text()) > 0">
-                        <mods:namePart type="given"><xsl:value-of select="name/given-names"/></mods:namePart>
+                    <mods:namePart type="family"><xsl:value-of select=".//surname"/></mods:namePart>
+                    <xsl:if test="string-length(.//given-names/text()) > 0">
+                      <mods:namePart type="given"><xsl:value-of select=".//given-names"/></mods:namePart>
                     </xsl:if>
                     <mods:role>
                         <mods:roleTerm type="text"><xsl:value-of select="@contrib-type"/></mods:roleTerm>
                     </mods:role>
                     <!-- Identifier: So far, support of ORCIDs (and email adresses?) only -->
-		    <xsl:if test="contains(contrib-id/@contrib-id-type,'orcid')">
+                    <xsl:if test="contains(contrib-id/@contrib-id-type,'orcid')">
                         <mods:nameIdentifier type="orcid">
                             <xsl:copy-of select="contrib-id[@contrib-id-type='orcid']/text()"/>
                         </mods:nameIdentifier>
-		    </xsl:if>
-		    <!--
-                    <mods:nameIdentifier type="email">
-		    </mods:nameIdentifier>
-                    -->
-                    <!-- Affiliation: Need to deal with three different cases -->
-                    <xsl:choose>
-                        <xsl:when test="contains(xref/@ref-type,'aff') and string-length(xref/@rid) > 0">
-                            <xsl:for-each select="xref[@ref-type='aff']">
-                                <mods:affiliation>
-                                    <xsl:copy-of select="key('kAffById',@rid)//text()"/>
-                                </mods:affiliation>
-                            </xsl:for-each> 
-                        </xsl:when>
-                        <xsl:when test="not(contains(xref/@ref-type,'aff')) and string-length(//article-meta/aff[position()=last()]/text()) > 0">
-                            <xsl:for-each select="//article-meta/aff[not(@*)]">
-                                <mods:affiliation>
-                                    <xsl:copy-of select=".//text()"/>
-                                </mods:affiliation>
-                            </xsl:for-each>
+                    </xsl:if>
+                    <xsl:if test="string-length(.//email/text()) > 0">
+                      <mods:nameIdentifier type="email">
+                        <xsl:value-of select=".//email"/>
+                      </mods:nameIdentifier>
+                    </xsl:if>
+                    
+                    <xsl:for-each select="xref[@ref-type='aff']">
+                      <xsl:choose>
+                        <xsl:when test="contains(./@ref-type,'aff') and string-length(@rid) > 0">
+                          <mods:affiliation>
+                            <xsl:copy-of select="key('kAffById',@rid)/text()"/>
+                          </mods:affiliation>
                         </xsl:when>
                         <xsl:otherwise>
-                            <xsl:if test="aff">
-                                <mods:affiliation>
-                                    <xsl:copy-of select="aff//text()"/>
-                                </mods:affiliation>
-                            </xsl:if>
+                          <xsl:if test="string-length(//aff[position()=last()]/text()) > 0">
+                            <mods:affiliation>
+                              <xsl:copy-of select="//aff[position()=last()]"/>
+                            </mods:affiliation>
+                          </xsl:if>
                         </xsl:otherwise>
-                    </xsl:choose>
-                    <!--
-                    <xsl:if test="aff">
-                        <mods:affiliation>
-                            <xsl:value-of select="aff"/>
-                        </mods:affiliation>
-                    </xsl:if>
-                    -->
+                      </xsl:choose>
+                    </xsl:for-each> 
                 </mods:name>
             </xsl:for-each>
 
@@ -2282,18 +2296,31 @@ class XSLT(object):
                     <xsl:when test="@type = 'toc'">
                         <mods:tableOfContents>
                             <xsl:call-template name="insert-lang-attribute"/>
-                            <xsl:value-of select="."/>
+                            <xsl:text disable-output-escaping="yes">&lt;![CDATA[</xsl:text>
+                            <xsl:copy-of select="./*" disable-output-escaping="yes" />
+                            <xsl:text disable-output-escaping="yes">]]&gt;</xsl:text>
                         </mods:tableOfContents>
                     </xsl:when>
                     <xsl:otherwise>
                         <mods:abstract>
                             <xsl:call-template name="insert-lang-attribute"/>
-                            <xsl:value-of select="."/>
+                            <xsl:text disable-output-escaping="yes">&lt;![CDATA[</xsl:text>
+                            <xsl:copy-of select="./*" disable-output-escaping="yes" />
+                            <xsl:text disable-output-escaping="yes">]]&gt;</xsl:text>
                         </mods:abstract>
                     </xsl:otherwise>
                 </xsl:choose>
             </xsl:for-each>
-
+            <xsl:for-each select="//article-meta/trans-abstract">
+              <mods:abstract>
+                <xsl:if test="@xml:lang">
+                  <xsl:attribute name="language"><xsl:value-of select="@xml:lang"/></xsl:attribute>
+                </xsl:if>
+                <xsl:text disable-output-escaping="yes">&lt;![CDATA[</xsl:text>
+                <xsl:copy-of select="./*" disable-output-escaping="yes" />
+                <xsl:text disable-output-escaping="yes">]]&gt;</xsl:text>
+              </mods:abstract>
+            </xsl:for-each>
             <!-- Description: Subject (Keywords) -->
             <xsl:if test="//article-meta/kwd-group/kwd">
                 <mods:subject>
@@ -2313,7 +2340,8 @@ class XSLT(object):
                 <!-- Publication date (= date available/issued) -->
                 <xsl:for-each select="//article-meta/pub-date">
                     <xsl:if test="(contains(@pub-type, 'epub') and year and month) or
-                                  (contains(@publication-format, 'electronic') and contains(@date-type, 'pub') and year and month)">
+                        (contains(@publication-format, 'electronic') and contains(@date-type, 'pub') and year and month) or
+                        (contains(@pub-type, 'ppub') and year and month) ">
                         <mods:dateIssued encoding="iso8601">
                             <xsl:call-template name="compose-date"></xsl:call-template>
                         </mods:dateIssued>
@@ -2357,7 +2385,7 @@ class XSLT(object):
             <!-- Funding -->
             <xsl:for-each select="//article-meta/funding-group/award-group/funding-source">
                 <mods:note type="funding">
-                    <xsl:value-of select="."/>
+                    <xsl:value-of select="." />
                 </mods:note>
             </xsl:for-each>
 
