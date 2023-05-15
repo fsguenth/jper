@@ -1370,7 +1370,7 @@ class XSLT(object):
                   <xsl:copy-of select="contrib-id[@contrib-id-type='orcid']/text()"/>
                 </xsl:attribute>
               </xsl:if>
-              <xsl:attribute name="email"><xsl:value-of select="//email"/></xsl:attribute>  
+              <xsl:attribute name="email"><xsl:value-of select=".//email"/></xsl:attribute>  
             </person>
           </xsl:for-each>
       </persons>
