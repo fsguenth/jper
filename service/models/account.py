@@ -20,7 +20,7 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
         "contact_name" : "<name of key contact>",
         "password" : "<hashed password for ui login>",
         "api_key" : "<api key for api auth>",
-        "role" : ["<account role: repository, publisher, admin, passive, active, subject_repository>"],
+        "role" : ["<account role: repository, publisher, admin, passive, active, subject_repository, match_all, participant>"],
 
         "repository" : {
             "name" : "<name of the repository>",
@@ -200,8 +200,9 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
         self._set_list("role", role, coerce=self._utf8_unicode())
 
     def add_role(self, role):
-        #  admin, publisher, repository, passive, active, subject_repository
-        if role in ['admin', 'publisher', 'repository', 'passive', 'active', 'subject_repository', 'match_all']:
+        #  admin, publisher, repository, passive, active, subject_repository, match_all, participant
+        if role in ['admin', 'publisher', 'repository', 'passive', 'active',
+                    'subject_repository', 'match_all', 'participant']:
             self._add_to_list("role", role, coerce=self._utf8_unicode(), unique=True)
 
     def remove_role(self, role):
@@ -717,6 +718,9 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
 
     @classmethod
     def pull_all_active_repositories(cls):
+        """
+        Pull all repositories that are not passive (i.e. active)
+        """
         size = 1000
         q = {
             "query": {

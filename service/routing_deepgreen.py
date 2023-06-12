@@ -99,6 +99,7 @@ def _route(unrouted):
         doi = doi[0]
     app.logger.debug("Article DOI is {x}".format(x=doi))
 
+    # Pull all repositories that are not passive (i.e. active)
     bibids = models.Account.pull_all_active_repositories()
     # NEW FEATURE
     # Get all subject repository accounts. Needed for Gold license. 

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1>Test XML transformations</h1>
+
+{% include 'test_xml/transform/upload_xml.html' %}
+
+{% include 'test_xml/transform/result.html' %}
+
+<script>hljs.highlightAll();</script>
+
+{% endblock %}
