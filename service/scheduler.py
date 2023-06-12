@@ -316,12 +316,10 @@ def processftp():
                             ]
                             app.logger.debug('Scheduler - processing POSTing ' + pkg + ' ' + json.dumps(notification))
                             resp = requests.post(apiurl, files=files, verify=False)
+                            log_data = f"{apiurl} - {resp.status_code} - {resp.text} - {pkg} - {xpub} - {udir}"
                             if str(resp.status_code).startswith('4') or str(resp.status_code).startswith('5'):
-                                app.logger.error(
-                                    'Scheduler - processing completed with POST failure to ' + apiurl + ' - ' + str(
-                                        resp.status_code) + ' - ' + resp.text)
+                                app.logger.error(f"Scheduler - processing completed with POST failure to {log_data}")
                             else:
-                                log_data = f"{apiurl} - {resp.status_code} - {resp.text} - {pkg} - {udir}"
                                 app.logger.info(f"Scheduler - processing completed with POST to {log_data}")
                 except Exception as e:
                     app.logger.error(
