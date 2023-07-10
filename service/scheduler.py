@@ -115,7 +115,7 @@ def flatten(destination, depth=None):
                 if stem:
                     destpath = os.path.join(destination, stem)
                 originpath = os.path.join(depth, fl)
-                print('Moving file #{a} tp #{b}'.format(a=originpath, b=destpath) )
+                print('Moving file #{a} to {b}'.format(a=originpath, b=destpath) )
                 if stem and os.path.isdir(destpath):
                     shutil.move(originpath, destpath)
                 else:
