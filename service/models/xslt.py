@@ -1365,12 +1365,15 @@ class XSLT(object):
                 <identifier type="gnd|intern">?????</identifier>
               </identifiers>
               -->
-              <xsl:if test="contains(contrib-id/@contrib-id-type,'orcid')">
-                <xsl:attribute name="orcid">
-                  <xsl:copy-of select="contrib-id[@contrib-id-type='orcid']/text()"/>
-                </xsl:attribute>
+              <xsl:if test=".//email">
+                <xsl:attribute name="email"><xsl:value-of select=".//email"/></xsl:attribute>
               </xsl:if>
-              <xsl:attribute name="email"><xsl:value-of select=".//email"/></xsl:attribute>  
+              <xsl:if test="contains(contrib-id/@contrib-id-type,'orcid')">
+              <identifier>
+                <xsl:attribute name="type"><xsl:text>orcid</xsl:text></xsl:attribute>
+                <xsl:copy-of select="contrib-id[@contrib-id-type='orcid']/text()"/>
+              </identifier>
+              </xsl:if>
             </person>
           </xsl:for-each>
       </persons>
@@ -2233,18 +2236,18 @@ class XSLT(object):
                             <mods:number><xsl:value-of select="//article-meta/issue"/></mods:number>
                         </mods:detail>
                     </xsl:if>
-                    <xsl:if test="//article-meta/fpage">
+                    <xsl:if test="//article-meta/fpage or //article-meta/counts/page-count/@count">
                         <mods:extent unit="pages">
-                            <mods:start><xsl:value-of select="//article-meta/fpage"/></mods:start>
+                            <xsl:if test="//article-meta/fpage">
+                                <mods:start><xsl:value-of select="//article-meta/fpage"/></mods:start>
+                            </xsl:if>
                             <xsl:if test="//article-meta/lpage">
                                 <mods:end><xsl:value-of select="//article-meta/lpage"/></mods:end>
                             </xsl:if>
+                            <xsl:if test="//article-meta/counts/page-count/@count">
+                                <mods:total><xsl:value-of select="//article-meta/counts/page-count/@count"/></mods:total>
+                            </xsl:if>
                         </mods:extent>
-                    </xsl:if>
-                    <xsl:if test="//article-meta/counts/page-count/@count">
-                      <mods:extent unit="pages">
-                        <mods:total><xsl:value-of select="//article-meta/counts/page-count/@count"/></mods:total>
-                      </mods:extent>
                     </xsl:if>
                 </mods:part>
             </mods:relatedItem>
