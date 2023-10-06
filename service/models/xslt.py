@@ -1369,10 +1369,12 @@ class XSLT(object):
                 <xsl:attribute name="email"><xsl:value-of select=".//email"/></xsl:attribute>
               </xsl:if>
               <xsl:if test="contains(contrib-id/@contrib-id-type,'orcid')">
-              <identifier>
-                <xsl:attribute name="type"><xsl:text>orcid</xsl:text></xsl:attribute>
-                <xsl:copy-of select="contrib-id[@contrib-id-type='orcid']/text()"/>
-              </identifier>
+              <identifiers>
+                <identifier>
+                  <xsl:attribute name="type"><xsl:text>orcid</xsl:text></xsl:attribute>
+                  <xsl:copy-of select="contrib-id[@contrib-id-type='orcid']/text()"/>
+                </identifier>
+              </identifiers>
               </xsl:if>
             </person>
           </xsl:for-each>
