@@ -1302,9 +1302,7 @@ class XSLT(object):
           </titleMain>
           <xsl:for-each select="//article-meta/title-group/trans-title-group/trans-title">
             <titleMain>
-              <xsl:if test="@xml:lang">
-                <xsl:attribute name="language"><xsl:value-of select="@xml:lang"/></xsl:attribute>
-              </xsl:if>
+              <xsl:call-template name="insert-lang-attribute"/>
               <xsl:value-of select="."/>
             </titleMain>
           </xsl:for-each>
@@ -1329,9 +1327,7 @@ class XSLT(object):
           </xsl:if>
           <xsl:for-each select="//article-meta/trans-abstract">
             <abstract>
-              <xsl:if test="@xml:lang">
-                <xsl:attribute name="language"><xsl:value-of select="@xml:lang"/></xsl:attribute>
-              </xsl:if>
+              <xsl:call-template name="insert-lang-attribute"/>
               <xsl:text disable-output-escaping="yes">&lt;![CDATA[</xsl:text>
               <xsl:copy-of select="//article-meta/trans-abstract/*" disable-output-escaping="yes" />
               <xsl:text disable-output-escaping="yes">]]&gt;</xsl:text>
@@ -1388,7 +1384,7 @@ class XSLT(object):
           <xsl:for-each select="//article-meta/kwd-group/kwd">
             <xsl:if test="string-length(normalize-space(text()))>0">
               <keyword> 
-                <xsl:attribute name="language"><xsl:value-of select="$langOut"/></xsl:attribute>
+                <xsl:call-template name="insert-lang-attribute"/>
                 <xsl:attribute name="type"><xsl:text>uncontrolled</xsl:text></xsl:attribute>
                 <xsl:value-of select="normalize-space(text())"/>
               </keyword>
@@ -1549,6 +1545,25 @@ class XSLT(object):
              </xsl:attribute>
           </date>
   </xsl:template>
+  
+  <xsl:template name="insert-lang-attribute">
+    <xsl:choose>
+        <xsl:when test="@xml:lang">
+            <xsl:variable name="lang2" select="translate(@xml:lang,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz')"/>
+            <xsl:variable name="lang3" select="document('')//langCodeMap/langCodes[@iso639-1=$lang2]/@iso639-2"/>
+            <xsl:attribute name="language"><xsl:value-of select="$lang3"/></xsl:attribute>
+        </xsl:when>
+        <xsl:when test="../@xml:lang">
+            <xsl:variable name="lang2" select="translate(../@xml:lang,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz')"/>
+            <xsl:variable name="lang3" select="document('')//langCodeMap/langCodes[@iso639-1=$lang2]/@iso639-2"/>
+            <xsl:attribute name="language"><xsl:value-of select="$lang3"/></xsl:attribute>
+        </xsl:when>
+        <xsl:otherwise>
+          <xsl:attribute name="language"><xsl:value-of select="$langOut"/></xsl:attribute>
+        </xsl:otherwise>
+        </xsl:choose>
+  </xsl:template>
+  
 
 </xsl:stylesheet>
 '''.format(xmlinject=iso639codes)
@@ -2409,9 +2424,14 @@ class XSLT(object):
     </xsl:template>
 
     <xsl:template name="insert-lang-attribute">
-        <xsl:if test="@xml:lang">
+        <xsl:choose>
+        <xsl:when test="@xml:lang">
             <xsl:attribute name="xml:lang"><xsl:value-of select="@xml:lang"/></xsl:attribute>
-        </xsl:if>
+        </xsl:when>
+        <xsl:when test="../@xml:lang">
+            <xsl:attribute name="xml:lang"><xsl:value-of select="../@xml:lang"/></xsl:attribute>
+        </xsl:when>
+        </xsl:choose>
     </xsl:template>
 
 </xsl:stylesheet>
