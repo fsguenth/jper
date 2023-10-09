@@ -1298,12 +1298,12 @@ class XSLT(object):
       <titlesMain>
           <titleMain>
             <xsl:attribute name="language"><xsl:value-of select="$langOut"/></xsl:attribute>
-            <xsl:value-of select="//article-meta/title-group/article-title"/>
+            <xsl:value-of select="normalize-space(//article-meta/title-group/article-title)"/>
           </titleMain>
           <xsl:for-each select="//article-meta/title-group/trans-title-group/trans-title">
             <titleMain>
               <xsl:call-template name="insert-lang-attribute"/>
-              <xsl:value-of select="."/>
+              <xsl:value-of select="normalize-space()"/>
             </titleMain>
           </xsl:for-each>
       </titlesMain>
@@ -1312,7 +1312,21 @@ class XSLT(object):
             <title> 
               <xsl:attribute name="language"><xsl:value-of select="$langOut"/></xsl:attribute>
               <xsl:attribute name="type"><xsl:text>parent</xsl:text></xsl:attribute> 
-              <xsl:value-of select="normalize-space(text())"/>
+              <xsl:value-of select="normalize-space()"/>
+            </title>
+          </xsl:for-each>
+          <xsl:if test="//article-meta/title-group/subtitle">
+            <title>
+              <xsl:attribute name="language"><xsl:value-of select="$langOut"/></xsl:attribute>
+              <xsl:attribute name="type"><xsl:text>sub</xsl:text></xsl:attribute>
+              <xsl:value-of select="normalize-space(//article-meta/title-group/subtitle)"/>
+            </title>
+          </xsl:if>
+          <xsl:for-each select="//article-meta/title-group/trans-title-group/trans-subtitle">
+            <title>
+              <xsl:call-template name="insert-lang-attribute"/>
+              <xsl:attribute name="type"><xsl:text>sub</xsl:text></xsl:attribute>
+              <xsl:value-of select="normalize-space()"/>
             </title>
           </xsl:for-each>
       </titles>
@@ -1329,7 +1343,7 @@ class XSLT(object):
             <abstract>
               <xsl:call-template name="insert-lang-attribute"/>
               <xsl:text disable-output-escaping="yes">&lt;![CDATA[</xsl:text>
-              <xsl:copy-of select="//article-meta/trans-abstract/*" disable-output-escaping="yes" />
+              <xsl:copy-of select="./*" disable-output-escaping="yes" />
               <xsl:text disable-output-escaping="yes">]]&gt;</xsl:text>
             </abstract>
           </xsl:for-each>
@@ -2333,9 +2347,7 @@ class XSLT(object):
             </xsl:for-each>
             <xsl:for-each select="//article-meta/trans-abstract">
               <mods:abstract>
-                <xsl:if test="@xml:lang">
-                  <xsl:attribute name="language"><xsl:value-of select="@xml:lang"/></xsl:attribute>
-                </xsl:if>
+                <xsl:call-template name="insert-lang-attribute"/>
                 <xsl:text disable-output-escaping="yes">&lt;![CDATA[</xsl:text>
                 <xsl:copy-of select="./*" disable-output-escaping="yes" />
                 <xsl:text disable-output-escaping="yes">]]&gt;</xsl:text>
@@ -2345,7 +2357,10 @@ class XSLT(object):
             <xsl:if test="//article-meta/kwd-group/kwd">
                 <mods:subject>
                     <xsl:for-each select="//article-meta/kwd-group/kwd">
-                        <mods:topic><xsl:value-of select="."/></mods:topic>
+                        <mods:topic>
+                          <xsl:call-template name="insert-lang-attribute"/>
+                          <xsl:value-of select="."/>
+                        </mods:topic>
                     </xsl:for-each>
                 </mods:subject>
             </xsl:if>
