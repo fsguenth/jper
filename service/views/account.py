@@ -414,10 +414,10 @@ def details(repo_id):
     page_num = int(request.values.get("page", app.config.get("DEFAULT_LIST_PAGE_START", 1)))
     num_of_pages = int(math.ceil(results['total'] / results['pageSize']))
     if provider:
-        return render_template('account/matching.html', repo=data, tabl=[json.dumps(mtable)],
-                               num_of_pages=num_of_pages, page_num=page_num, link=link, date=date)
-    return render_template('account/details.html', repo=data, results=data_to_display,
-                           num_of_pages=num_of_pages, page_num=page_num, link=link, date=date, repo_id=repo_id)
+        return render_template('account/matching.html', repo=data, tabl=[json.dumps(mtable)], total=results['total'],
+                               page_size=results['pageSize'], num_of_pages=num_of_pages, page_num=page_num, link=link, date=date)
+    return render_template('account/details.html', repo=data, results=data_to_display, total=results['total'],
+                           page_size=results['pageSize'], num_of_pages=num_of_pages, page_num=page_num, link=link, date=date, repo_id=repo_id)
 
 
 # 2016-10-19 TD : restructure matching and(!!) failing history output (primarily for publishers) -- start --
