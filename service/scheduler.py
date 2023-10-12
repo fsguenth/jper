@@ -25,6 +25,7 @@ from threading import Thread
 from octopus.core import app, initialise
 from service import reports
 from service import models
+from service.lib.cleanup_repository_logs import cleanup_repository_logs
 
 if app.config.get('DEEPGREEN_EZB_ROUTING', False):
     from service import routing_deepgreen as routing
@@ -488,6 +489,10 @@ def delete_old_routed():
 
 if app.config.get('SCHEDULE_DELETE_OLD_ROUTED', False):
     schedule.every().day.at("03:00").do(delete_old_routed)
+
+
+if app.config.get('SCHEDULE_DELETE_OLD_SWORD_LOGS', False):
+    schedule.every().day.at("04:00").do(cleanup_repository_logs)
 
 
 def cheep():
