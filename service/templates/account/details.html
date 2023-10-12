@@ -28,11 +28,13 @@
     </div>
 
     <div class="row">
-        {% set msg = None %}
         {% if total > 9999 %}
             {% set msg="( only the latest 10000 notifications are displayed )" %}
+            <div class="col span-12">Number of notifications: {{total}} {{ msg }}</div>
+        {%  else %}
+            <div class="col span-12">Number of notifications: {{total}}</div>
         {% endif %}
-        <div class="col span-12">Number of notifications: {{total}} {{ msg }}</div>
+
     </div>
     <div class="row">
         <div class="col span-12">Number of notifications per page: {{page_size}}</div>
