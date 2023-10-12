@@ -28,10 +28,3 @@ def cleanup_repository_logs():
             deposit_log = RepositoryDepositLog().pull(log['id'])
             deposit_log.delete()
             app.looger.debug(f"Deleted sword deposit log {log['id']}")
-
-
-
-
-
-
-
