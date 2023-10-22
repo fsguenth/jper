@@ -1,0 +1,35 @@
+<div class="box box--padding-large box--brd-mgreyblue">
+    <h3>Manage profile settings</h3>
+    <form method="post" action="{{request.path}}/repoinfo" class="form">
+        <ul class="form-fields">
+            <li class="form-fields__item--text">
+                <span class="form-fields__label-text">Repository bibid (EZB)</span>
+                <input type="text" class="input--large" name="repository_bibid" style="color: darkgrey;" readonly
+                    value="{{account.data.get('repository',{}).get('bibid','')}}" />
+            </li>
+            <li class="form-fields__item--text">
+                <span class="form-fields__label-text">Repository sigel</span>
+                <input type="text" class="input--large" name="repository_sigel"
+                    placeholder="(comma separated)"
+                    value="{{','.join(account.data.get('repository',{}).get('sigel',[]))}}" />
+            </li>
+            <li class="form-fields__item--text">
+                <span class="form-fields__label-text">Repository name</span>
+                <input type="text" class="input--large" name="repository_name"
+                    value="{{account.data.get('repository',{}).get('name','')}}" />
+            </li>
+            <li class="form-fields__item--text">
+                <span class="form-fields__label-text">Repository URL</span>
+                <input type="text" class="input--large" name="repository_url"
+                    value="{{account.data.get('repository',{}).get('url','')}}" />
+            </li>
+            <li class="form-fields__item--text">
+                <span class="form-fields__label-text">Repository software</span>
+                <input type="text" class="input--large" name="repository_software"
+                    value="{{account.data.get('repository',{}).get('software','')}}" />
+            </li>
+        </ul>
+        <button class="btn btn--3d btnright" id="update" type="submit">Update
+            settings</button>
+    </form>
+</div>

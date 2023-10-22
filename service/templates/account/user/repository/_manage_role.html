@@ -1,0 +1,68 @@
+{% if current_user.is_super and account.has_role('repository') %}
+    <div class="box box--padding-large box--brd-mgreyblue">
+        <p>Account settings</p>
+        {% if account.has_role('passive') %}
+            <form class="form" method="POST" action="{{request.path}}/become/active" id="form_passive">
+                <input type="checkbox" id="passive_no" value="active" name='status'
+                   onclick="submit_form_passive()">
+                <label for="passive_no">Active</label><br>
+                <input type="checkbox" id="passive_yes" value="passive" name='status' checked="checked"
+                   onclick="submit_form_passive()">
+                <label for="passive_yes">Passive</label><br>
+            </form>
+        {% else %}
+            <form class="form" method="POST" action="{{request.path}}/become/passive" id="form_active">
+                <div class="form-fields__item--text form-fields__item--single">
+                    <input type="checkbox" id="active_yes" value="active" name='status' checked="checked"
+                       onclick="submit_form_active()">
+                    <label for="active_yes">Active</label>
+                </div>
+                <div class="form-fields__item--text form-fields__item--single">
+                    <input type="checkbox" id="active_no" value="passive" name='status'
+                       onclick="submit_form_active()">
+                    <label for="active_no">Passive</label>
+                </div>
+            </form>
+            <!-- Participant role check box -->
+            {% set participant_check = "" %}
+            {% set participant_action = "become" %}
+            {% if account.has_role('participant') %}
+                {% set participant_check = "checked" %}
+                {% set participant_action = "cease" %}
+            {% endif %}
+            <form class="form" method="POST" action="{{request.path}}/{{participant_action}}/participant" id="form_participant">
+                <div class="form-fields__item--text form-fields__item--single">
+                    <input type="checkbox" id="update_participant" value="participant" name='role' {{participant_check}}
+                           onclick='document.getElementById("form_participant").submit()'>
+                    <label for="update_participant">Participant</label><br>
+                </div>
+            </form>
+        {% endif %}
+        {% set match_check = "" %}
+        {% set match_action = "become" %}
+        {% if account.has_role('match_all') %}
+            {% set match_check = "checked" %}
+            {% set match_action = "cease" %}
+        {% endif %}
+        <form class="form" method="POST" action="{{request.path}}/{{match_action}}/match_all" id="form_match_all">
+            <div class="form-fields__item--text form-fields__item--single">
+                <input type="checkbox" id="update_match_all" value="match_all" name='role' {{match_check}}
+                       onclick='document.getElementById("form_match_all").submit()'>
+                <label for="update_match_all">Match with all institutions</label><br>
+            </div>
+        </form>
+        {% set subject_check = "" %}
+        {% set subject_action = "become" %}
+        {% if account.has_role('subject_repository') %}
+            {% set subject_check = "checked" %}
+            {% set subject_action = "cease" %}
+        {% endif %}
+        <form class="form" method="POST" action="{{request.path}}/{{subject_action}}/subject_repository" id="form_subject_repository">
+            <div class="form-fields__item--text form-fields__item--single">
+                <input type="checkbox" id="update_subject_repository" value="subject_repository" name='role' {{subject_check}}
+                       onclick='document.getElementById("form_subject_repository").submit()'>
+                <label for="update_subject_repository">Subject repository</label><br>
+            </div>
+        </form>
+    </div>
+{% endif %}
