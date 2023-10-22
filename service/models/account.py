@@ -735,6 +735,9 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
             app.logger.warn("Account params have a different id. Ignoring id in params")
         elif not self.id and acc_id:
             self.id = acc_id
+        has_acc = Account.pull(self.id)
+        if isinstance(has_acc, Account) :
+            raise dataobj.DataSchemaException(f"Account with id {acc_id} already exists")
         password = account_hash.get('password', None)
         if password:
             if not self.password:

@@ -14,6 +14,7 @@ from service.views.webapi import _bad_request
 from service.repository_licenses import get_matching_licenses
 import math
 import csv
+import sys
 from jsonpath_rw_ext import parse
 from itertools import zip_longest
 from service import models
@@ -992,8 +993,15 @@ def register():
 
     if request.method == 'POST' and form.validate():
         role = vals.get('radio', None)
+        if not vals.get('id', None):
+            vals['id'] = str(uuid.uuid4())
         account = models.Account()
-        account.add_account(vals)
+        try:
+            account.add_account(vals)
+        except Exception as e:
+            ex_type, ex_value, ex_traceback = sys.exc_info()
+            flash('Error creating account: ' + str(ex_value), 'error')
+            return render_template('account/register.html', vals=vals, form=form)
         account.save()
         if role == 'publisher':
             account.become_publisher()
