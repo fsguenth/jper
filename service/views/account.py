@@ -585,6 +585,8 @@ def username(username):
                 flash('Account ' + acc.id + ' deleted')
             return redirect(url_for('.index'))
 
+    ssh_help_text = """Begins with 'ssh-rsa', 'ecdsa-sha2-nistp256', 'ecdsa-sha2-nistp384', 'ecdsa-sha2-nistp521', 'ssh-ed25519', 'sk-ecdsa-sha2-nistp256@openssh.com', or 'sk-ssh-ed25519@openssh.com'"""
+
     if acc.has_role('repository'):
         repoconfig = models.RepositoryConfig.pull_by_repo(acc.id)
         licenses = get_matching_licenses(acc.id)
@@ -607,7 +609,7 @@ def username(username):
             if len(request.values['password']) < 8:
                 flash("Sorry. Password must be at least eight characters long", "error")
                 return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
-                                       license_ids=license_ids, sword_status=sword_status)
+                                       license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text)
             else:
                 acc.set_password(request.values['password'])
 
@@ -615,10 +617,10 @@ def username(username):
         time.sleep(2)
         flash("Record updated", "success")
         return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
-                               license_ids=license_ids, sword_status=sword_status)
+                               license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text)
     elif current_user.id == acc.id or current_user.is_super:
         return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
-                               license_ids=license_ids, sword_status=sword_status)
+                               license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text)
     else:
         abort(404)
 
@@ -906,6 +908,52 @@ def resend_notification(username):
     if duplicate > 0:
         msg = msg + '<br>' + '{n} notifications are already waiting in queue'.format(n=duplicate)
     return msg, 201
+
+
+@blueprint.route('/<username>/add_ssh_key', methods=["POST"])
+def add_ssh_key(username):
+    if current_user.id != username and not current_user.is_super:
+        abort(401)
+    acc = models.Account.pull(username)
+    if acc is None:
+        abort(404)
+    ssh_key = request.values.get('ssh_key', None)
+    title = request.values.get('title', None)
+    if not ssh_key:
+        flash("Sorry. SSH key is required", "error")
+        return redirect(url_for('.username', username=username))
+    acc.add_ssh_key(ssh_key, title)
+    acc.save()
+    flash('The ssh key has been added', "success")
+    return redirect(url_for('.username', username=username))
+
+
+@blueprint.route('/<username>/activate_ssh_key', methods=["POST"])
+def activate_ssh_key(username):
+    if current_user.id != username and not current_user.is_super:
+        abort(401)
+    acc = models.Account.pull(username)
+    if acc is None:
+        abort(404)
+    ssh_key = request.values.get('id', None)
+    acc.activate_ssh_key(ssh_key)
+    acc.save()
+    flash('The ssh key has been activated', "success")
+    return redirect(url_for('.username', username=username))
+
+
+@blueprint.route('/<username>/delete_ssh_key', methods=["POST"])
+def delete_ssh_key(username):
+    if current_user.id != username and not current_user.is_super:
+        abort(401)
+    acc = models.Account.pull(username)
+    if acc is None:
+        abort(404)
+    ssh_key = request.values.get('id', None)
+    acc.delete_ssh_key(ssh_key)
+    acc.save()
+    flash('The ssh key has been deleted', "success")
+    return redirect(url_for('.username', username=username))
 
 
 @blueprint.route('/login', methods=['GET', 'POST'])

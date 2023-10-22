@@ -384,3 +384,25 @@ div.actions div {
     margin: 10px 0;
     padding: 10px 0;
 }
+
+.status {
+    padding: 0px 10px
+}
+
+.box--info {
+    color: #fff;
+    background-color: #007bff;
+    border: 2px solid #007bff;
+}
+
+.box--success {
+    color: #fff;
+    background-color: #28a745;
+    border: 2px solid #28a745;
+}
+
+.box--warning {
+    color: #fff;
+    background-color: #6c757d;
+    border: 2px solid #6c757d;
+}

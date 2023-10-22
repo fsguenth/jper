@@ -4,10 +4,13 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.datastructures import TypeConversionDict
 
 from octopus.core import app
-from octopus.lib import dataobj
+from octopus.lib import dataobj, dates
 from service import dao
 from esprit import raw
+from datetime import datetime
+from copy import deepcopy
 
+SSH_KEY_STATUS = ['new', 'active', 'inactive']
 
 class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
     '''
@@ -57,7 +60,15 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
             "url" : "<license url>",
             "version" : "<license version>",
             "gold_license" : [<license type> | <license url>]
-        }
+        },
+        "ssh_keys" : [{
+            "id": <uuid for the ssh key",
+            "title" : "<ssh key title>",
+            "public_key": "<public ssh key>",
+            "status": "<new, active, inactive>",
+            "created_date": "<date key was added>"
+            "last_updated": <date key status was updated">
+        }]
     }
     '''
 
@@ -89,6 +100,7 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
     #         "lists" : {
     #             "role" : {"contains" : "field", "coerce" : "unicode"},
     #             "packaging": {"contains" : "field", "coerce" : "unicode"},
+    #             "ssh_keys": {"contains" : "object"}
     #         },
     #         "structs" : {
     #             "repository" : {
@@ -128,6 +140,16 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
     #                     "version": {"coerce": "unicode"},
     #                 }
     #             },
+    #             "ssh_keys": {
+    #                 "fields": {
+    #                     "id": {"coerce": "unicode"}
+    #                     "title": {"coerce": "unicode"},
+    #                     "public_key": {"coerce": "unicode"},
+    #                     "status": {"coerce": "unicode", "allowed_values": SSH_KEY_STATUS},
+    #                     "created_date": {"coerce": "utcdatetime"},
+    #                     "last_updated": {"coerce": "utcdatetime"},
+    #                 }
+    #             }
     #         }
     #     }
     #     self._add_struct(struct)
@@ -599,6 +621,112 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
 
         # finally write it
         self._set_single("license", obj)
+
+
+    @property
+    def ssh_keys(self):
+        return self._get_list("ssh_keys")
+
+    @ssh_keys.setter
+    def ssh_keys(self, vals):
+        self._set_list("ssh_keys", vals)
+
+    def add_ssh_key(self, public_key, title=None):
+        """
+        {
+            "id": {"coerce": "unicode"}
+            "title": {"coerce": "unicode"},
+            "public_key": {"coerce": "unicode"},
+            "status": {"coerce": "unicode", "allowed_values": SSH_KEY_STATUS},
+            "created_date": {"coerce": "utcdatetime"},
+            "last_updated": {"coerce": "utcdatetime"},
+        }
+        """
+        if not public_key:
+            raise dataobj.DataSchemaException("SSH public key is missing")
+        current_date = dates.format(datetime.now())
+        vals = {
+            'id': str(uuid.uuid4()),
+            'title': title,
+            'public_key': public_key,
+            'status': 'new',
+            'created_date': current_date,
+            'last_updated': current_date
+        }
+        if vals['status'] not in SSH_KEY_STATUS:
+            raise dataobj.DataSchemaException(
+                "Key status can only be one of: {x}".format(x=", ".join(SSH_KEY_STATUS)))
+        self._add_to_list("ssh_keys", vals)
+
+    def activate_ssh_key(self, id):
+        """
+        Any key can be made active (not just new)
+        Check id exists
+        set all active keys to inactive
+        Set id to active
+        """
+        if not self._key_exists(id):
+            raise dataobj.DataSchemaException(f"Key {id} does not exist")
+
+        inactive_keys = self._deactivate_keys(self.ssh_keys)
+
+        new_keys = self._set_status(inactive_keys, id, 'active')
+        self.ssh_keys = new_keys
+        return True
+
+    def delete_ssh_key(self, id):
+        """
+        Check id exists and status is inactive before deleting key
+        """
+        if not self._key_exists(id):
+            raise dataobj.DataSchemaException(f"Key {id} does not exist")
+        current_status = self._get_status(id)
+        if current_status == 'active':
+            raise dataobj.DataSchemaException(f"Cannot delete active key #{id}")
+        new_keys = self._delete_key(id, self.ssh_keys)
+        self.ssh_keys = new_keys
+        return True
+
+    def _key_exists(self, id):
+        key_exists = False
+        for key in self.ssh_keys:
+            if key['id'] == id:
+                key_exists = True
+                break
+        return key_exists
+
+    def _get_status(self, id):
+        for rec in self.ssh_keys:
+            if rec['id'] == id:
+                return rec['status']
+        return None
+
+    def _set_status(self, ssh_keys, id, status):
+        if status not in SSH_KEY_STATUS:
+            raise dataobj.DataSchemaException(
+                "Key status can only be one of: {x}".format(x=", ".join(SSH_KEY_STATUS)))
+        new_keys = deepcopy(ssh_keys)
+        for rec in new_keys:
+            if rec['id'] == id:
+                rec['status'] = status
+                rec['last_updated'] = dates.format(datetime.now())
+        return new_keys
+
+    def _deactivate_keys(self, ssh_keys):
+        new_keys = deepcopy(ssh_keys)
+        for rec in new_keys:
+            if rec['status'] == 'active':
+                rec['status'] = 'inactive'
+                rec['last_updated'] = dates.format(datetime.now())
+        return new_keys
+
+    def _delete_key(self, id, ssh_keys):
+        new_keys = deepcopy(ssh_keys)
+        for key in new_keys:
+            if key['id'] == id:
+                new_keys.remove(key)
+                break
+        return new_keys
 
     def add_account(self, account_hash):
         account_hash = _coerce_account_hash(account_hash)

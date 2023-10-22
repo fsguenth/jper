@@ -1,0 +1,49 @@
+<div class="box box--padding-large box--brd-mgreyblue">
+    <h3>SSH keys</h3>
+    {% for ssh_key in account.ssh_keys[::-1] %}
+        <div class="row">
+            {%  if ssh_key.get('title', '') %}
+                <div class="row"><b>{{ ssh_key['title']  }}</b></div>
+            {% endif %}
+
+            {%  if ssh_key.get('status', '') %}
+                <div class="row">
+                <div class="col span-3">
+                {% if ssh_key['status'] == 'new' %}
+                    <div><span class="status box--success" >{{ ssh_key['status']  }}</span></div>
+                {% elif ssh_key['status'] == 'active' %}
+                    <div><span class="status box--info" >{{ ssh_key['status']  }}</span></div>
+                {% else %}
+                    <div><span class="status box--warning" >{{ ssh_key['status']  }}</span></div>
+                {% endif %}
+                </div>
+                <div class="col span-4">
+                    {% if ssh_key.get('status', '') == 'new' %}
+                    <form method="POST" action="{{request.path}}/activate_ssh_key" class="form">
+                        <ul class="form-fields">
+                            <input type="hidden" name="id" class="form-control" value="{{ ssh_key['id'] }}"/>
+                            <button class="btn btn--3d" id="Activate SSH key" type="submit">Activate SSH key</button>
+                        </ul>
+                    </form>
+                    {% endif %}
+                    {% if ssh_key.get('status', '') == 'inactive' %}
+                        <form method="POST" action="{{request.path}}/delete_ssh_key" class="form">
+                            <ul class="form-fields">
+                                <input type="hidden" name="id" class="form-control" value="{{ ssh_key['id'] }}"/>
+                                <button class="btn btn--3d" id="Delete SSH key" type="submit">Delete SSH key</button>
+                            </ul>
+                        </form>
+                    {% endif %}
+                </div></div>
+            {% endif %}
+            {%  if ssh_key.get('public_key', '') %}
+                <div class="row">
+                    <div style="word-wrap: break-word">{{ ssh_key['public_key']  }}</div>
+                </div>
+            {% endif %}
+
+
+        </div>
+        <hr>
+    {% endfor %}
+</div>
