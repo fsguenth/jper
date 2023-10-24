@@ -578,7 +578,6 @@ def username(username):
                 if repoconfig is not None:
                     repoconfig.delete()
             acc.remove()
-            time.sleep(1)
             # 2017-03-03 TD : ... and be verbose about it!
             if repoconfig is not None:
                 flash('Account ' + acc.id + ' and RepoConfig ' + repoconfig.id + ' deleted')
@@ -650,7 +649,6 @@ def username(username):
                                    license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text,
                                    default_ftp_server=default_ftp_server)
 
-        # time.sleep(2)
         flash("Record updated", "success")
         return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
                                license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text,
@@ -690,7 +688,6 @@ def pubinfo(username):
     if license_details:
         acc.license = license_details
     acc.save()
-    time.sleep(2)
     flash('Thank you. Your publisher details have been updated.', "success")
     return redirect(url_for('.username', username=username))
 
@@ -753,7 +750,6 @@ def repoinfo(username):
         acc.data['packaging'] = []
 
     acc.save()
-    time.sleep(2)
     flash('Thank you. Your repository details have been updated.', "success")
     return redirect(url_for('.username', username=username))
 
@@ -765,7 +761,6 @@ def apikey(username):
     acc = models.Account.pull(username)
     acc.api_key = str(uuid.uuid4())
     acc.save()
-    time.sleep(2)
     flash('Thank you. Your API key has been updated.', "success")
     return redirect(url_for('.username', username=username))
 
@@ -831,7 +826,6 @@ def config(username):
             flash('Sorry, there was an exception detected while your config upload was processed. Please try again.',
                   "error")
             app.logger.error(str(e))
-        time.sleep(1)
 
     return redirect(url_for('.username', username=username))
 
@@ -844,9 +838,7 @@ def changerole(username, role):
         abort(404)
     elif request.method == 'POST' and current_user.is_super:
         if 'become' in request.path:
-            if role == 'publisher':
-                acc.become_publisher()
-            elif role == 'active' and acc.has_role('repository'):
+            if role == 'active' and acc.has_role('repository'):
                 acc.set_active()
                 acc.save()
             elif role == 'passive' and acc.has_role('repository'):
@@ -856,12 +848,8 @@ def changerole(username, role):
                 acc.add_role(role)
                 acc.save()
         elif 'cease' in request.path:
-            if role == 'publisher':
-                acc.cease_publisher()
-            else:
-                acc.remove_role(role)
-                acc.save()
-        time.sleep(1)
+            acc.remove_role(role)
+            acc.save()
         flash("Record updated", "success")
         return redirect(url_for('.username', username=username))
     else:
@@ -877,7 +865,6 @@ def sword_activate(username):
     if sword_status and sword_status.status == 'failing':
         sword_status.activate()
         sword_status.save()
-    time.sleep(2)
     flash('The sword connection has been activated.', "success")
     return redirect(url_for('.username', username=username))
 
@@ -891,7 +878,6 @@ def sword_deactivate(username):
     if sword_status and sword_status.status in ['succeeding', 'problem']:
         sword_status.deactivate()
         sword_status.save()
-    time.sleep(2)
     flash('The sword connection has been deactivated.', "success")
     return redirect(url_for('.username', username=username))
 
@@ -913,7 +899,6 @@ def excluded_license(username):
         rec = models.RepositoryConfig.pull_by_repo(username)
         rec.excluded_license = excluded_licenses
         rec.save()
-        time.sleep(1)
     return redirect(url_for('.username', username=username))
 
 
@@ -1066,9 +1051,6 @@ def register():
             flash('Error creating account: ' + str(ex_value), 'error')
             return render_template('account/register.html', vals=vals, form=form)
         account.save()
-        if role == 'publisher':
-            account.become_publisher()
-        time.sleep(1)
         flash('Account created for ' + account.id, 'success')
         return redirect('/account')
 

@@ -1039,41 +1039,6 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
                 app.logger.error(str(self.id) + ' failed deleteFTPuser subprocess')
         self.delete()
 
-    def become_publisher(self):
-        # create an FTP user for the account, if it is a publisher
-        # TODO / NOTE: if the service has to be scaled up to run on multiple machines,
-        # the ftp users should only be created on the machine that the ftp address points to.
-        # so the create user scripts should be triggered on that machine. Alternatively the user
-        # accounts could be created on every machine - but that leaves more potential security holes.
-        # Better to restrict the ftp upload to one machine that is configured to accept them. Then
-        # when it runs the schedule, it will check the ftp folder locations and send any to the API
-        # endpoints, so the heavy lifting would still be distributed across machines.
-        #un = self.data['email'].replace('@','_')
-        un = self.id
-        try:
-            import os, subprocess
-            fl = os.path.dirname(os.path.abspath(__file__)) + '/createFTPuser.sh'
-            print("subprocessing " + fl)
-            subprocess.call( [ 'sudo', fl, un, self.data['api_key'] ] )
-            print("creating FTP user for " + un)
-        except:
-            print("could not create an FTP user for " + un)
-        self.add_role('publisher')
-        self.save()
-
-    def cease_publisher(self):
-        un = self.id
-        try:
-            import os, subprocess
-            fl = os.path.dirname(os.path.abspath(__file__)) + '/deleteFTPuser.sh'
-            print("subprocessing " + fl)
-            subprocess.call(['sudo',fl,un])
-            print("deleting FTP user for " + un)
-        except:
-            print("could not delete an FTP user for " + un)
-        self.remove_role('publisher')
-        self.save()
-
 
 def _coerce_account_hash(account_hash):
     if isinstance(account_hash, TypeConversionDict):
