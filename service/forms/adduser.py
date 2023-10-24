@@ -101,7 +101,7 @@ Create a form for WEBSERVICE
 '''
 class AdduserForm(Form):
     id = TextField('Id', render_kw={"placeholder": "Optional. If left blank, a UUID will be generated."})
-    custom_id = TextField('Custom Id', render_kw={"placeholder": "Optional field for human friendly id."})
+    custom_id = TextField('Custom Id', render_kw={"placeholder": "Optional field for human friendly id. If available, it is used as SSH username."})
     password_verify = PasswordField('Password verify', [validators.Length(min=8, max=2035), validators.Required(), validate_password])
     password = PasswordField('Password', [validators.Length(min=8, max=2035), validators.Required()])
     email = TextField('Email address', [validators.Length(min=2, max=2035), validators.Required(), is_email])

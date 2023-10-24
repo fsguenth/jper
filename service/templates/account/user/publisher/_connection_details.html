@@ -4,17 +4,40 @@
     <h3>Connecting to the API</h3>
     <p>To use the API for deposit, please read our <a href="https://github.com/OA-DeepGreen/jper/blob/develop/docs/api/API.md" target="_blank">API documentation</a><br></p>
     <hr>
-    <h3>Connecting via SFTP</h3>
-    <p>SFTP Address:     <b>sl61.kobv.de</b> <br>
-        Port:            <b>22</b><br>
-        Username:        <b>{{account.id}}</b><br>
-        Password:        <b>{{account.data['api_key']}}</b><br>
-        Send a directory (alternatively a flat ZIP file) for each single publication notification. There should be no files in the top level of your SFTP folder.<br>
-    </p>
-    <hr>
     <h3>Connecting via SWORD</h3>
-    <p>	SWORD endpoint:  <b>https://www.oa-deepgreen.de/sword</b><br>
-        Username:        <b>{{account.id}}</b><br>
-        Password:        <b>{{account.data['api_key']}}</b><br>
-    </p>
+    <div class="dl-table">
+        <dl>
+            <dt>SWORD endpoint:</dt>
+            <dd>https://www.oa-deepgreen.de/sword</dd>
+            <dt>Username:</dt>
+            <dd>{{account.id}}</dd>
+            <dt>Password:</dt>
+            <dd>{{account.data['api_key']}}</dd>
+        </dl>
+    </div>
+    <hr>
+    <h3>Connecting via SFTP</h3>
+    <div class="dl-table">
+    <p>Add your SSH public key to connect to the FTP server</p>
+    <p>Once the key is active, Send a directory (alternatively a flat ZIP file) for each single publication notification. There should be no files in the top level of your SFTP folder.</p>
+        <dl>
+            {% if account.ftp_server_url %}
+                <dt>SFTP Address</dt>
+                <dd>{{ account.ftp_server_url }}</dd>
+                <dt>Port</dt>
+                <dd>{{ account.ftp_server_port }}</dd>
+            {% else %}
+                <dt>SFTP Address</dt>
+                <dd>{{ default_ftp_server['url'] }}</dd>
+                <dt>Port</dt>
+                <dd>{{ default_ftp_server['port'] }}</dd>
+            {% endif %}
+            <dt>Username</dt>
+            {% if account.custom_id %}
+                <dd>{{account.custom_id}}</dd>
+            {% else %}
+                <dd>{{account.id}}</dd>
+            {% endif %}
+        </dl>
+    </div>
 </div>

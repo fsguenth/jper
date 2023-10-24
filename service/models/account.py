@@ -69,7 +69,11 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
             "status": "<new, active, inactive>",
             "created_date": "<date key was added>"
             "last_updated": <date key status was updated">
-        }]
+        }],
+        "ftp_server" : {
+            "url": <url of the SSH server",
+            "port": <port of the SSH server",
+        }
     }
     '''
 
@@ -97,7 +101,8 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
     #             "publisher": {"contains": "object"},
     #             "sword": {"contains": "object"},
     #             "embargo": {"contains": "object"},
-    #             "license": {"contains": "object"}
+    #             "license": {"contains": "object"},
+    #             "ftp_server": {"contains": "object"},
     #         },
     #         "lists" : {
     #             "role" : {"contains" : "field", "coerce" : "unicode"},
@@ -151,7 +156,13 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
     #                     "created_date": {"coerce": "utcdatetime"},
     #                     "last_updated": {"coerce": "utcdatetime"},
     #                 }
-    #             }
+    #             },
+    #             "ftp_server": {
+    #                 "fields": {
+    #                     "url": {"coerce": "unicode"},
+    #                     "port": {"coerce": "unicode"}
+    #                 }
+    #             },
     #         }
     #     }
     #     self._add_struct(struct)
@@ -638,7 +649,6 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
         # finally write it
         self._set_single("license", obj)
 
-
     @property
     def ssh_keys(self):
         return self._get_list("ssh_keys")
@@ -646,6 +656,71 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
     @ssh_keys.setter
     def ssh_keys(self, vals):
         self._set_list("ssh_keys", vals)
+
+    @property
+    def ftp_server(self):
+        """
+        The ftp_server information for the publisher
+
+        The returned object is as follows:
+
+        ::
+            {
+                "url" : "<connection url for ftp>",
+                "port" : "<connection port for ftp>"            }
+
+        :return: The ftp_server information as a python dict object
+        """
+        return self._get_single("ftp_server")
+
+    @ftp_server.setter
+    def ftp_server(self, obj):
+        """
+        Set the ftp_server object
+
+        The object will be validated and types coerced as needed.
+
+        The supplied object should be structured as follows:
+
+        ::
+            {
+                "url" : "<connection url for the ftp server>",
+                "port" : "<connection port for the ftp server>"
+            }
+
+        :param obj: the ftp_server object as a dict
+        :return:
+        """
+        # validate the object structure quickly
+        allowed = ["url", "port"]
+        for k in list(obj.keys()):
+            if k not in allowed:
+                raise dataobj.DataSchemaException("ftp_server object must only contain the following keys: {x}".format(x=", ".join(allowed)))
+
+        # coerce the values of the keys
+        uc = dataobj.to_unicode()
+        for k in allowed:
+            if k in obj:
+                obj[k] = self._coerce(obj[k], uc)
+
+        # write it
+        self._set_single("ftp_server", obj)
+
+    @property
+    def ftp_server_url(self):
+        return self._get_single("ftp_server.url", coerce=self._utf8_unicode())
+
+    @ftp_server_url.setter
+    def ftp_server_url(self, val):
+        self._set_single("ftp_server.url", val, coerce=self._utf8_unicode())
+
+    @property
+    def ftp_server_port(self):
+        return self._get_single("ftp_server.port", coerce=self._utf8_unicode())
+
+    @ftp_server_port.setter
+    def ftp_server_port(self, val):
+        self._set_single("ftp_server.port", val, coerce=self._utf8_unicode())
 
     def add_ssh_key(self, public_key, title=None):
         """

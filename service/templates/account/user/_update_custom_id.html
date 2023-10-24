@@ -1,16 +1,18 @@
-<h4>Update custom ID</h4>
-<form method="POST" action="" class="form">
-    <ul class="form-fields">
-        <li class="form-fields__item--text">
-            <p>Optional field for human friendly id. If available, it is used as SSH username.</p>
-            {% if account.custom_id %}
-                <p>Current custom Id: {{ account.custom_id }}</p>
-            {% endif %}
-            <span class="form-fields__label-text"> New custom Id </span>
-            <input type="text" name="custom_id" value="">
-            <button id="reset_custom_id" type="submit"
-                class="btn btn--3d">Update</button>
-        </li>
-    </ul>
+{% if current_user.is_super %}
+    <h4>Update custom ID</h4>
+    <form method="POST" action="" class="form">
+        <ul class="form-fields">
+            <li class="form-fields__item--text">
+                <p>Optional field for human friendly id. If available, it is used as SSH username.</p>
+                {% if account.custom_id %}
+                    <p>Current custom Id: {{ account.custom_id }}</p>
+                {% endif %}
+                <span class="form-fields__label-text"> New custom Id </span>
+                <input type="text" name="custom_id" value="">
+                <button id="reset_custom_id" type="submit"
+                    class="btn btn--3d">Update</button>
+            </li>
+        </ul>
 
-</form>
+    </form>
+{% endif %}
