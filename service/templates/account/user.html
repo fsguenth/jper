@@ -25,16 +25,15 @@
                     {% include 'account/user/repository/_sword_status.html' %}
                 {% endif %}
                 {% include 'account/user/_update_login.html' %}
-                {% if current_user.is_super %}
-                    <div class="col span-3 push-1 cms">
-                        {# This column is displayed on the rights #}
-                        {% include 'account/user/_manage_account.html' %}
-                        {% include 'account/user/repository/_manage_role.html' %}
-                    </div>
-                {% endif %}
             </div>
+            {% if current_user.is_super %}
+                <div class="col span-3 push-1 cms">
+                    {# This column is displayed on the rights #}
+                    {% include 'account/user/_manage_account.html' %}
+                    {% include 'account/user/repository/_manage_role.html' %}
+                </div>
+            {% endif %}
         </div>
-
         <!-- 2016-08-18 TD : *** Do not want to display this *** -->
         {#% include 'account/user/repository/_search.html' %#}
 

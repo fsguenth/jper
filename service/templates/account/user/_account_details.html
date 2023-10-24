@@ -24,6 +24,10 @@
 					{% endif %}
 					<dt>Account <abbr title="Identifier">ID</abbr></dt>
 					<dd>{{account.id}}</dd>
+                    {% if account.custom_id %}
+                        <dt>Custom <abbr title="Identifier">ID</abbr></dt>
+                        <dd>{{account.custom_id}}</dd>
+                	{% endif %}
 					<dt><abbr title="Application Programming Interface">API</abbr> key</dt>
 	                <dd>{{account.data['api_key']}}</dd>
 				</dl>

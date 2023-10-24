@@ -16,6 +16,7 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
     '''
     {
         "id" : "<unique persistent account id>",
+        "custom_id": "<unique human friendly account id>",
         "created_date" : "<date account created>",
         "last_updated" : "<date account last modified>",
 
@@ -85,6 +86,7 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
     #     struct = {
     #         "fields" : {
     #             "id" : {"coerce" : "unicode"},
+    #             "custom_id" : {"coerce" : "unicode"},
     #             "created_date" : {"coerce" : "unicode"},
     #             "last_updated" : {"coerce" : "unicode"},
     #             "email" : {"coerce" : "unicode"},
@@ -154,6 +156,20 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
     #     }
     #     self._add_struct(struct)
     #     super(Account, self).__init__(raw=raw)
+
+    @property
+    def custom_id(self):
+        return self._get_single("custom_id", coerce=self._utf8_unicode())
+
+    @custom_id.setter
+    def custom_id(self, val):
+        existing_acc = Account.pull_by_custom_id(val)
+        if existing_acc and existing_acc != self.id:
+            raise dataobj.DataSchemaException(f"Account with custom id {val} already exists")
+        existing_acc = Account.pull(val)
+        if existing_acc and existing_acc != self.id:
+            raise dataobj.DataSchemaException(f"Account with id {val} already exists")
+        self._set_single("custom_id", val, coerce=self._utf8_unicode())
 
     @property
     def password(self):
@@ -738,6 +754,8 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
         has_acc = Account.pull(self.id)
         if isinstance(has_acc, Account) :
             raise dataobj.DataSchemaException(f"Account with id {acc_id} already exists")
+        if account_hash.get('custom_id', None):
+            self.custom_id = account_hash.get('custom_id')
         password = account_hash.get('password', None)
         if password:
             if not self.password:
@@ -930,6 +948,10 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
     def pull_by_email(cls,email):
         return cls.pull_by_key('email',email)
 
+    @classmethod
+    def pull_by_custom_id(cls, custom_id):
+        return cls.pull_by_key('custom_id',custom_id)
+
     def remove(self):
         if self.has_role('publisher'):
             un = self.id
@@ -989,7 +1011,8 @@ def _coerce_account_hash(account_hash):
         'repository': ['repository_name', 'repository_software', 'repository_url', 'repository_bibid', 'repository_sigel'],
         'sword': ['sword_username', 'sword_password', 'sword_collection'],
         'embargo': ['embargo_duration',],
-        'license': ['license_title', 'license_type', 'license_url', 'license_version', 'license_gold_license']
+        'license': ['license_title', 'license_type', 'license_url', 'license_version', 'license_gold_license'],
+        'ssh_keys': ['title', 'public_key']
     }
     for parent, props in nested_properties.items():
         parent_hash = account_hash.pop(parent, {})

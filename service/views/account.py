@@ -604,18 +604,43 @@ def username(username):
             abort(401)
 
         if request.values.get('email', False):
-            acc.data['email'] = request.values['email']
+            acc.email = request.values['email']
 
         if 'password' in request.values and not request.values['password'].startswith('sha1'):
             if len(request.values['password']) < 8:
                 flash("Sorry. Password must be at least eight characters long", "error")
                 return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
                                        license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text)
-            else:
+            try:
                 acc.set_password(request.values['password'])
+            except Exception as e:
+                ex_type, ex_value, ex_traceback = sys.exc_info()
+                flash('Error updating account: ' + str(ex_value), 'error')
+                return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
+                                       license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text)
 
-        acc.save()
-        time.sleep(2)
+        if request.values.get('custom_id', False):
+            if not current_user.is_super:
+                flash('Only administrator can change the custom ID', 'error')
+                return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
+                                   license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text)
+            try:
+                acc.custom_id = request.values['custom_id']
+            except Exception as e:
+                ex_type, ex_value, ex_traceback = sys.exc_info()
+                flash('Error updating account: ' + str(ex_value), 'error')
+                return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
+                                       license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text)
+
+        try:
+            acc.save()
+        except Exception as e:
+            ex_type, ex_value, ex_traceback = sys.exc_info()
+            flash('Error updating account: ' + str(ex_value), 'error')
+            return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
+                                   license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text)
+
+        # time.sleep(2)
         flash("Record updated", "success")
         return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
                                license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text)
@@ -989,7 +1014,7 @@ def register():
         abort(401)
 
     form = AdduserForm(request.form)
-    vals = request.json if request.json else request.values
+    vals = request.json if request.json else request.values.to_dict()
 
     if request.method == 'POST' and form.validate():
         role = vals.get('radio', None)
