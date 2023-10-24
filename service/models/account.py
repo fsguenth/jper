@@ -767,6 +767,11 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
             self.embargo = account_hash.get('embargo')
         if account_hash.get('license', {}):
             self.license = account_hash.get('license')
+        if account_hash.get('ssh_keys', []):
+            for key in ssh_keys:
+                if key.get('public_key', None) and key.get('title', None):
+                    self.add_ssh_key(key['public_key'], key['title'])
+        return
 
     def can_log_in(self):
         return True
