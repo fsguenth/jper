@@ -16,7 +16,6 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
     '''
     {
         "id" : "<unique persistent account id>",
-        "custom_id": "<unique human friendly account id>",
         "created_date" : "<date account created>",
         "last_updated" : "<date account last modified>",
 
@@ -63,14 +62,15 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
             "gold_license" : [<license type> | <license url>]
         },
         "ssh_keys" : [{
-            "id": <uuid for the ssh key",
+            "id": <uuid for the ssh key>",
             "title" : "<ssh key title>",
             "public_key": "<public ssh key>",
             "status": "<new, active, inactive>",
             "created_date": "<date key was added>"
             "last_updated": <date key status was updated">
         }],
-        "ftp_server" : {
+        "sftp_server" : {
+            "username": "<unique human friendly account id>",
             "url": <url of the SSH server",
             "port": <port of the SSH server",
         }
@@ -90,7 +90,6 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
     #     struct = {
     #         "fields" : {
     #             "id" : {"coerce" : "unicode"},
-    #             "custom_id" : {"coerce" : "unicode"},
     #             "created_date" : {"coerce" : "unicode"},
     #             "last_updated" : {"coerce" : "unicode"},
     #             "email" : {"coerce" : "unicode"},
@@ -102,7 +101,7 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
     #             "sword": {"contains": "object"},
     #             "embargo": {"contains": "object"},
     #             "license": {"contains": "object"},
-    #             "ftp_server": {"contains": "object"},
+    #             "sftp_server": {"contains": "object"},
     #         },
     #         "lists" : {
     #             "role" : {"contains" : "field", "coerce" : "unicode"},
@@ -157,8 +156,9 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
     #                     "last_updated": {"coerce": "utcdatetime"},
     #                 }
     #             },
-    #             "ftp_server": {
+    #             "sftp_server": {
     #                 "fields": {
+    #                     "username": {"coerce": "unicode"},
     #                     "url": {"coerce": "unicode"},
     #                     "port": {"coerce": "unicode"}
     #                 }
@@ -167,20 +167,6 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
     #     }
     #     self._add_struct(struct)
     #     super(Account, self).__init__(raw=raw)
-
-    @property
-    def custom_id(self):
-        return self._get_single("custom_id", coerce=self._utf8_unicode())
-
-    @custom_id.setter
-    def custom_id(self, val):
-        existing_acc = Account.pull_by_custom_id(val)
-        if existing_acc and existing_acc != self.id:
-            raise dataobj.DataSchemaException(f"Account with custom id {val} already exists")
-        existing_acc = Account.pull(val)
-        if existing_acc and existing_acc != self.id:
-            raise dataobj.DataSchemaException(f"Account with id {val} already exists")
-        self._set_single("custom_id", val, coerce=self._utf8_unicode())
 
     @property
     def password(self):
@@ -658,25 +644,26 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
         self._set_list("ssh_keys", vals)
 
     @property
-    def ftp_server(self):
+    def sftp_server(self):
         """
-        The ftp_server information for the publisher
+        The sftp_server information for the publisher
 
         The returned object is as follows:
 
         ::
             {
-                "url" : "<connection url for ftp>",
-                "port" : "<connection port for ftp>"            }
+                "username": "<connection username for sftp>",
+                "url" : "<connection url for sftp>",
+                "port" : "<connection port for sftp>"            }
 
         :return: The ftp_server information as a python dict object
         """
-        return self._get_single("ftp_server")
+        return self._get_single("sftp_server")
 
-    @ftp_server.setter
-    def ftp_server(self, obj):
+    @sftp_server.setter
+    def sftp_server(self, obj):
         """
-        Set the ftp_server object
+        Set the sftp_server object
 
         The object will be validated and types coerced as needed.
 
@@ -684,43 +671,56 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
 
         ::
             {
-                "url" : "<connection url for the ftp server>",
-                "port" : "<connection port for the ftp server>"
+                "username": "<connection username for sftp>",
+                "url" : "<connection url for the sftp server>",
+                "port" : "<connection port for the sftp server>"
             }
 
-        :param obj: the ftp_server object as a dict
+        :param obj: the sftp_server object as a dict
         :return:
         """
         # validate the object structure quickly
-        allowed = ["url", "port"]
+        allowed = ["username", "url", "port"]
         for k in list(obj.keys()):
             if k not in allowed:
-                raise dataobj.DataSchemaException("ftp_server object must only contain the following keys: {x}".format(x=", ".join(allowed)))
+                raise dataobj.DataSchemaException("sftp_server object must only contain the following keys: {x}".format(x=", ".join(allowed)))
 
         # coerce the values of the keys
         uc = dataobj.to_unicode()
         for k in allowed:
             if k in obj:
-                obj[k] = self._coerce(obj[k], uc)
-
+                if k == 'username':
+                    if self._sftp_username_is_unique(obj[k]):
+                        obj[k] = self._coerce(obj[k], uc)
+                else:
+                    obj[k] = self._coerce(obj[k], uc)
         # write it
-        self._set_single("ftp_server", obj)
+        self._set_single("sftp_server", obj)
 
     @property
-    def ftp_server_url(self):
-        return self._get_single("ftp_server.url", coerce=self._utf8_unicode())
+    def sftp_server_username(self):
+        return self._get_single("sftp_server.username", coerce=self._utf8_unicode())
 
-    @ftp_server_url.setter
-    def ftp_server_url(self, val):
-        self._set_single("ftp_server.url", val, coerce=self._utf8_unicode())
+    @sftp_server_username.setter
+    def sftp_server_username(self, val):
+        if self._sftp_username_is_unique(val):
+            self._set_single("sftp_server.username", val, coerce=self._utf8_unicode())
 
     @property
-    def ftp_server_port(self):
-        return self._get_single("ftp_server.port", coerce=self._utf8_unicode())
+    def sftp_server_url(self):
+        return self._get_single("sftp_server.url", coerce=self._utf8_unicode())
 
-    @ftp_server_port.setter
-    def ftp_server_port(self, val):
-        self._set_single("ftp_server.port", val, coerce=self._utf8_unicode())
+    @sftp_server_url.setter
+    def sftp_server_url(self, val):
+        self._set_single("sftp_server.url", val, coerce=self._utf8_unicode())
+
+    @property
+    def sftp_server_port(self):
+        return self._get_single("sftp_server.port", coerce=self._utf8_unicode())
+
+    @sftp_server_port.setter
+    def sftp_server_port(self, val):
+        self._set_single("sftp_server.port", val, coerce=self._utf8_unicode())
 
     def add_ssh_key(self, public_key, title=None):
         """
@@ -778,6 +778,18 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
         self.ssh_keys = new_keys
         return True
 
+    def _sftp_username_is_unique(self, val):
+        if val == self.id:
+            return True
+        existing_acc = Account.pull_by_sftp_username(val)
+        if existing_acc and existing_acc.id != self.id:
+            raise dataobj.DataSchemaException(f"Account with sftp username {val} already exists")
+        existing_acc = Account.pull(val)
+        if existing_acc and existing_acc.id != self.id:
+            raise dataobj.DataSchemaException(f"Account with id {val} already exists")
+        return True
+
+
     def _key_exists(self, id):
         key_exists = False
         for key in self.ssh_keys:
@@ -829,8 +841,6 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
         has_acc = Account.pull(self.id)
         if isinstance(has_acc, Account) :
             raise dataobj.DataSchemaException(f"Account with id {acc_id} already exists")
-        if account_hash.get('custom_id', None):
-            self.custom_id = account_hash.get('custom_id')
         password = account_hash.get('password', None)
         if password:
             if not self.password:
@@ -1024,19 +1034,10 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
         return cls.pull_by_key('email',email)
 
     @classmethod
-    def pull_by_custom_id(cls, custom_id):
-        return cls.pull_by_key('custom_id',custom_id)
+    def pull_by_sftp_username(cls, username):
+        return cls.pull_by_key('sftp_server.username',username)
 
     def remove(self):
-        if self.has_role('publisher'):
-            un = self.id
-            try:
-                import os, subprocess
-                fl = os.path.dirname(os.path.abspath(__file__)) + '/deleteFTPuser.sh'
-                subprocess.call(['sudo',fl,un])
-                app.logger.info(str(self.id) + ' calling deleteFTPuser subprocess')
-            except:
-                app.logger.error(str(self.id) + ' failed deleteFTPuser subprocess')
         self.delete()
 
 

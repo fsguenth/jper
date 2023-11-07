@@ -1,5 +1,8 @@
 {% set ssh_text = " """ %}
-<div class="box box--padding-large box--brd-mgreyblue">
+<div style="margin:10px 0px;">
+    <button onclick="show_form('add_ssh_key')">Show / hide form to add SSH key</button>
+</div>
+<div id="add_ssh_key" style="display: none;">
     <h3>Add SSH key</h3>
     <div class="row">
         <form method="POST" action="{{request.path}}/add_ssh_key" class="form">

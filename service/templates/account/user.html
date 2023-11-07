@@ -12,9 +12,6 @@
                     {% include 'account/user/publisher/_matching_history.html' %}
                     {% include 'account/user/publisher/_default_license_form.html' %}
                     {% include 'account/user/publisher/_connection_details.html' %}
-                    {% include 'account/user/publisher/_list_ssh_keys.html' %}
-                    {% include 'account/user/publisher/_add_ssh_key.html' %}
-                    {% include 'account/user/publisher/_ftp_server_settings_form.html' %}
                 {% endif %}
                 {% if account.has_role('repository') %}
                     {% include 'account/user/repository/_matching_details_form.html' %}
@@ -59,6 +56,15 @@
 	     	document.getElementById("form_passive").submit();
 		}
         {#% include 'account/user/repository/_search_js.html' %#}
+
+        function show_form(form_id) {
+          var x = document.getElementById(form_id);
+          if (x.style.display === "none") {
+            x.style.display = "block";
+          } else {
+            x.style.display = "none";
+          }
+        }
 
     </script>
 {% endblock extra_js_bottom %}

@@ -598,9 +598,9 @@ def username(username):
         license_ids = None
         sword_status = None
 
-    default_ftp_server = {
-        'url':  app.config.get("DEFAULT_FTP_SERVER_URL", ''),
-        'port':  app.config.get("DEFAULT_FTP_SERVER_PORT", '')
+    default_sftp_server = {
+        'url':  app.config.get("DEFAULT_SFTP_SERVER_URL", ''),
+        'port':  app.config.get("DEFAULT_SFTP_SERVER_PORT", '')
     }
 
     if request.method == 'POST':
@@ -615,7 +615,7 @@ def username(username):
                 flash("Sorry. Password must be at least eight characters long", "error")
                 return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
                                        license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text,
-                                       default_ftp_server=default_ftp_server)
+                                       default_sftp_server=default_sftp_server)
             try:
                 acc.set_password(request.values['password'])
             except Exception as e:
@@ -623,22 +623,7 @@ def username(username):
                 flash('Error updating account: ' + str(ex_value), 'error')
                 return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
                                        license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text,
-                                       default_ftp_server=default_ftp_server)
-
-        if request.values.get('custom_id', False):
-            if not current_user.is_super:
-                flash('Only administrator can change the custom ID', 'error')
-                return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
-                                       license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text,
-                                       default_ftp_server=default_ftp_server)
-            try:
-                acc.custom_id = request.values['custom_id']
-            except Exception as e:
-                ex_type, ex_value, ex_traceback = sys.exc_info()
-                flash('Error updating account: ' + str(ex_value), 'error')
-                return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
-                                       license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text,
-                                       default_ftp_server=default_ftp_server)
+                                       default_sftp_server=default_sftp_server)
 
         try:
             acc.save()
@@ -647,16 +632,16 @@ def username(username):
             flash('Error updating account: ' + str(ex_value), 'error')
             return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
                                    license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text,
-                                   default_ftp_server=default_ftp_server)
+                                   default_sftp_server=default_sftp_server)
 
         flash("Record updated", "success")
         return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
                                license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text,
-                               default_ftp_server=default_ftp_server)
+                               default_sftp_server=default_sftp_server)
     elif current_user.id == acc.id or current_user.is_super:
         return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
                                license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text,
-                               default_ftp_server=default_ftp_server)
+                               default_sftp_server=default_sftp_server)
     else:
         abort(404)
 
@@ -979,29 +964,37 @@ def delete_ssh_key(username):
     return redirect(url_for('.username', username=username))
 
 
-@blueprint.route('/<username>/ftp_server', methods=['POST', 'DELETE'])
-def ftp_server(username):
+@blueprint.route('/<username>/sftp_server', methods=['POST', 'DELETE'])
+def sftp_server(username):
     acc = models.Account.pull(username)
     if not current_user.is_super:
         abort(401)
     if (request.method == 'DELETE' or
           (request.method == 'POST' and
            request.values.get('submit', '').split(' ')[0].lower() == 'delete')):
-        if request.values.get('ftp_server_url', '') == acc.ftp_server_url:
-            ftp_server_details = {'url': '', 'port': ''}
-            acc.ftp_server = ftp_server_details
+        if request.values.get('sftp_server_url', '') == acc.sftp_server_url:
+            sftp_server_details = {'username':'', 'url': '', 'port': ''}
+            acc.sftp_server = sftp_server_details
             acc.save()
-            flash('FTP server details have been deleted.', "success")
+            flash('SFTP server details have been deleted.', "success")
     else:
-        ftp_server_details = {}
-        if request.values.get('ftp_server_url', ''):
-            ftp_server_details['url'] = request.values['ftp_server_url']
-        if request.values.get('ftp_server_port', ''):
-            ftp_server_details['port'] = request.values['ftp_server_port']
-        if ftp_server_details:
-            acc.ftp_server = ftp_server_details
+        sftp_server_details = {}
+        if request.values.get('sftp_server_username', ''):
+            sftp_server_details['username'] = request.values['sftp_server_username']
+        if request.values.get('sftp_server_url', ''):
+            sftp_server_details['url'] = request.values['sftp_server_url']
+        if request.values.get('sftp_server_port', ''):
+            sftp_server_details['port'] = request.values['sftp_server_port']
+        if sftp_server_details:
+            if not 'username' in sftp_server_details:
+                sftp_server_details['username'] = acc.id
+            if not 'url' in sftp_server_details:
+                sftp_server_details['url'] = app.config.get("DEFAULT_SFTP_SERVER_URL", '')
+            if not 'port' in sftp_server_details:
+                sftp_server_details['port'] = app.config.get("DEFAULT_SFTP_SERVER_PORT", '')
+            acc.sftp_server = sftp_server_details
             acc.save()
-            flash('FTP server details have been updated.', "success")
+            flash('SFTP server details have been updated.', "success")
     return redirect(url_for('.username', username=username))
 
 
