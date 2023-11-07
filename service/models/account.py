@@ -658,7 +658,14 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
 
         :return: The ftp_server information as a python dict object
         """
-        return self._get_single("sftp_server")
+        sftp_server = self._get_single("sftp_server")
+        if not sftp_server['username']:
+            sftp_server['username'] = self.id
+        if not sftp_server['url']:
+            sftp_server['url'] = app.config.get("DEFAULT_SFTP_SERVER_URL", '')
+        if not sftp_server['port']:
+            sftp_server['port'] = app.config.get("DEFAULT_SFTP_SERVER_PORT", '')
+        return sftp_server
 
     @sftp_server.setter
     def sftp_server(self, obj):
@@ -684,42 +691,60 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
         for k in list(obj.keys()):
             if k not in allowed:
                 raise dataobj.DataSchemaException("sftp_server object must only contain the following keys: {x}".format(x=", ".join(allowed)))
-
-        # coerce the values of the keys
-        uc = dataobj.to_unicode()
-        for k in allowed:
-            if k in obj:
-                if k == 'username':
-                    if self._sftp_username_is_unique(obj[k]):
-                        obj[k] = self._coerce(obj[k], uc)
-                else:
-                    obj[k] = self._coerce(obj[k], uc)
-        # write it
-        self._set_single("sftp_server", obj)
+        if 'username' in obj:
+            self.sftp_server_username = obj['username']
+        if 'url' in obj:
+            self.sftp_server_url = obj['url']
+        if 'port' in obj:
+            self.sftp_server_port = obj['port']
 
     @property
     def sftp_server_username(self):
-        return self._get_single("sftp_server.username", coerce=self._utf8_unicode())
+        # If empty serve the account id
+        val = self._get_single("sftp_server.username", coerce=self._utf8_unicode())
+        if not val:
+            return self.id
+        return val
 
     @sftp_server_username.setter
     def sftp_server_username(self, val):
-        if self._sftp_username_is_unique(val):
+        # Do not save the default value - account id and check it is unique
+        is_unique = True
+        if val == self.id:
+            val = ''
+        if val:
+            is_unique = self._sftp_username_is_unique(val)
+        if is_unique:
             self._set_single("sftp_server.username", val, coerce=self._utf8_unicode())
 
     @property
     def sftp_server_url(self):
-        return self._get_single("sftp_server.url", coerce=self._utf8_unicode())
+        # If empty serve the default value - DEFAULT_SFTP_SERVER_URL
+        val = self._get_single("sftp_server.url", coerce=self._utf8_unicode())
+        if not val:
+            return app.config.get("DEFAULT_SFTP_SERVER_URL", '')
+        return val
 
     @sftp_server_url.setter
     def sftp_server_url(self, val):
+        # Do not save the default value
+        if val == app.config.get("DEFAULT_SFTP_SERVER_URL", ''):
+            val = ''
         self._set_single("sftp_server.url", val, coerce=self._utf8_unicode())
 
     @property
     def sftp_server_port(self):
-        return self._get_single("sftp_server.port", coerce=self._utf8_unicode())
+        # If empty serve the default value - DEFAULT_SFTP_SERVER_PORT
+        val = self._get_single("sftp_server.port", coerce=self._utf8_unicode())
+        if not val:
+            return app.config.get("DEFAULT_SFTP_SERVER_PORT", '')
+        return val
 
     @sftp_server_port.setter
     def sftp_server_port(self, val):
+        # Do not save the default value
+        if val == app.config.get("DEFAULT_SFTP_SERVER_PORT", ''):
+            val = ''
         self._set_single("sftp_server.port", val, coerce=self._utf8_unicode())
 
     def add_ssh_key(self, public_key, title=None):

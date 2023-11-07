@@ -627,14 +627,10 @@ def username(username):
 
         try:
             acc.save()
+            flash("Record updated", "success")
         except Exception as e:
             ex_type, ex_value, ex_traceback = sys.exc_info()
             flash('Error updating account: ' + str(ex_value), 'error')
-            return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
-                                   license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text,
-                                   default_sftp_server=default_sftp_server)
-
-        flash("Record updated", "success")
         return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
                                license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text,
                                default_sftp_server=default_sftp_server)
@@ -652,28 +648,37 @@ def pubinfo(username):
     if current_user.id != acc.id and not current_user.is_super:
         abort(401)
 
-    if request.values.get('embargo_form', False):
-        if request.values.get('embargo_duration', False):
-            acc.embargo = {'duration': request.values['embargo_duration']}
-        else:
-            acc.embargo = {'duration': 0}
-
+    add_license = False
     license_details = {}
     if request.values.get('license_form', False):
-        if request.values.get('license_title', False):
+        add_license = True
+        if 'license_title' in request.values:
             license_details['title'] = request.values['license_title']
-        if request.values.get('license_type', False):
+        if 'license_type' in request.values:
             license_details['type'] = request.values['license_type']
-        if request.values.get('license_url', False):
+        if 'license_url' in request.values:
             license_details['url'] = request.values['license_url']
-        if request.values.get('license_version', False):
+        if 'license_version' in request.values:
             license_details['version'] = request.values['license_version']
-        if request.values.get('license_gold_license', False):
+        if 'license_gold_license' in request.values:
             license_details['gold_license'] = request.values['license_gold_license']
-    if license_details:
-        acc.license = license_details
-    acc.save()
-    flash('Thank you. Your publisher details have been updated.', "success")
+
+    add_embargo = False
+    embargo_details = {'duration': 0}
+    if request.values.get('embargo_form', False):
+        add_embargo = True
+        if request.values.get('embargo_duration', False):
+            embargo_details = {'duration': request.values['embargo_duration']}
+    try:
+        if add_license:
+            acc.license = license_details
+        if add_embargo:
+            acc.embargo = embargo_details
+        acc.save()
+        flash('Thank you. Your publisher details have been updated.', "success")
+    except Exception as e:
+        ex_type, ex_value, ex_traceback = sys.exc_info()
+        flash('Error updating publisher details: ' + str(ex_value), 'error')
     return redirect(url_for('.username', username=username))
 
 
@@ -683,59 +688,53 @@ def repoinfo(username):
     if current_user.id != acc.id and not current_user.is_super:
         abort(401)
 
-    if 'repository' not in acc.data:
-        acc.data['repository'] = {}
-    # 2016-10-04 TD: proper handling of two independent forms using hidden input fields
-    # if request.values.get('repo_profile_form',False):
-    if request.values.get('repository_software', False):
-        acc.data['repository']['software'] = request.values['repository_software']
-    else:
-        acc.data['repository']['software'] = ''
-    if request.values.get('repository_url', False):
-        acc.data['repository']['url'] = request.values['repository_url'].strip()
-    else:
-        acc.data['repository']['url'] = ''
-    if request.values.get('repository_name', False):
-        acc.data['repository']['name'] = request.values['repository_name']
-    else:
-        acc.data['repository']['name'] = ''
-    if request.values.get('repository_sigel', False):
-        acc.data['repository']['sigel'] = request.values['repository_sigel'].split(',')
-    else:
-        acc.data['repository']['sigel'] = []
-    if request.values.get('repository_bibid', False):
-        acc.data['repository']['bibid'] = request.values['repository_bibid'].strip().upper()
-    else:
-        acc.data['repository']['bibid'] = ''
+    add_repository = False
+    repository = {}
+    if request.values.get('repository_form', False):
+        add_repository = True
+        if 'repository_software' in request.values:
+            repository['software'] = request.values['repository_software']
+        if 'repository_url' in request.values:
+            repository['url'] = request.values['repository_url'].strip()
+        if 'repository_name' in request.values:
+            repository['name'] = request.values['repository_name']
+        if 'repository_sigel' in request.values:
+            repository['sigel'] = request.values['repository_sigel'].split(',')
+        if 'repository_bibid' in request.values:
+            repository['bibid'] = request.values['repository_bibid'].strip().upper()
 
-    if 'sword' not in acc.data:
-        acc.data['sword'] = {}
-    # 2016-10-04 TD: proper handling of two independent forms using hidden input fields
-    # if request.values.get('repo_sword_form',False):
-    if request.values.get('sword_username', False):
-        acc.data['sword']['username'] = request.values['sword_username']
-    else:
-        acc.data['sword']['username'] = ''
-    if request.values.get('sword_password', False):
-        acc.data['sword']['password'] = request.values['sword_password']
-    else:
-        acc.data['sword']['password'] = ''
-    if request.values.get('sword_collection', False):
-        acc.data['sword']['collection'] = request.values['sword_collection'].strip()
-    else:
-        acc.data['sword']['collection'] = ''
-    if request.values.get('sword_deposit_method', False):
-        acc.data['sword']['deposit_method'] = request.values['sword_deposit_method'].strip()
-    else:
-        acc.data['sword']['deposit_method'] = ''
+    add_sword = False
+    sword = {}
+    if request.values.get('sword_form', False):
+        add_sword = True
+        if 'sword_username' in request.values:
+            sword['username'] = request.values['sword_username']
+        if 'sword_password' in request.values:
+            sword['password'] = request.values['sword_password']
+        if 'sword_collection' in request.values:
+            sword['collection'] = request.values['sword_collection'].strip()
+        if 'sword_deposit_method' in request.values:
+            sword['deposit_method'] = request.values['sword_deposit_method'].strip()
 
+    add_packaging = False
+    packaging = []
+    if 'packaging' in request.values:
+        add_packaging = True
     if request.values.get('packaging', False):
-        acc.data['packaging'] = [s.strip() for s in request.values['packaging'].split(',')]
-    else:
-        acc.data['packaging'] = []
+        packaging = [s.strip() for s in request.values['packaging'].split(',')]
 
-    acc.save()
-    flash('Thank you. Your repository details have been updated.', "success")
+    try:
+        if add_repository:
+            acc.data['repository'] = repository
+        if add_sword:
+            acc.data['sword'] = sword
+        if add_packaging:
+            acc.data['packaging'] = packaging
+        acc.save()
+        flash('Thank you. Your repository details have been updated.', "success")
+    except Exception as e:
+        ex_type, ex_value, ex_traceback = sys.exc_info()
+        flash('Error updating repository details: ' + str(ex_value), 'error')
     return redirect(url_for('.username', username=username))
 
 
@@ -744,9 +743,13 @@ def apikey(username):
     if current_user.id != username and not current_user.is_super:
         abort(401)
     acc = models.Account.pull(username)
-    acc.api_key = str(uuid.uuid4())
-    acc.save()
-    flash('Thank you. Your API key has been updated.', "success")
+    try:
+        acc.api_key = str(uuid.uuid4())
+        acc.save()
+        flash('Thank you. Your API key has been updated.', "success")
+    except Exception as e:
+        ex_type, ex_value, ex_traceback = sys.exc_info()
+        flash('Error updating API key details: ' + str(ex_value), 'error')
     return redirect(url_for('.username', username=username))
 
 
@@ -821,24 +824,33 @@ def changerole(username, role):
     acc = models.Account.pull(username)
     if acc is None:
         abort(404)
-    elif request.method == 'POST' and current_user.is_super:
+    if request.method == 'POST':
+        if not current_user.is_super:
+            abort(401)
         if 'become' in request.path:
-            if role == 'active' and acc.has_role('repository'):
-                acc.set_active()
-                acc.save()
-            elif role == 'passive' and acc.has_role('repository'):
-                acc.set_passive()
-                acc.save()
-            else:
-                acc.add_role(role)
-                acc.save()
+            try:
+                if role == 'active' and acc.has_role('repository'):
+                    acc.set_active()
+                    acc.save()
+                elif role == 'passive' and acc.has_role('repository'):
+                    acc.set_passive()
+                    acc.save()
+                else:
+                    acc.add_role(role)
+                    acc.save()
+                flash("Role updated", "success")
+            except Exception as e:
+                ex_type, ex_value, ex_traceback = sys.exc_info()
+                flash('Error updating account role: ' + str(ex_value), 'error')
         elif 'cease' in request.path:
-            acc.remove_role(role)
-            acc.save()
-        flash("Record updated", "success")
+            try:
+                acc.remove_role(role)
+                acc.save()
+                flash("Role removed", "success")
+            except Exception as e:
+                ex_type, ex_value, ex_traceback = sys.exc_info()
+                flash('Error removing account role: ' + str(ex_value), 'error')
         return redirect(url_for('.username', username=username))
-    else:
-        abort(401)
 
 
 @blueprint.route('/<username>/sword_activate', methods=['POST'])
@@ -930,9 +942,13 @@ def add_ssh_key(username):
     if not ssh_key:
         flash("Sorry. SSH key is required", "error")
         return redirect(url_for('.username', username=username))
-    acc.add_ssh_key(ssh_key, title)
-    acc.save()
-    flash('The ssh key has been added', "success")
+    try:
+        acc.add_ssh_key(ssh_key, title)
+        acc.save()
+        flash('The ssh key has been added', "success")
+    except Exception as e:
+        ex_type, ex_value, ex_traceback = sys.exc_info()
+        flash('Error saving SSH key: ' + str(ex_value), 'error')
     return redirect(url_for('.username', username=username))
 
 
@@ -944,9 +960,13 @@ def activate_ssh_key(username):
     if acc is None:
         abort(404)
     ssh_key = request.values.get('id', None)
-    acc.activate_ssh_key(ssh_key)
-    acc.save()
-    flash('The ssh key has been activated', "success")
+    try:
+        acc.activate_ssh_key(ssh_key)
+        acc.save()
+        flash('The ssh key has been activated', "success")
+    except Exception as e:
+        ex_type, ex_value, ex_traceback = sys.exc_info()
+        flash('Error activating SSH key: ' + str(ex_value), 'error')
     return redirect(url_for('.username', username=username))
 
 
@@ -958,9 +978,13 @@ def delete_ssh_key(username):
     if acc is None:
         abort(404)
     ssh_key = request.values.get('id', None)
-    acc.delete_ssh_key(ssh_key)
-    acc.save()
-    flash('The ssh key has been deleted', "success")
+    try:
+        acc.delete_ssh_key(ssh_key)
+        acc.save()
+        flash('The ssh key has been deleted', "success")
+    except Exception as e:
+        ex_type, ex_value, ex_traceback = sys.exc_info()
+        flash('Error deleting SSH key: ' + str(ex_value), 'error')
     return redirect(url_for('.username', username=username))
 
 
@@ -974,27 +998,29 @@ def sftp_server(username):
            request.values.get('submit', '').split(' ')[0].lower() == 'delete')):
         if request.values.get('sftp_server_url', '') == acc.sftp_server_url:
             sftp_server_details = {'username':'', 'url': '', 'port': ''}
-            acc.sftp_server = sftp_server_details
-            acc.save()
-            flash('SFTP server details have been deleted.', "success")
+            try:
+                acc.sftp_server = sftp_server_details
+                acc.save()
+                flash('SFTP server details have been deleted.', "success")
+            except Exception as e:
+                ex_type, ex_value, ex_traceback = sys.exc_info()
+                flash('Error deleting SFTP server details: ' + str(ex_value), 'error')
     else:
         sftp_server_details = {}
-        if request.values.get('sftp_server_username', ''):
+        if 'sftp_server_username' in request.values:
             sftp_server_details['username'] = request.values['sftp_server_username']
-        if request.values.get('sftp_server_url', ''):
+        if 'sftp_server_url' in request.values:
             sftp_server_details['url'] = request.values['sftp_server_url']
-        if request.values.get('sftp_server_port', ''):
+        if 'sftp_server_port' in request.values:
             sftp_server_details['port'] = request.values['sftp_server_port']
         if sftp_server_details:
-            if not 'username' in sftp_server_details:
-                sftp_server_details['username'] = acc.id
-            if not 'url' in sftp_server_details:
-                sftp_server_details['url'] = app.config.get("DEFAULT_SFTP_SERVER_URL", '')
-            if not 'port' in sftp_server_details:
-                sftp_server_details['port'] = app.config.get("DEFAULT_SFTP_SERVER_PORT", '')
-            acc.sftp_server = sftp_server_details
-            acc.save()
-            flash('SFTP server details have been updated.', "success")
+            try:
+                acc.sftp_server = sftp_server_details
+                acc.save()
+                flash('SFTP server details have been updated.', "success")
+            except Exception as e:
+                ex_type, ex_value, ex_traceback = sys.exc_info()
+                flash('Error saving SFTP server details: ' + str(ex_value), 'error')
     return redirect(url_for('.username', username=username))
 
 
@@ -1039,11 +1065,11 @@ def register():
         account = models.Account()
         try:
             account.add_account(vals)
+            account.save()
         except Exception as e:
             ex_type, ex_value, ex_traceback = sys.exc_info()
             flash('Error creating account: ' + str(ex_value), 'error')
             return render_template('account/register.html', vals=vals, form=form)
-        account.save()
         flash('Account created for ' + account.id, 'success')
         return redirect('/account')
 

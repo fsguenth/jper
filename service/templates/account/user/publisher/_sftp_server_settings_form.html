@@ -10,33 +10,18 @@
                 <ul class="form-fields">
                     <li class="form-fields__item--text">
                         <span class="form-fields__label-text">SFTP username</span>
-                        {% if account.sftp_server_username %}
-                            <input type="text" class="input--large" name="sftp_server_username"
-                                value="{{account.sftp_server_username}}" />
-                        {% else %}
-                            <input type="text" class="input--large" name="sftp_server_username"
-                                value="{{ account.id }}" />
-                        {% endif %}
+                        <input type="text" class="input--large" name="sftp_server_username"
+                            value="{{account.sftp_server_username}}" />
                     </li>
                     <li class="form-fields__item--text">
                         <span class="form-fields__label-text">SFTP server URL</span>
-                        {% if account.sftp_server_url %}
-                            <input type="text" class="input--large" name="sftp_server_url"
-                                value="{{account.sftp_server_url}}" />
-                        {% else %}
-                            <input type="text" class="input--large" name="sftp_server_url"
-                                value="{{ default_sftp_server['url'] }}" />
-                        {% endif %}
+                        <input type="text" class="input--large" name="sftp_server_url"
+                            value="{{account.sftp_server_url}}" />
                     </li>
                     <li class="form-fields__item--text">
                         <span class="form-fields__label-text">SFTP server port</span>
-                        {% if account.sftp_server_port %}
-                            <input type="text" class="input--large" name="sftp_server_port"
-                                value="{{account.sftp_server_port}}" />
-                        {% else %}
-                            <input type="text" class="input--large" name="sftp_server_port"
-                                value="{{ default_sftp_server['port'] }}" />
-                        {% endif %}
+                        <input type="text" class="input--large" name="sftp_server_port"
+                            value="{{account.sftp_server_port}}" />
                     </li>
                 </ul>
                 <button class="btn btn--3d btnright" id="update" type="submit">Update
