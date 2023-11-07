@@ -970,6 +970,24 @@ def activate_ssh_key(username):
     return redirect(url_for('.username', username=username))
 
 
+@blueprint.route('/<username>/deactivate_ssh_key', methods=["POST"])
+def deactivate_ssh_key(username):
+    if not current_user.is_super:
+        abort(401)
+    acc = models.Account.pull(username)
+    if acc is None:
+        abort(404)
+    ssh_key = request.values.get('id', None)
+    try:
+        acc.deactivate_ssh_key(ssh_key)
+        acc.save()
+        flash('The ssh key has been made inactive', "success")
+    except Exception as e:
+        ex_type, ex_value, ex_traceback = sys.exc_info()
+        flash('Error making SSH key inactive: ' + str(ex_value), 'error')
+    return redirect(url_for('.username', username=username))
+
+
 @blueprint.route('/<username>/delete_ssh_key', methods=["POST"])
 def delete_ssh_key(username):
     if current_user.id != username and not current_user.is_super:

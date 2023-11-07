@@ -778,15 +778,30 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
         """
         Any key can be made active (not just new)
         Check id exists
-        set all active keys to inactive
         Set id to active
+        Multiple keys can be active
         """
         if not self._key_exists(id):
             raise dataobj.DataSchemaException(f"Key {id} does not exist")
 
-        inactive_keys = self._deactivate_keys(self.ssh_keys)
+        # inactive_keys = self._deactivate_keys(self.ssh_keys)
+        # new_keys = self._set_status(inactive_keys, id, 'active')
+        new_keys = self._set_status(self.ssh_keys, id, 'active')
+        self.ssh_keys = new_keys
+        return True
 
-        new_keys = self._set_status(inactive_keys, id, 'active')
+    def deactivate_ssh_key(self, id):
+        """
+        Any active key can be made inactive
+        Check id exists
+        Set id to inactive
+        """
+        if not self._key_exists(id):
+            raise dataobj.DataSchemaException(f"Key {id} does not exist")
+        current_status = self._get_status(id)
+        if current_status != 'active':
+            raise dataobj.DataSchemaException(f"Cannot make key inactive #{id}. It is not active.")
+        new_keys = self._set_status(self.ssh_keys, id, 'inactive')
         self.ssh_keys = new_keys
         return True
 

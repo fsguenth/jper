@@ -38,6 +38,12 @@
                                     <input type="hidden" name="id" class="form-control" value="{{ ssh_key['id'] }}"/>
                                     <button class="btn btn--3d" id="Activate SSH key" type="submit">Activate SSH key</button>
                                 </ul>
+                            </form><br/>
+                            <form method="POST" action="{{request.path}}/delete_ssh_key" class="form">
+                                <ul class="form-fields">
+                                    <input type="hidden" name="id" class="form-control" value="{{ ssh_key['id'] }}"/>
+                                    <button class="btn btn--3d" id="Delete SSH key" type="submit">Delete SSH key</button>
+                                </ul>
                             </form>
                         {% endif %}
                         {% if ssh_key.get('status', '') == 'inactive' %}
@@ -51,6 +57,14 @@
                                 <ul class="form-fields">
                                     <input type="hidden" name="id" class="form-control" value="{{ ssh_key['id'] }}"/>
                                     <button class="btn btn--3d" id="Delete SSH key" type="submit">Delete SSH key</button>
+                                </ul>
+                            </form>
+                        {% endif %}
+                        {% if ssh_key.get('status', '') == 'active' %}
+                            <form method="POST" action="{{request.path}}/deactivate_ssh_key" class="form">
+                                <ul class="form-fields">
+                                    <input type="hidden" name="id" class="form-control" value="{{ ssh_key['id'] }}"/>
+                                    <button class="btn btn--3d" id="Make SSH key inactive" type="submit">Make SSH key inactive</button>
                                 </ul>
                             </form>
                         {% endif %}
