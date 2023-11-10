@@ -585,8 +585,6 @@ def username(username):
                 flash('Account ' + acc.id + ' deleted')
             return redirect(url_for('.index'))
 
-    ssh_help_text = """Begins with 'ssh-rsa', 'ecdsa-sha2-nistp256', 'ecdsa-sha2-nistp384', 'ecdsa-sha2-nistp521', 'ssh-ed25519', 'sk-ecdsa-sha2-nistp256@openssh.com', or 'sk-ssh-ed25519@openssh.com'"""
-
     if acc.has_role('repository'):
         repoconfig = models.RepositoryConfig.pull_by_repo(acc.id)
         licenses = get_matching_licenses(acc.id)
@@ -598,6 +596,11 @@ def username(username):
         license_ids = None
         sword_status = None
 
+    ssh_help_text = """Begins with 'ssh-rsa', 'ecdsa-sha2-nistp256', 'ecdsa-sha2-nistp384', 'ecdsa-sha2-nistp521', 'ssh-ed25519', 'sk-ecdsa-sha2-nistp256@openssh.com', or 'sk-ssh-ed25519@openssh.com'"""
+    deepgreen_ssh_key = {
+        "title": "Deepgreen service",
+        "public_key": app.config.get("DEEPGREEN_SSH_PUBLIC_KEY", ''),
+    }
     default_sftp_server = {
         'url':  app.config.get("DEFAULT_SFTP_SERVER_URL", ''),
         'port':  app.config.get("DEFAULT_SFTP_SERVER_PORT", '')
@@ -615,7 +618,7 @@ def username(username):
                 flash("Sorry. Password must be at least eight characters long", "error")
                 return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
                                        license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text,
-                                       default_sftp_server=default_sftp_server)
+                                       default_sftp_server=default_sftp_server, deepgreen_ssh_key=deepgreen_ssh_key)
             try:
                 acc.set_password(request.values['password'])
             except Exception as e:
@@ -623,7 +626,7 @@ def username(username):
                 flash('Error updating account: ' + str(ex_value), 'error')
                 return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
                                        license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text,
-                                       default_sftp_server=default_sftp_server)
+                                       default_sftp_server=default_sftp_server, deepgreen_ssh_key=deepgreen_ssh_key)
 
         try:
             acc.save()
@@ -633,11 +636,11 @@ def username(username):
             flash('Error updating account: ' + str(ex_value), 'error')
         return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
                                license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text,
-                               default_sftp_server=default_sftp_server)
+                               default_sftp_server=default_sftp_server, deepgreen_ssh_key=deepgreen_ssh_key)
     elif current_user.id == acc.id or current_user.is_super:
         return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
                                license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text,
-                               default_sftp_server=default_sftp_server)
+                               default_sftp_server=default_sftp_server, deepgreen_ssh_key=deepgreen_ssh_key)
     else:
         abort(404)
 
