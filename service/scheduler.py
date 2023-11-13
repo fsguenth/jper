@@ -25,6 +25,7 @@ from threading import Thread
 from octopus.core import app, initialise
 from service import reports
 from service import models
+from service.lib.cleanup_repository_logs import cleanup_repository_logs
 
 if app.config.get('DEEPGREEN_EZB_ROUTING', False):
     from service import routing_deepgreen as routing
@@ -115,7 +116,7 @@ def flatten(destination, depth=None):
                 if stem:
                     destpath = os.path.join(destination, stem)
                 originpath = os.path.join(depth, fl)
-                print('Moving file #{a} tp #{b}'.format(a=originpath, b=destpath) )
+                print('Moving file #{a} to {b}'.format(a=originpath, b=destpath) )
                 if stem and os.path.isdir(destpath):
                     shutil.move(originpath, destpath)
                 else:
@@ -488,6 +489,10 @@ def delete_old_routed():
 
 if app.config.get('SCHEDULE_DELETE_OLD_ROUTED', False):
     schedule.every().day.at("03:00").do(delete_old_routed)
+
+
+if app.config.get('SCHEDULE_DELETE_OLD_SWORD_LOGS', False):
+    schedule.every().day.at("04:00").do(cleanup_repository_logs)
 
 
 def cheep():

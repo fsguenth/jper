@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='utils',
-    version='1.0.0-p3',
+    version='1.0.3',
     packages=find_packages(),
     install_requires=[
         "requests==2.25.1",

@@ -420,14 +420,14 @@ class JPER(object):
                 "bool": {
                     "filter": {
                         "range": {
-                            "created_date": {
+                            "last_updated": {
                                 "gte": nl.since
                             }
                         }
                     }
                 }
             },
-            "sort": [{"created_date":{"order":"desc"}}],
+            "sort": [{"last_updated":{"order":"desc"}}],
             "from": (page - 1) * page_size,
             "size": page_size
         }
@@ -493,16 +493,14 @@ class JPER(object):
                 "bool": {
                     "filter": {
                         "range": {
-                            "created_date": {
+                            "last_updated": {
                                 "gte": mpl.since
                             }
                         }
                     }
                 }
             },
-            # "sort": [{"analysis_date":{"order":"asc"}}],
-            "sort": [{"created_date":{"order":"desc"}}],
-            # 2016-09-06 TD : change of sort order newest first
+            "sort": [{"last_updated":{"order":"desc"}}],
             "from": (page - 1) * page_size,
             "size": page_size
         }
@@ -559,14 +557,14 @@ class JPER(object):
                 "bool": {
                     "filter": {
                         "range": {
-                            "created_date": {
+                            "last_updated": {
                                 "gte": fnl.since
                             }
                         }
                     }
                 }
             },
-            "sort": [{"created_date":{"order":"desc"}}],
+            "sort": [{"last_updated":{"order":"desc"}}],
             ## "sort": [{"analysis_date":{"order":"desc"}}],
             ## 2018-03-07 TD : change of sort key to 'created_date', but still newest first
             # 2016-09-06 TD : change of sort order newest first
@@ -613,14 +611,14 @@ class JPER(object):
                 "bool": {
                     "filter": {
                         "range": {
-                            "created_date": {
+                            "last_updated": {
                                 "gte": nl.since
                             }
                         }
                     }
                 }
             },
-            "sort": [{"created_date":{"order":"desc"}}],
+            "sort": [{"last_updated":{"order":"desc"}}],
         }
 
         if repository_id is not None:
@@ -674,16 +672,14 @@ class JPER(object):
                 "bool": {
                     "filter": {
                         "range": {
-                            "created_date": {
+                            "last_updated": {
                                 "gte": mpl.since
                             }
                         }
                     }
                 }
             },
-            # "sort": [{"analysis_date":{"order":"asc"}}],
-            "sort": [{"created_date":{"order":"desc"}}],
-            # 2016-09-06 TD : change of sort order newest first
+            "sort": [{"last_updated":{"order":"desc"}}],
         }
 
         if repository_id is not None:
@@ -729,14 +725,14 @@ class JPER(object):
                 "bool": {
                     "filter": {
                         "range": {
-                            "created_date": {
+                            "last_updated": {
                                 "gte": fnl.since
                             }
                         }
                     }
                 }
             },
-            "sort": [{"created_date":{"order":"desc"}}],
+            "sort": [{"last_updated":{"order":"desc"}}],
         }
 
         if provider_id is not None:
