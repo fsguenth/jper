@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='jper',
-    version='1.0.0-p3',
+    version='1.0.3',
     packages=find_packages(),
     install_requires=[
         "beautifulsoup4==4.9.3",
@@ -10,9 +10,10 @@ setup(
         "werkzeug==1.0.1",
         "Flask==1.1.2",
         "Flask-Login==0.5.0",
+        "itsdangerous==2.0.1",
         "requests==2.25.1",
         "simplejson==3.17.2",
-        "lxml==4.6.2",
+        "lxml==4.6.3",
         "Flask-WTF==0.14.3",
         "nose==1.3.7",
         "Flask-Mail==0.9.1",

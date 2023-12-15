@@ -754,6 +754,12 @@ class RepositoryDepositLogDAO(dao.ESDAO):
         obs = cls.query(q=q.get_deposit_dates_query(repo_id))
         return obs
 
+    @classmethod
+    def pull_old_deposit_logs(cls, repo_id, to_date):
+        """Get all deposit logs older than the specified date"""
+        q = RepositoryDepositLogQuery()
+        obs = cls.query(q=q.get_old_logs_query(to_date, repo_id))
+        return obs
 
 class RepositoryDepositLogQuery(object):
     """
@@ -862,6 +868,27 @@ class RepositoryDepositLogQuery(object):
             "size": 1,
             "sort": {"last_updated": {"order": "desc"}}
         }
+
+    def get_old_logs_query(self, to_date, repo_id=None):
+        query = {
+            "query": {
+                "bool": {
+                    "must": [{
+                        "range": {
+                            "last_updated": {
+                                "lt": to_date
+                            }
+                        }
+                    }]
+
+                }
+            },
+            "sort": {"last_updated": {"order": "desc"}},
+            "size": 10000
+        }
+        if repo_id:
+            query['query']['bool']['must'].append({ "term": {"repo.exact": repo_id}})
+        return query
 
 
 class LicenseManagementDAO(dao.ESDAO):
