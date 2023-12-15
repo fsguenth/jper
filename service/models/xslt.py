@@ -1330,6 +1330,7 @@ class XSLT(object):
             </title>
           </xsl:for-each>
       </titles>
+      <xsl:if test="//article-meta/abstract or //article-meta/trans-abstract">
       <abstracts>
           <xsl:if test="//article-meta/abstract">
             <abstract>
@@ -1348,6 +1349,7 @@ class XSLT(object):
             </abstract>
           </xsl:for-each>
       </abstracts>
+      </xsl:if>
       <persons>
           <xsl:for-each select="//article-meta/contrib-group/contrib">
             <person>
@@ -1382,7 +1384,24 @@ class XSLT(object):
               <identifiers>
                 <identifier>
                   <xsl:attribute name="type"><xsl:text>orcid</xsl:text></xsl:attribute>
-                  <xsl:copy-of select="contrib-id[@contrib-id-type='orcid']/text()"/>
+                  <xsl:variable name='orcid' select="contrib-id[@contrib-id-type='orcid']/text()"/>
+
+                  <xsl:choose>
+                  <xsl:when test="substring($orcid, string-length($orcid))='/'">
+                    <xsl:variable name="orcid2" select="substring($orcid, 1, string-length($orcid)-1)"/>
+                    <xsl:call-template name="cut-orcid">
+                      <xsl:with-param name="orcid" select="$orcid2"/>
+                    </xsl:call-template>
+                    <!--xsl:message>Last slash was cut.</xsl:message>
+                    <xsl:message>Parameter given to template is <xsl:value-of select="$orcid2"/></xsl:message-->
+                  </xsl:when>
+                  <xsl:otherwise>
+                    <xsl:call-template name="cut-orcid">
+                      <xsl:with-param name="orcid" select="$orcid"/>
+                    </xsl:call-template>
+                    <!--xsl:message>Template called on: <xsl:value-of select="$orcid"/> </xsl:message-->
+                  </xsl:otherwise>
+                  </xsl:choose>
                 </identifier>
               </identifiers>
               </xsl:if>
@@ -1576,6 +1595,27 @@ class XSLT(object):
           <xsl:attribute name="language"><xsl:value-of select="$langOut"/></xsl:attribute>
         </xsl:otherwise>
         </xsl:choose>
+  </xsl:template>
+
+  <xsl:template name="cut-orcid">
+    <xsl:param name="orcid"/>
+    <!-- This template accepts an url as input and selects the substring after the last "/".
+    orcids consist of four 4-digit blocks, separated by dashes. i.e. the resulting string should be precisely 19 characters long.
+    Lacking any regex capabilities in xslt 1.0, the template makes a last check for string-length before returning the orcid-id.
+    Recursive template, as substring-after() can only ever select the substring after the first instance of a character.
+    -->
+    <xsl:choose>
+      <xsl:when test="not(contains($orcid,'/'))">
+        <xsl:if test="string-length($orcid)=19">
+          <xsl:value-of select="$orcid"/>
+        </xsl:if>
+      </xsl:when>
+      <xsl:otherwise>
+        <xsl:call-template name="cut-orcid">
+        <xsl:with-param name="orcid" select="substring-after($orcid,'/')"/>
+        </xsl:call-template>
+      </xsl:otherwise>
+    </xsl:choose>
   </xsl:template>
   
 
