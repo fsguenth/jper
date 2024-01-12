@@ -40,5 +40,8 @@ if os.path.isfile(args.file):
 The encoding for stdout in Python is {sys.stdout.encoding}.\n\
 Export the environment variable PYTHONIOENCODING='utf_8' and try again.")
 
+    except:
+        print(f'\n\n{traceback.format_exc()}')
+
 else:
     raise FileNotFoundError(f"No such file: {os.path.realpath(args.file)}")
