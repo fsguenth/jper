@@ -1298,14 +1298,12 @@ class XSLT(object):
       <titlesMain>
           <titleMain>
             <xsl:attribute name="language"><xsl:value-of select="$langOut"/></xsl:attribute>
-            <xsl:value-of select="//article-meta/title-group/article-title"/>
+            <xsl:value-of select="normalize-space(//article-meta/title-group/article-title)"/>
           </titleMain>
           <xsl:for-each select="//article-meta/title-group/trans-title-group/trans-title">
             <titleMain>
-              <xsl:if test="@xml:lang">
-                <xsl:attribute name="language"><xsl:value-of select="@xml:lang"/></xsl:attribute>
-              </xsl:if>
-              <xsl:value-of select="."/>
+              <xsl:call-template name="insert-lang-attribute"/>
+              <xsl:value-of select="normalize-space()"/>
             </titleMain>
           </xsl:for-each>
       </titlesMain>
@@ -1314,10 +1312,25 @@ class XSLT(object):
             <title> 
               <xsl:attribute name="language"><xsl:value-of select="$langOut"/></xsl:attribute>
               <xsl:attribute name="type"><xsl:text>parent</xsl:text></xsl:attribute> 
-              <xsl:value-of select="normalize-space(text())"/>
+              <xsl:value-of select="normalize-space()"/>
+            </title>
+          </xsl:for-each>
+          <xsl:if test="//article-meta/title-group/subtitle">
+            <title>
+              <xsl:attribute name="language"><xsl:value-of select="$langOut"/></xsl:attribute>
+              <xsl:attribute name="type"><xsl:text>sub</xsl:text></xsl:attribute>
+              <xsl:value-of select="normalize-space(//article-meta/title-group/subtitle)"/>
+            </title>
+          </xsl:if>
+          <xsl:for-each select="//article-meta/title-group/trans-title-group/trans-subtitle">
+            <title>
+              <xsl:call-template name="insert-lang-attribute"/>
+              <xsl:attribute name="type"><xsl:text>sub</xsl:text></xsl:attribute>
+              <xsl:value-of select="normalize-space()"/>
             </title>
           </xsl:for-each>
       </titles>
+      <xsl:if test="//article-meta/abstract or //article-meta/trans-abstract">
       <abstracts>
           <xsl:if test="//article-meta/abstract">
             <abstract>
@@ -1329,15 +1342,14 @@ class XSLT(object):
           </xsl:if>
           <xsl:for-each select="//article-meta/trans-abstract">
             <abstract>
-              <xsl:if test="@xml:lang">
-                <xsl:attribute name="language"><xsl:value-of select="@xml:lang"/></xsl:attribute>
-              </xsl:if>
+              <xsl:call-template name="insert-lang-attribute"/>
               <xsl:text disable-output-escaping="yes">&lt;![CDATA[</xsl:text>
-              <xsl:copy-of select="//article-meta/trans-abstract/*" disable-output-escaping="yes" />
+              <xsl:copy-of select="./*" disable-output-escaping="yes" />
               <xsl:text disable-output-escaping="yes">]]&gt;</xsl:text>
             </abstract>
           </xsl:for-each>
       </abstracts>
+      </xsl:if>
       <persons>
           <xsl:for-each select="//article-meta/contrib-group/contrib">
             <person>
@@ -1365,12 +1377,34 @@ class XSLT(object):
                 <identifier type="gnd|intern">?????</identifier>
               </identifiers>
               -->
-              <xsl:if test="contains(contrib-id/@contrib-id-type,'orcid')">
-                <xsl:attribute name="orcid">
-                  <xsl:copy-of select="contrib-id[@contrib-id-type='orcid']/text()"/>
-                </xsl:attribute>
+              <xsl:if test=".//email">
+                <xsl:attribute name="email"><xsl:value-of select=".//email"/></xsl:attribute>
               </xsl:if>
-              <xsl:attribute name="email"><xsl:value-of select=".//email"/></xsl:attribute>  
+              <xsl:if test="contains(contrib-id/@contrib-id-type,'orcid')">
+              <identifiers>
+                <identifier>
+                  <xsl:attribute name="type"><xsl:text>orcid</xsl:text></xsl:attribute>
+                  <xsl:variable name='orcid' select="contrib-id[@contrib-id-type='orcid']/text()"/>
+
+                  <xsl:choose>
+                  <xsl:when test="substring($orcid, string-length($orcid))='/'">
+                    <xsl:variable name="orcid2" select="substring($orcid, 1, string-length($orcid)-1)"/>
+                    <xsl:call-template name="cut-orcid">
+                      <xsl:with-param name="orcid" select="$orcid2"/>
+                    </xsl:call-template>
+                    <!--xsl:message>Last slash was cut.</xsl:message>
+                    <xsl:message>Parameter given to template is <xsl:value-of select="$orcid2"/></xsl:message-->
+                  </xsl:when>
+                  <xsl:otherwise>
+                    <xsl:call-template name="cut-orcid">
+                      <xsl:with-param name="orcid" select="$orcid"/>
+                    </xsl:call-template>
+                    <!--xsl:message>Template called on: <xsl:value-of select="$orcid"/> </xsl:message-->
+                  </xsl:otherwise>
+                  </xsl:choose>
+                </identifier>
+              </identifiers>
+              </xsl:if>
             </person>
           </xsl:for-each>
       </persons>
@@ -1383,7 +1417,7 @@ class XSLT(object):
           <xsl:for-each select="//article-meta/kwd-group/kwd">
             <xsl:if test="string-length(normalize-space(text()))>0">
               <keyword> 
-                <xsl:attribute name="language"><xsl:value-of select="$langOut"/></xsl:attribute>
+                <xsl:call-template name="insert-lang-attribute"/>
                 <xsl:attribute name="type"><xsl:text>uncontrolled</xsl:text></xsl:attribute>
                 <xsl:value-of select="normalize-space(text())"/>
               </keyword>
@@ -1544,6 +1578,46 @@ class XSLT(object):
              </xsl:attribute>
           </date>
   </xsl:template>
+  
+  <xsl:template name="insert-lang-attribute">
+    <xsl:choose>
+        <xsl:when test="@xml:lang">
+            <xsl:variable name="lang2" select="translate(@xml:lang,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz')"/>
+            <xsl:variable name="lang3" select="document('')//langCodeMap/langCodes[@iso639-1=$lang2]/@iso639-2"/>
+            <xsl:attribute name="language"><xsl:value-of select="$lang3"/></xsl:attribute>
+        </xsl:when>
+        <xsl:when test="../@xml:lang">
+            <xsl:variable name="lang2" select="translate(../@xml:lang,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz')"/>
+            <xsl:variable name="lang3" select="document('')//langCodeMap/langCodes[@iso639-1=$lang2]/@iso639-2"/>
+            <xsl:attribute name="language"><xsl:value-of select="$lang3"/></xsl:attribute>
+        </xsl:when>
+        <xsl:otherwise>
+          <xsl:attribute name="language"><xsl:value-of select="$langOut"/></xsl:attribute>
+        </xsl:otherwise>
+        </xsl:choose>
+  </xsl:template>
+
+  <xsl:template name="cut-orcid">
+    <xsl:param name="orcid"/>
+    <!-- This template accepts an url as input and selects the substring after the last "/".
+    orcids consist of four 4-digit blocks, separated by dashes. i.e. the resulting string should be precisely 19 characters long.
+    Lacking any regex capabilities in xslt 1.0, the template makes a last check for string-length before returning the orcid-id.
+    Recursive template, as substring-after() can only ever select the substring after the first instance of a character.
+    -->
+    <xsl:choose>
+      <xsl:when test="not(contains($orcid,'/'))">
+        <xsl:if test="string-length($orcid)=19">
+          <xsl:value-of select="$orcid"/>
+        </xsl:if>
+      </xsl:when>
+      <xsl:otherwise>
+        <xsl:call-template name="cut-orcid">
+        <xsl:with-param name="orcid" select="substring-after($orcid,'/')"/>
+        </xsl:call-template>
+      </xsl:otherwise>
+    </xsl:choose>
+  </xsl:template>
+  
 
 </xsl:stylesheet>
 '''.format(xmlinject=iso639codes)
@@ -2233,18 +2307,18 @@ class XSLT(object):
                             <mods:number><xsl:value-of select="//article-meta/issue"/></mods:number>
                         </mods:detail>
                     </xsl:if>
-                    <xsl:if test="//article-meta/fpage">
+                    <xsl:if test="//article-meta/fpage or //article-meta/counts/page-count/@count">
                         <mods:extent unit="pages">
-                            <mods:start><xsl:value-of select="//article-meta/fpage"/></mods:start>
+                            <xsl:if test="//article-meta/fpage">
+                                <mods:start><xsl:value-of select="//article-meta/fpage"/></mods:start>
+                            </xsl:if>
                             <xsl:if test="//article-meta/lpage">
                                 <mods:end><xsl:value-of select="//article-meta/lpage"/></mods:end>
                             </xsl:if>
+                            <xsl:if test="//article-meta/counts/page-count/@count">
+                                <mods:total><xsl:value-of select="//article-meta/counts/page-count/@count"/></mods:total>
+                            </xsl:if>
                         </mods:extent>
-                    </xsl:if>
-                    <xsl:if test="//article-meta/counts/page-count/@count">
-                      <mods:extent unit="pages">
-                        <mods:total><xsl:value-of select="//article-meta/counts/page-count/@count"/></mods:total>
-                      </mods:extent>
                     </xsl:if>
                 </mods:part>
             </mods:relatedItem>
@@ -2313,9 +2387,7 @@ class XSLT(object):
             </xsl:for-each>
             <xsl:for-each select="//article-meta/trans-abstract">
               <mods:abstract>
-                <xsl:if test="@xml:lang">
-                  <xsl:attribute name="language"><xsl:value-of select="@xml:lang"/></xsl:attribute>
-                </xsl:if>
+                <xsl:call-template name="insert-lang-attribute"/>
                 <xsl:text disable-output-escaping="yes">&lt;![CDATA[</xsl:text>
                 <xsl:copy-of select="./*" disable-output-escaping="yes" />
                 <xsl:text disable-output-escaping="yes">]]&gt;</xsl:text>
@@ -2325,7 +2397,10 @@ class XSLT(object):
             <xsl:if test="//article-meta/kwd-group/kwd">
                 <mods:subject>
                     <xsl:for-each select="//article-meta/kwd-group/kwd">
-                        <mods:topic><xsl:value-of select="."/></mods:topic>
+                        <mods:topic>
+                          <xsl:call-template name="insert-lang-attribute"/>
+                          <xsl:value-of select="."/>
+                        </mods:topic>
                     </xsl:for-each>
                 </mods:subject>
             </xsl:if>
@@ -2404,9 +2479,14 @@ class XSLT(object):
     </xsl:template>
 
     <xsl:template name="insert-lang-attribute">
-        <xsl:if test="@xml:lang">
+        <xsl:choose>
+        <xsl:when test="@xml:lang">
             <xsl:attribute name="xml:lang"><xsl:value-of select="@xml:lang"/></xsl:attribute>
-        </xsl:if>
+        </xsl:when>
+        <xsl:when test="../@xml:lang">
+            <xsl:attribute name="xml:lang"><xsl:value-of select="../@xml:lang"/></xsl:attribute>
+        </xsl:when>
+        </xsl:choose>
     </xsl:template>
 
 </xsl:stylesheet>
