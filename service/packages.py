@@ -192,7 +192,7 @@ class PackageManager(object):
 
         :param store_id: the storage id where this object can be found
         :param source_format: format identifier for the input package handler.  As seen in the configuration.
-        :param target_format: format identifier for the output package handler.  As seen in the configuration.
+        :param target_formats: format identifier for the output package handler.  As seen in the configuration.
         :param storage_manager: an instance of Store to use as the storage API
         :return: a list of tuples of the conversions carried out of the form [(format, filename, url name)]
         """
@@ -250,6 +250,53 @@ class PackageManager(object):
 
         # return the conversions record to the caller
         return conversions
+
+    @classmethod
+    def backup(cls, store_id, source_format, target_formats, storage_manager=None):
+        """
+        For the package held in the store at the specified store_id, backup the packages in the
+        target_format, if the source_format exists.
+
+        If a storage_manager is provided, that will be used as the interface to the storage system,
+        otherwise a storage manager will be constructed from the StoreFactory.
+
+        :param store_id: the storage id where this object can be found
+        :param source_format: format identifier for the input package handler.  As seen in the configuration.
+        :param target_formats: format identifier for the output package handler.  As seen in the configuration.
+        :param storage_manager: an instance of Store to use as the storage API
+        :return: a list of tuples of the conversions carried out of the form [(format, filename, url name)]
+        """
+        app.logger.debug(
+            "Package backup - StoreID:{a}; SourceFormat:{b}; TargetFormats:{c}".format(a=store_id, b=source_format,
+                                                                                       c=",".join(target_formats)))
+
+        # load the storage manager
+        if storage_manager is None:
+            storage_manager = store.StoreFactory.get()
+
+        # get the packager that will do the conversions
+        pm = PackageFactory.converter(source_format)
+
+        # check that there is a source package to convert
+        if not storage_manager.exists(store_id):
+            return []
+
+        # first check the file we want exists
+        if not pm.zip_name() in storage_manager.list(store_id):
+            return []
+
+        # a record of all the backups which took place
+        backups = []
+
+        # for each target format, load it's equivalent packager to get the storage name,
+        # then run the conversion
+        for tf in target_formats:
+            tpm = PackageFactory.converter(tf)
+            backups.append(tpm.zip_name())
+            storage_manager.backup(store_id, tpm.zip_name())
+
+        # return the conversions record to the caller
+        return backups
 
 class PackageHandler(object):
     """
