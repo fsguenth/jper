@@ -292,9 +292,9 @@ class PackageManager(object):
         # then run the conversion
         for tf in target_formats:
             tpm = PackageFactory.converter(tf)
-            backups.append(tpm.zip_name())
-            storage_manager.backup(store_id, tpm.zip_name())
-
+            backup_name = storage_manager.backup(store_id, tpm.zip_name())
+            if backup_name:
+                backups.append(backup_name)
         # return the conversions record to the caller
         return backups
 
