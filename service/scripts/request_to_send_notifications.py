@@ -2,13 +2,15 @@ from service import models
 
 def request_to_send_notifications(account_id, notification_ids, check_none = True):
     if check_none:
-        recs = models.RequestNotification.pull_by_ids(None, username, status='queued', size=100)
-        if recs is not None:
-            return False, f"There are {len(recs)} in queue"
+        records = models.RequestNotification.pull_by_ids(None, account_id, status='queued', size=100)
+        if records:
+            return False, f"There are {len(records)} in queue"
     duplicate = 0
     queued_notifications = []
     for n_id in list(notification_ids):
-        rec = models.RequestNotification.pull_by_ids(n_id, account_id, status='queued', size=1)
+        rec = None
+        if not check_none:
+            rec = models.RequestNotification.pull_by_ids(n_id, account_id, status='queued', size=1)
         if not rec:
             rec = models.RequestNotification()
             rec.account_id = account_id
