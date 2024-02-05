@@ -1,3 +1,5 @@
+from service import models
+
 def request_to_send_notifications(account_id, notification_ids, check_none = True):
     if check_none:
         recs = models.RequestNotification.pull_by_ids(None, username, status='queued', size=100)
