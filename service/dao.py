@@ -575,8 +575,11 @@ class RequestNotification(dao.ESDAO):
         """
         q = RequestNotificationQuery(notification_id, repository_id, status, size)
         obs = cls.object_query(q=q.query())
-        if len(obs) > 0:
+        if size and size == 1 and len(obs) > 0:
             return obs[0]
+        else:
+            return obs
+
 
     @classmethod
     def pull_by_status(cls, status, size=None):
@@ -613,14 +616,15 @@ class RequestNotificationQuery(object):
         q = {
             "query": {
                 "bool": {
-                    "must": [
-                        {"term": {"account_id.exact": self.repository_id}},
-                        {"term": {"notification_id.exact": self.notification_id}}
-                    ]
+                    "must": []
                 }
             },
             "sort": {"last_updated": {"order": "desc"}}
         }
+        if self.repository_id:
+            q["query"]["bool"]["must"].append({"term": {"account_id.exact": self.repository_id}})
+        if self.notification_id:
+            q["query"]["bool"]["must"].append({"term": {"notification_id.exact": self.notification_id}})
         if self.status:
             q["query"]["bool"]["must"].append({"term": {"status.exact": self.status}})
         if self.size:
