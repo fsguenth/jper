@@ -1,7 +1,5 @@
 #! /bin/bash
 
-ESHOST=`hostname|sed -e 's/1\./4./'`
-ES="http://${ESHOST}:9200"
 LIMIT=1000
 FULL=0
 PROGNAME=`basename $0`
@@ -21,12 +19,18 @@ usage: $PROGNAME [-i LIMIT] [-f] [-u] -q <query>
 EOT
 }
 
-
-
 # working on a local tunnel
 if [ `hostname` == "probibw41" ]; then
-    ES="http://localhost:9201"
+    ESHOST="localhost"
 fi
+
+# check ESHOST environment variable
+if [ -z "$ESHOST" ] ; then
+    echo; echo "ERROR: ESHOST environment variable missing"; help; exit 1 ;
+fi
+
+ES="http://${ESHOST}:9200"
+
 
 # parse arguments
 while getopts "hl:fq:" option; do
@@ -58,13 +62,13 @@ fi
 
 # print number of hits
 echo "Hits:"| tr '\012' ' '
-curl -s "${ES}/jper/failed/_search?size=$LIMIT&q=\"$QUERY\"" |jq '.hits|.total'
+curl -s "${ES}/jper-failed/_search?size=$LIMIT&q=\"$QUERY\"" |jq '.hits|.total'
 
 echo
 if [ $FULL == 1 ]; then
     # print full notification
-    curl -s "${ES}/jper/failed/_search?size=$LIMIT&q=\"$QUERY\"" |jq '.hits.hits[]._source'
+    curl -s "${ES}/jper-failed/_search?size=$LIMIT&q=\"$QUERY\"" |jq '.hits.hits[]._source'
 else
     # print notification id an package URL only
-    curl -s "${ES}/jper/failed/_search?size=$LIMIT&q=\"$QUERY\"" |jq '.hits.hits[]|._id,._source.links[].url'
+    curl -s "${ES}/jper-failed/_search?size=$LIMIT&q=\"$QUERY\"" |jq '.hits.hits[]|._id,._source.links[].url'
 fi

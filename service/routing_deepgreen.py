@@ -83,10 +83,10 @@ def _route(unrouted):
     if issn_data is not None and len(issn_data) > 0 and publ_date is not None:
         dt = datetime.strptime(publ_date, "%Y-%m-%dT%H:%M:%SZ")
         publ_year = str(dt.year)
-        app.logger.debug("Routing - Notification:{y} provides issn_data:{x} and publ_year:{w}".format(y=unrouted.id, x=issn_data, w=publ_year))
+        app.logger.info("Routing - Notification:{y} provides issn_data:{x} and publ_year:{w}".format(y=unrouted.id, x=issn_data, w=publ_year))
     else:
         routing_reason = "No ISSN/EISSN nor publication date found."
-        app.logger.debug("Routing - Notification:{y} includes no ISSN or no publ_year in metatdata".format(y=unrouted.id, x=issn_data))
+        app.logger.info("Routing - Notification:{y} includes no ISSN or no publ_year in metatdata".format(y=unrouted.id, x=issn_data))
         issn_data = []
 
     # Extract doi
@@ -169,7 +169,7 @@ def _route(unrouted):
         al_repos.append((bibids[bibid], lic_data, bibid))
     if len(al_repos) == 0:
         routing_reason = "No (active!) qualified repositories."
-        app.logger.debug("Routing - Notification {y} No (active!) qualified repositories currently found to receive this notification.  Notification will not be routed!".format(y=unrouted.id))
+        app.logger.info("Routing - Notification {y} No (active!) qualified repositories currently found to receive this notification.  Notification will not be routed!".format(y=unrouted.id))
     # 2016-09-08 TD : end of checking alliance (and probably other!) license legitimation(s)
 
     app.logger.debug("Starting matching repository to article")
@@ -224,7 +224,7 @@ def _route(unrouted):
         app.logger.error("Routing - Notification:{y} failed with error '{x}'".format(y=unrouted.id, x=str(e)))
         raise RoutingException(str(e))
 
-    app.logger.debug("Routing - Notification:{y} matched to {x} repositories".format(y=unrouted.id, x=len(match_ids)))
+    app.logger.info("Routing - Notification:{y} matched to {x} repositories".format(y=unrouted.id, x=len(match_ids)))
 
     # if there are matches then the routing is successful, and we want to finalise the
     # notification for the routed index and its content for download
