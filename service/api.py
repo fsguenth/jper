@@ -765,7 +765,7 @@ class JperHelper:
 
     @classmethod
     def get_request_status(self, notification_id, account_id, size=1):
-        rn = models.RequestNotification().pull_by_ids(notification_id, account_id, size)
+        rn = models.RequestNotification().pull_by_ids(notification_id, account_id, size=size)
         status = None
         if rn is not None:
             status = rn.status

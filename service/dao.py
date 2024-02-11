@@ -575,8 +575,11 @@ class RequestNotification(dao.ESDAO):
         """
         q = RequestNotificationQuery(notification_id, repository_id, status, size)
         obs = cls.object_query(q=q.query())
-        if size and size == 1 and len(obs) > 0:
-            return obs[0]
+        if size and size == 1:
+            if len(obs) > 0:
+                return obs[0]
+            else:
+                return None
         else:
             return obs
 
