@@ -2,10 +2,11 @@
 {% block content %}
     <h1>Participant record:
         {% if rec.get('name','') %}
-            {{ rec.get('name','') }}</h1>
+            {{ rec.get('name','') }}
         {% else %}
             {{ rec.get('id', '') }}
         {% endif %}
+    </h1>
     <div class="details">
         <div>
             <label for="id">ID</label>
