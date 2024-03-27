@@ -34,14 +34,13 @@ def details():
                            managed_licenses=ordered_records)
 
 
-@blueprint.route('/view_raw')
-def view_raw():
-    rec_id = request.values.get('record_id')
+@blueprint.route('/view_license_manager/<record_id>')
+def view_license_manager(record_id):
     title = "License management record in JSON"
-    if rec_id:
-        rec = LicenseManagement.pull(rec_id)
+    if record_id:
+        rec = LicenseManagement.pull(record_id)
         if not rec:
-            data = {'Error': f"Record {rec_id} not found"}
+            data = {'Error': f"Record {record_id} not found"}
         else:
             data = rec.data
     else:
@@ -49,14 +48,13 @@ def view_raw():
     return render_template('manage_license/view_json.html', title=title, rec=data)
 
 
-@blueprint.route('/view_license')
-def view_license():
-    rec_id = request.values.get('record_id')
+@blueprint.route('/view_license/<record_id>')
+def view_license(record_id):
     title = "License record in JSON"
-    if rec_id:
-        rec = License.pull(rec_id)
+    if record_id:
+        rec = License.pull(record_id)
         if not rec:
-            data = {'Error': f"Record {rec_id} not found"}
+            data = {'Error': f"Record {record_id} not found"}
         else:
             data = rec.data
     else:
@@ -64,12 +62,10 @@ def view_license():
     return render_template('manage_license/view_json.html', title=title, rec=data)
 
 
-@blueprint.route('/download_license_file')
-def download_license_file():
+@blueprint.route('/download_license_file/<manager_id>')
+def download_license_file(manager_id):
     if not current_user.is_super:
         abort(401)
-
-    manager_id = request.values.get('management_id')
     version = int(request.values.get('version'))
 
     management_record = LicenseManagement.pull(manager_id)
@@ -184,14 +180,13 @@ def delete_license():
     return redirect(url_for('manage_license.details'))
 
 
-@blueprint.route('/view_participant')
-def view_participant():
+@blueprint.route('/view_participant/<record_id>')
+def view_participant(record_id):
     title = "Participant record in JSON"
-    rec_id = request.values.get('record_id')
-    if rec_id:
-        rec = Alliance.pull(rec_id)
+    if record_id:
+        rec = Alliance.pull(record_id)
         if not rec:
-            data = {'Error': f"Record {rec_id} not found"}
+            data = {'Error': f"Record {record_id} not found"}
         else:
             data = rec.data
     else:
@@ -199,12 +194,11 @@ def view_participant():
     return render_template('manage_license/view_json.html', title=title, rec=data)
 
 
-@blueprint.route('/download_participant_file')
-def download_participant_file():
+@blueprint.route('/download_participant_file/<manager_id>')
+def download_participant_file(manager_id):
     if not current_user.is_super:
         abort(401)
 
-    manager_id = request.values.get('management_id')
     version = int(request.values.get('version'))
 
     management_record = LicenseManagement.pull(manager_id)

@@ -22,7 +22,7 @@
         idField: function (val, resultobj, renderer) {
             var field = '<div><h3>';
             if (resultobj.id) {
-                display = "<a href='/manage_license/view_participant?record_id=" + resultobj.id + "'>" + resultobj.id + "</a>";
+                display = '<a href="/manage_license/view_participant/' + resultobj.id + '">' + resultobj.id + '</a>';
                 return display;
             } else {
                 return false;
@@ -31,7 +31,7 @@
         licenseIdField: function (val, resultobj, renderer) {
             var field = '<div><h3>';
             if (resultobj.id) {
-                display = "<a href='/manage_license/view_license?record_id=" + resultobj.license_id + "'>" + resultobj.license_id + "</a>";
+                display = '<a href="/manage_license/view_license/' + resultobj.license_id + '">' + resultobj.license_id + '</a>';
                 return display;
             } else {
                 return false;

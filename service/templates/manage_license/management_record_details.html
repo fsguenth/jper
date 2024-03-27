@@ -8,7 +8,7 @@
         {% endif %}
         <dt>Id</dt>
         <dd>
-            <a href="{{ url_for('manage_license.view_raw') }}?record_id={{ rec.id }}">
+            <a href="/manage_license/view_license_manager/{{ rec.id }}">
             {{ rec.id }}</a>
         </dd>
         {% if rec.get('admin_notes', '') %}

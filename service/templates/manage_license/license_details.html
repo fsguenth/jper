@@ -10,7 +10,7 @@
     <dt>View license</dt>
     <dd>
         {% if lic.get('record_id', '') %}
-            <a href="{{ url_for('manage_license.view_license') }}?record_id={{ lic.get('record_id', '') }}">
+            <a href="/manage_license/view_license/{{ lic.get('record_id', '') }}">
                 {{ lic.get('record_id', '') }}</a>
         {% else %}
             <b>No license record</b>
@@ -18,7 +18,7 @@
     </dd>
     {% if lic.get('record_id', '') or lic.get('file_name', '') %}
         <dt>Download license file</dt>
-        <dd><a href="{{ url_for('manage_license.download_license_file', management_id=rec.id, version=lic.get('version', 0)) }}">
+        <dd><a href="manage_license/download_license_file/{{ rec.id}}?version={{lic.get('version', 0) }}">
             {{ lic.get('file_name', 'license file') }}
         </a></dd>
     {% endif %}
