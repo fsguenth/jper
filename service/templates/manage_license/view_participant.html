@@ -1,6 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
-    <h1>Participant record: {{ rec.get('name','') }}</h1>
+    <h1>Participant record:
+        {% if rec.get('name','') %}
+            {{ rec.get('name','') }}</h1>
+        {% else %}
+            {{ rec.get('id', '') }}
+        {% endif %}
     <div class="details">
         <div>
             <label for="id">ID</label>
