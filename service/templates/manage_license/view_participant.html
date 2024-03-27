@@ -18,7 +18,7 @@
         {% endfor %}
         <div>
             <label for="related_license">Related license</label>
-            {{ rec.get('license_id', '') }}
+            <a href="/manage_license/view_license/{{ rec.get('license_id', '') }}">{{ rec.get('license_id', '') }}</a>
         </div>
         <div>
             <label for="view_json">View JSON</label>
@@ -36,7 +36,7 @@
         <tr>
             <td>{{ participant.get('name', '') }}</td>
             <td>
-            {% for id in journal.get('identifier', []) %}
+            {% for id in participant.get('identifier', []) %}
                 {% if id.get('type', '') == 'ezb'  %}
                     {{ id.get('id', '') }}
                 {% endif %}

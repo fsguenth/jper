@@ -36,7 +36,7 @@ def details():
 
 @blueprint.route('/view_license_manager/<record_id>')
 def view_license_manager(record_id):
-    title = "License management record in JSON"
+    title = f"License management record {record_id} in JSON"
     if record_id:
         rec = LicenseManagement.pull(record_id)
         if not rec:
@@ -57,7 +57,7 @@ def view_license(record_id):
     if not rec:
         abort(404)
     if format == 'json':
-        title = f"License record #{record_id} in JSON"
+        title = f"License record {record_id} in JSON"
         return render_template('manage_license/view_json.html', title=title, rec=rec.data)
     else:
         return render_template('manage_license/view_license.html', rec=rec.data)
@@ -191,7 +191,7 @@ def view_participant(record_id):
     if not rec:
         abort(404)
     if format == 'json':
-        title = f"Participant record #{record_id} in JSON"
+        title = f"Participant record {record_id} in JSON"
         return render_template('manage_license/view_json.html', title=title, rec=rec.data)
     else:
         return render_template('manage_license/view_participant.html', rec=rec.data)
