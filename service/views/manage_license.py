@@ -183,16 +183,18 @@ def delete_license():
 
 @blueprint.route('/view_participant/<record_id>')
 def view_participant(record_id):
-    title = "Participant record in JSON"
-    if record_id:
-        rec = Alliance.pull(record_id)
-        if not rec:
-            data = {'Error': f"Record {record_id} not found"}
-        else:
-            data = rec.data
+    format = request.values.get('format', 'html')
+
+    if not record_id:
+        abort(404)
+    rec = Alliance.pull(record_id)
+    if not rec:
+        abort(404)
+    if format == 'json':
+        title = f"Participant record #{record_id} in JSON"
+        return render_template('manage_license/view_json.html', title=title, rec=rec.data)
     else:
-        data = {'Error': f"Please specify a record_id"}
-    return render_template('manage_license/view_json.html', title=title, rec=data)
+        return render_template('manage_license/view_participant.html', rec=rec.data)
 
 
 @blueprint.route('/download_participant_file/<manager_id>')

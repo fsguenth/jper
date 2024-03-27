@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+    <h1>Participant record: {{ rec.get('name','') }}</h1>
+    <div class="details">
+        <div>
+            <label for="id">ID</label>
+            {{ rec.get('id', '') }}
+        </div>
+        <div>
+            <label for="date_created">Date created</label>
+            {{ rec.get('created_date', '') }}
+        </div>
+        {% for id in rec.get('identifier', []) %}
+            <div>
+                <label for="{{ id.get('type', 'ID') }}">{{ id.get('type', 'ID') |upper }}</label>
+                {{ id.get('id', '') }}
+            </div>
+        {% endfor %}
+        <div>
+            <label for="related_license">Related license</label>
+            {{ rec.get('license_id', '') }}
+        </div>
+        <div>
+            <label for="view_json">View JSON</label>
+            <a href="/manage_license/view_participant/{{ rec.get('id', '') }}?format=json">{{ rec.get('id', '') }}</a>
+        </div>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>EZB</th>
+            </tr>
+        </thead>
+    {% for participant in rec.get('participant', []) %}
+        <tr>
+            <td>{{ participant.get('name', '') }}</td>
+            <td>
+            {% for id in journal.get('identifier', []) %}
+                {% if id.get('type', '') == 'ezb'  %}
+                    {{ id.get('id', '') }}
+                {% endif %}
+            {% endfor %}
+            </td>
+        </tr>
+    {% endfor %}
+    </table>
+{% endblock %}
