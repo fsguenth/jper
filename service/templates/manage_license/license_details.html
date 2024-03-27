@@ -18,7 +18,7 @@
     </dd>
     {% if lic.get('record_id', '') or lic.get('file_name', '') %}
         <dt>Download license file</dt>
-        <dd><a href="manage_license/download_license_file/{{ rec.id}}?version={{lic.get('version', 0) }}">
+        <dd><a href="/manage_license/download_license_file/{{ rec.id}}?version={{lic.get('version', 0) }}">
             {{ lic.get('file_name', 'license file') }}
         </a></dd>
     {% endif %}

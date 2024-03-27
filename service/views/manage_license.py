@@ -57,11 +57,10 @@ def view_license(record_id):
     if not rec:
         abort(404)
     if format == 'json':
-        title = "License record {record_id} in JSON"
+        title = f"License record #{record_id} in JSON"
         return render_template('manage_license/view_json.html', title=title, rec=rec.data)
     else:
-        title = "License record {record_id}"
-        return render_template('manage_license/view_license.html', title=title, rec=rec.data)
+        return render_template('manage_license/view_license.html', rec=rec.data)
 
 
 @blueprint.route('/download_license_file/<manager_id>')
