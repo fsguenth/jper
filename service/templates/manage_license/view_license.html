@@ -12,7 +12,7 @@
         {{ rec.get('status', '') }}
     </div>
     <div>
-        <label for="date_created">date created</label>
+        <label for="date_created">Date created</label>
         {{ rec.get('created_date', '') }}
     </div>
     <div>
@@ -21,7 +21,7 @@
     </div>
     {% for id in rec.get('identifier', []) %}
         <div>
-            <label for="{{ id.get('type', 'ID') }}">{{ id.get('type', 'ID') }}</label>
+            <label for="{{ id.get('type', 'ID') }}">{{ id.get('type', 'ID') |upper }}</label>
             {{ id.get('id', '') }}
         </div>
     {% endfor %}
@@ -47,21 +47,27 @@
             <td>{{ journal.get('title', '') }}</td>
             <td>{{ journal.get('publisher', '') }}</td>
             <td>{{ journal.get('embargo', {}).get('duration', '') }}</td>
+            <td>
             {% for id in journal.get('identifier', []) %}
                 {% if id.get('type', '') == 'ezb'  %}
-                    <td>{{ id.get('id', '') }}</td>
+                    {{ id.get('id', '') }}
                 {% endif %}
             {% endfor %}
+            </td>
+            <td>
             {% for id in journal.get('identifier', []) %}
                 {% if id.get('type', '') == 'issn'  %}
-                    <td>{{ id.get('id', '') }}</td>
+                    {{ id.get('id', '') }}
                 {% endif %}
             {% endfor %}
+            </td>
+            <td>
             {% for id in journal.get('identifier', []) %}
                 {% if id.get('type', '') == 'eissn'  %}
-                    <td>{{ id.get('id', '') }}</td>
+                    {{ id.get('id', '') }}
                 {% endif %}
             {% endfor %}
+            </td>
         </tr>
     {% endfor %}
 </table>
