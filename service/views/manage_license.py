@@ -50,16 +50,18 @@ def view_license_manager(record_id):
 
 @blueprint.route('/view_license/<record_id>')
 def view_license(record_id):
-    title = "License record in JSON"
-    if record_id:
-        rec = License.pull(record_id)
-        if not rec:
-            data = {'Error': f"Record {record_id} not found"}
-        else:
-            data = rec.data
+    format = request.values.get('format', 'html')
+    if not record_id:
+        abort(404)
+    rec = License.pull(record_id)
+    if not rec:
+        abort(404)
+    if format == 'json':
+        title = "License record {record_id} in JSON"
+        return render_template('manage_license/view_json.html', title=title, rec=rec.data)
     else:
-        data = {'Error': f"Please specify a record_id"}
-    return render_template('manage_license/view_json.html', title=title, rec=data)
+        title = "License record {record_id}"
+        return render_template('manage_license/view_license.html', title=title, rec=rec.data)
 
 
 @blueprint.route('/download_license_file/<manager_id>')

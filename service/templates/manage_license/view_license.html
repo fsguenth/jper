@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1>{{ rec.get('name','') }}</h1>
+<div>
+    <label for="id">ID</label>
+    {{ rec.get('id', '') }}
+</div>
+<div>
+    <label for="status">Status</label>
+    {{ rec.get('status', '') }}
+</div>
+<div>
+    <label for="date_created">date created</label>
+    {{ rec.get('created_date', '') }}
+</div>
+<div>
+    <label for="type">Type</label>
+    {{ rec.get('type', '') }}
+</div>
+<div>
+    <label for="view_json">View JSON</label>
+    <a href="/manage_license/view_license/{{ rec.get('id', '') }}?format=json">{{ rec.get('id', '') }}></a>
+</div>
+{% for id in rec.get('identifier', []) %}
+    <div>
+        <label for="{{ id.get('type', 'ID') }}">{{ id.get('type', 'ID') }}</label>
+        {{ id.get('id', '') }}
+    </div>
+{% endfor %}
+<table>
+    <thead>
+        <tr>
+            <th>Title</th>
+            <th>Publisher</th>
+            <th>Embargo</th>
+            <th>EZB</th>
+            <th>ISSN</th>
+            <th>EISSN</th>
+        </tr>
+    </thead>
+    {% for journal in rec.get('journal', []) %}
+        {% set ezb = '' %}
+        {% set eissn = '' %}
+        {% set issn = '' %}
+        {% for id in journal.get('identifier', []) %}
+            {%  if id.get('type', '') == 'ezb'  %}
+                {% set ezb = id['id'] %}
+            {% elif id.get('type', '') == 'eissn' %}
+                {% set eissn = id['eissn'] %}
+            {% elif id.get('type', '') == 'issn' %}
+                {% set issn = id['issn'] %}
+            {% endif %}
+        <tr>
+            <td>{{ journal.get('title', '') }}</td>
+            <td>{{ journal.get('publisher', '') }}</td>
+            <td>{{ journal.get('embargo', {}).get('duration', '') }}</td>
+            <td>{{ ezb }}</td>
+            <td>{{ issn }}</td>
+            <td>{{ eissn }}</td>
+        </tr>
+    {% endfor %}
+</table>
