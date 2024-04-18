@@ -780,7 +780,9 @@ def _validate_license_file(license_record, license_type, filename, file_bytes, e
     if file_extension in ['.xls', '.xlsx']:
         rows = _load_rows_by_xls_bytes(file_bytes)
     else:
-        csv_str = _decode_csv_bytes(file_bytes)
+        decode_status, csv_str = _decode_csv_bytes(file_bytes)
+        if not decode_status:
+            return False, csv_str, license_record, None
         rows = _load_rows_by_csv_str(csv_str)
 
     # validate license file contents
@@ -807,7 +809,9 @@ def _validate_participant_file(participant_record, filename, file_bytes):
 
     csv_str: str = None
     if filename.lower().endswith('.csv'):
-        csv_str = _decode_csv_bytes(file_bytes)
+        decode_status, csv_str = _decode_csv_bytes(file_bytes)
+        if not decode_status:
+            return False, csv_str, participant_record, None
     elif any(filename.lower().endswith(fmt) for fmt in ['xls', 'xlsx']):
         csv_str = _load_parti_csv_str_by_xls_bytes(file_bytes)
 
@@ -823,13 +827,16 @@ def _validate_participant_file(participant_record, filename, file_bytes):
 
 def _decode_csv_bytes(csv_bytes):
     encoding = chardet.detect(csv_bytes)['encoding']
+    encoding_str = 'utf-8'
     if encoding == 'ISO-8859-1':
-        return csv_bytes.decode(encoding='iso-8859-1', errors='ignore')
-    else:
-        if encoding != 'utf-8':
-            app.logger.warning(f'unknown encoding[{encoding}], decode as utf8')
-        return csv_bytes.decode(encoding='utf-8', errors='ignore')
-
+        encoding_str = 'iso-8859-1'
+    if encoding != 'utf-8' and encoding != 'ISO-8859-1':
+        app.logger.warning(f'unknown encoding[{encoding}], decode as utf8')
+    try:
+        decoded_csv_bytes = csv_bytes.decode(encoding=encoding_str, errors='ignore')
+        return True, decoded_csv_bytes
+    except Exception as e:
+        return False, str(e)
 
 def _extract_name_ezb_id_by_line(line):
     results = re.findall(r'.+:\s*(.+?)\s*\[(.+?)\]', line)
