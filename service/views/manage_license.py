@@ -834,9 +834,9 @@ def _decode_csv_bytes(csv_bytes):
         app.logger.warning(f'unknown encoding[{encoding}], decode as utf8')
     try:
         decoded_csv_bytes = csv_bytes.decode(encoding=encoding_str, errors='ignore')
-        return True, decoded_csv_bytes
     except Exception as e:
         return False, str(e)
+    return True, decoded_csv_bytes
 
 def _extract_name_ezb_id_by_line(line):
     results = re.findall(r'.+:\s*(.+?)\s*\[(.+?)\]', line)
@@ -866,8 +866,13 @@ def _load_rows_by_csv_str(csv_str):
 
 
 def _to_csv_str(headers, data):
-    dict_rows = [{headers[col_idx]: row[col_idx] for col_idx in range(len(headers))}
-                 for row in data]
+    dict_rows = []
+    for row in data:
+        dict_row = {}
+        for col_idx in range(len(headers)):
+            if len(row) > col_idx:
+                dict_row[headers[col_idx]] = row[col_idx]
+        dict_rows.append(dict_row)
 
     tmp_file_path = tempfile.mkstemp(prefix='__lc__')[1]
     with open(tmp_file_path, 'w') as tmp_file:
