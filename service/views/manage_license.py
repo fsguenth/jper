@@ -10,6 +10,7 @@ from flask import Blueprint, abort, render_template, request, redirect, url_for,
 from flask_login.utils import current_user
 from service.models.ezb import LICENSE_TYPES, Alliance, License
 from service.models.license_management import LicenseManagement
+from lib import csv_helper
 
 blueprint = Blueprint('manage_license', __name__)
 ALLOWED_DEL_STATUS = ["validation failed", "archived", "validation passed"]
@@ -357,7 +358,7 @@ def _upload_participant_file(management_id, uploaded_file):
 
     # load participant_file
     filename = uploaded_file.filename
-    file_bytes = uploaded_file.stream.read()
+    file_bytes = _read_uploaded_file(uploaded_file)
 
     # save file
     version_datetime = datetime.now()
@@ -404,7 +405,7 @@ def _upload_participant_file(management_id, uploaded_file):
 def _update_license(lic_type, uploaded_file, management_record):
     # load lic_file
     filename = uploaded_file.filename
-    file_bytes = uploaded_file.stream.read()
+    file_bytes = _read_uploaded_file(uploaded_file)
 
     # save file
     version_datetime = datetime.now()
@@ -824,19 +825,6 @@ def _validate_participant_file(participant_record, filename, file_bytes):
     participant_record["validation_status"] = "validation passed"
     return True, "Participant file is valid", participant_record, csv_str
 
-
-def _decode_csv_bytes(csv_bytes):
-    encoding = chardet.detect(csv_bytes)['encoding']
-    encoding_str = 'utf-8'
-    if encoding == 'ISO-8859-1':
-        encoding_str = 'iso-8859-1'
-    if encoding != 'utf-8' and encoding != 'ISO-8859-1':
-        app.logger.warning(f'unknown encoding[{encoding}], decode as utf8')
-    try:
-        decoded_csv_bytes = csv_bytes.decode(encoding=encoding_str, errors='ignore')
-    except Exception as e:
-        return False, str(e)
-    return True, decoded_csv_bytes
 
 def _extract_name_ezb_id_by_line(line):
     results = re.findall(r'.+:\s*(.+?)\s*\[(.+?)\]', line)

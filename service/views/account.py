@@ -19,6 +19,7 @@ from itertools import zip_longest
 from service import models
 from io import StringIO, TextIOWrapper, BytesIO
 from datetime import timedelta
+from lib import csv_helper
 
 blueprint = Blueprint('account', __name__)
 
@@ -778,7 +779,10 @@ def config(username):
                         saved = rec.set_repo_config(textfile=strm, repository=username)
             else:
                 if request.files['file'].filename.endswith('.csv'):
-                    saved = rec.set_repo_config(csvfile=TextIOWrapper(request.files['file'], encoding='utf-8'),
+                    uploaded_file = request.files.get('file')
+                    file_bytes = _read_uploaded_file(uploaded_file)
+                    decoded_file_str = _decode_csv_bytes(file_bytes)
+                    saved = rec.set_repo_config(csvfile=StringIO(decoded_file_str),
                                                 repository=username)
                 elif request.files['file'].filename.endswith('.txt'):
                     saved = rec.set_repo_config(textfile=TextIOWrapper(request.files['file'], encoding='utf-8'),
