@@ -1,4 +1,4 @@
-<div class="modal" id="updateManagementRecordModal">
+<div class="modal" id="updateManagementRecordModal_{{ rec.id }}">
   <h2>Updating {{ rec['ezb_id'] }}</h2>
   <div>
     <form method="POST" action="{{ url_for('manage_license.update_management_record_details') }}"
