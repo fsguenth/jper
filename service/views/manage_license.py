@@ -10,7 +10,7 @@ from flask import Blueprint, abort, render_template, request, redirect, url_for,
 from flask_login.utils import current_user
 from service.models.ezb import LICENSE_TYPES, Alliance, License
 from service.models.license_management import LicenseManagement
-from lib import csv_helper
+from service.lib import csv_helper
 
 blueprint = Blueprint('manage_license', __name__)
 ALLOWED_DEL_STATUS = ["validation failed", "archived", "validation passed"]

@@ -12,6 +12,7 @@ from octopus.lib import dates
 from service.api import JPER, ParameterException
 from service.views.webapi import _bad_request
 from service.repository_licenses import get_matching_licenses
+from service.lib import csv_helper
 import math
 import csv
 from jsonpath_rw_ext import parse
@@ -19,7 +20,6 @@ from itertools import zip_longest
 from service import models
 from io import StringIO, TextIOWrapper, BytesIO
 from datetime import timedelta
-from lib import csv_helper
 
 blueprint = Blueprint('account', __name__)
 
