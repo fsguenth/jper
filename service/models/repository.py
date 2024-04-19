@@ -304,8 +304,6 @@ class RepositoryConfig(dataobj.DataObj, dao.RepositoryConfigDAO):
         for f in fields:
             if f in self.data: del self.data[f]
         if csvfile is not None:
-            # could do some checking of the obj
-            lines = False
             inp = csv.DictReader(csvfile)
             for row in inp:
                 for field in inp.fieldnames:

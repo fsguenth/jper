@@ -780,10 +780,13 @@ def config(username):
             else:
                 if request.files['file'].filename.endswith('.csv'):
                     uploaded_file = request.files.get('file')
-                    file_bytes = _read_uploaded_file(uploaded_file)
-                    decoded_file_str = _decode_csv_bytes(file_bytes)
-                    saved = rec.set_repo_config(csvfile=StringIO(decoded_file_str),
-                                                repository=username)
+                    file_bytes = csv_helper.read_uploaded_file(uploaded_file)
+                    status, decoded_file_str = csv_helper.decode_csv_bytes(file_bytes)
+                    if not status:
+                        flash('Sorry, there was an error reading your config upload. Please try again.', "error")
+                        return redirect(url_for('.username', username=username))
+
+                    saved = rec.set_repo_config(csvfile=StringIO(decoded_file_str), repository=username)
                 elif request.files['file'].filename.endswith('.txt'):
                     saved = rec.set_repo_config(textfile=TextIOWrapper(request.files['file'], encoding='utf-8'),
                                                 repository=username)

@@ -358,7 +358,7 @@ def _upload_participant_file(management_id, uploaded_file):
 
     # load participant_file
     filename = uploaded_file.filename
-    file_bytes = _read_uploaded_file(uploaded_file)
+    file_bytes = csv_helper.read_uploaded_file(uploaded_file)
 
     # save file
     version_datetime = datetime.now()
@@ -405,7 +405,7 @@ def _upload_participant_file(management_id, uploaded_file):
 def _update_license(lic_type, uploaded_file, management_record):
     # load lic_file
     filename = uploaded_file.filename
-    file_bytes = _read_uploaded_file(uploaded_file)
+    file_bytes = csv_helper.read_uploaded_file(uploaded_file)
 
     # save file
     version_datetime = datetime.now()
@@ -781,7 +781,7 @@ def _validate_license_file(license_record, license_type, filename, file_bytes, e
     if file_extension in ['.xls', '.xlsx']:
         rows = _load_rows_by_xls_bytes(file_bytes)
     else:
-        decode_status, csv_str = _decode_csv_bytes(file_bytes)
+        decode_status, csv_str = csv_helper.decode_csv_bytes(file_bytes)
         if not decode_status:
             return False, csv_str, license_record, None
         rows = _load_rows_by_csv_str(csv_str)
@@ -810,7 +810,7 @@ def _validate_participant_file(participant_record, filename, file_bytes):
 
     csv_str: str = None
     if filename.lower().endswith('.csv'):
-        decode_status, csv_str = _decode_csv_bytes(file_bytes)
+        decode_status, csv_str = csv_helper.decode_csv_bytes(file_bytes)
         if not decode_status:
             return False, csv_str, participant_record, None
     elif any(filename.lower().endswith(fmt) for fmt in ['xls', 'xlsx']):
