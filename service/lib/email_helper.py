@@ -1,5 +1,6 @@
 import smtplib
 from email.message import EmailMessage
+from octopus.core import app
 
 def send_email_to_admin(subject, message):
     send_email = app.config.get("SEND_EMAIL", False)

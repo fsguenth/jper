@@ -11,7 +11,7 @@
                     {% set check = "checked" %}
                 {% endif %}
                 <input type="checkbox" id="license_{{license.id}}" value="{{license.id}}" name='excluded_license' {{check}}>
-                <label for="license_{{license.id}}">{{license.name}}</label><br>
+                <label for="license_{{license.id}}">{{license.name}}</label>
                 <a href="/manage_license/view_license/{{license.id}}">view license</a><br>
             {% endfor %}
             <input type="hidden" id="license_ids" value="{{license_ids}}" name='license_ids'>
