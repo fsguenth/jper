@@ -12,7 +12,7 @@ from octopus.lib import dates
 from service.api import JPER, ParameterException
 from service.views.webapi import _bad_request
 from service.repository_licenses import get_matching_licenses
-from service.lib import csv_helper
+from service.lib import csv_helper, email_helper
 import math
 import csv
 import sys
@@ -955,6 +955,10 @@ def add_ssh_key(username):
     try:
         acc.add_ssh_key(ssh_key, title)
         acc.save()
+        subject = f"New SSH key for #{acc.id}"
+        message = f"""New SSH key has been added to the account #{acc.id}.
+        The key has to be copied to the publisher account and when ready needs to be activated in Deepgreen."""
+        email_helper.send_email_to_admin(subject, message)
         flash('The ssh key has been added', "success")
     except Exception as e:
         ex_type, ex_value, ex_traceback = sys.exc_info()
@@ -991,7 +995,7 @@ def deactivate_ssh_key(username):
     try:
         acc.deactivate_ssh_key(ssh_key)
         acc.save()
-        flash('The ssh key has been made inactive', "success")
+        flash('The ssh key has been set to inactive', "success")
     except Exception as e:
         ex_type, ex_value, ex_traceback = sys.exc_info()
         flash('Error making SSH key inactive: ' + str(ex_value), 'error')
@@ -1051,6 +1055,30 @@ def sftp_server(username):
                 flash('Error saving SFTP server details: ' + str(ex_value), 'error')
     return redirect(url_for('.username', username=username))
 
+
+@blueprint.route('/<username>/routing_activate', methods=['POST'])
+def routing_activate(username):
+    if current_user.id != username and not current_user.is_super:
+        abort(401)
+    acc = models.Account.pull(username)
+    routing_status = acc.publisher_routing_status
+    if routing_status == 'inactive':
+        acc.publisher_routing_status = 'active'
+        acc.save()
+        flash('The publisher routing status has been set to active.', "success")
+    return redirect(url_for('.username', username=username))
+
+
+@blueprint.route('/<username>/routing_deactivate', methods=['POST'])
+def routing_deactivate(username):
+    if current_user.id != username and not current_user.is_super:
+        abort(401)
+    acc = models.Account.pull(username)
+    if routing_status == 'active':
+        acc.publisher_routing_status = 'inactive'
+        acc.save()
+        flash('The publisher routing status has been set to inactive.', "success")
+    return redirect(url_for('.username', username=username))
 
 @blueprint.route('/login', methods=['GET', 'POST'])
 def login():

@@ -35,7 +35,8 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
 
         "publisher" : {
             "name" : "<name of the publisher>",
-            "url" : "<url for the main publisher weg page>"
+            "url" : "<url for the main publisher web page>"
+            "routing_status": "<True|False>"
         },
 
         # "sword_repository" : {
@@ -121,7 +122,8 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
     #             "publisher": {
     #                 "fields": {
     #                     "name": {"coerce": "unicode"},
-    #                     "url": {"coerce": "unicode"}
+    #                     "url": {"coerce": "unicode"},
+    #                     "routing_status": {"coerce": "unicode"}
     #                 }
     #             },
     #             "sword": {
@@ -368,6 +370,7 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
             {
                 "name" : "<name of publisher>",
                 "url" : "<url>",
+                "routing_status" : "<True|False>"
             }
 
         :return: The publisher information as a python dict object
@@ -387,13 +390,14 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
             {
                 "name" : "<name of publisher>",
                 "url" : "<url>",
+                "routing_status": "<True|False>"
             }
 
         :param obj: the publisher object as a dict
         :return:
         """
         # validate the object structure quickly
-        allowed = ["name", "url"]
+        allowed = ["name", "url", "routing_status"]
         for k in list(obj.keys()):
             if k not in allowed:
                 raise dataobj.DataSchemaException("Publisher object must only contain the following keys: {x}".format(x=", ".join(allowed)))
@@ -423,6 +427,16 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
     @publisher_url.setter
     def publisher_url(self, val):
         self._set_single("publisher.url", val, coerce=self._utf8_unicode())
+    # 2020-02-20 TD : end of convenience setter and getter for extra pub infos
+
+    @property
+    def publisher_routing_status(self):
+        return self._get_single("publisher.routing_status", coerce=self._utf8_unicode())
+
+    @publisher_routing_status.setter
+    def publisher_routing_status(self, val):
+        if val in ['active', 'inactive']:
+            self._set_single("publisher.routing_status", val, coerce=self._utf8_unicode())
     # 2020-02-20 TD : end of convenience setter and getter for extra pub infos
 
     @property

@@ -23,10 +23,10 @@
                 <dd>{{ sword_status.id }}</dd>
             </dl>
             {% set sword_action = "deactivate" %}
-            {% set action_label = "De-activate sword connection" %}
+            {% set action_label = "Set sword connection to inactive" %}
             {% if sword_status.status == 'failing' %}
                 {% set sword_action = "activate" %}
-                {% set action_label = "Activate sword connection" %}
+                {% set action_label = "Set sword connection to active" %}
             {% endif %}
             <form class="form" method="POST" action="{{request.path}}/sword_{{sword_action}}" id="sword_{{sword_action}}">
                 <div class="form-fields__item--text form-fields__item--single">
