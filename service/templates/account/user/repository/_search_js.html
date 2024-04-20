@@ -1,0 +1,62 @@
+{% if account.has_role('repository') %}
+var results = function(data) {
+    var disp = '<table data-rwdtable data-rwdtable-sortable class="content-table" id="matches">';
+    for ( var r in data.hits.hits ) {
+        var rec = data.hits.hits[r]._source;
+        disp += '<tr><td>';
+        disp += '<p>Notification ' + rec.notification + '</a></p>'
+        for ( var p in rec.provenance ) {
+            var prov = rec.provenance[p];
+            disp += '<p>' + prov.explanation + '</p>';
+            disp += '<p>' + searchify({class: 'holder', val: prov.source_field, attrs: {function: 'add', filter: 'provenance.source_field.exact', value: prov.source_field} });
+            disp += ': ' + searchify({class: 'holder', val: prov.term, attrs: {function: 'add', filter: 'provenance.term.exact', value: prov.term} });
+            disp += ' matched ' + searchify({class: 'holder', val: prov.notification_field, attrs: {function: 'add', filter: 'provenance.notification_field.exact', value: prov.notification_field} });
+            disp += ': ' + searchify({class: 'holder', val: prov.matched, attrs: {function: 'add', filter: 'provenance.matched.exact', value: prov.matched} });
+            disp += '</p>';
+        }
+        disp += '</td></tr>';
+    }
+    disp += '</table>';
+    $('.holder.holder-results').html(disp);
+}
+
+var qr = {
+    'query': {
+        'filtered': {
+            'query': {
+                'bool': {
+                  'must': [
+                    ]
+                }
+            },
+            'filter': {
+                'bool': {
+                    'must': [
+                        {
+                            'term': {
+                                'repo.exact': '{{account.id}}'
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    }
+}
+$('#matchholder').holder({
+    what: "Matches review",
+    url: "/query/match_prov/_search",
+    datatype: 'JSON',
+    pushstate: false,
+    defaultquery: qr,
+        results: {
+            default: results
+        },
+        after: {
+            render: function() {
+                $('.holder.holder-filters').children("[holder-remove='options.query.query.filtered.filter.bool.must.0']").first().hide();
+            }
+        },
+        size: 20
+});
+{% endif %}

@@ -100,7 +100,7 @@ def validate_password(form, email):
 Create a form for WEBSERVICE
 '''
 class AdduserForm(Form):
-
+    id = TextField('Id', render_kw={"placeholder": "Optional. If left blank, a UUID will be generated."})
     password_verify = PasswordField('Password verify', [validators.Length(min=8, max=2035), validators.Required(), validate_password])
     password = PasswordField('Password', [validators.Length(min=8, max=2035), validators.Required()])
     email = TextField('Email address', [validators.Length(min=2, max=2035), validators.Required(), is_email])
