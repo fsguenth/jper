@@ -304,32 +304,25 @@ class RepositoryConfig(dataobj.DataObj, dao.RepositoryConfigDAO):
         for f in fields:
             if f in self.data: del self.data[f]
         if csvfile is not None:
-            # could do some checking of the obj
-            lines = False
             inp = csv.DictReader(csvfile)
             for row in inp:
-                for x in list(row.keys()):
-                    # 2019-05-21 TD : A tiny safeguard with respect to forgotten commata
-                    #                 'None' appears if there are less than fields in row.keys()
-                    if None in list(row.values()):
-                        continue
-                    # 2019-05-21 TD
-                    if x.strip().lower().replace(' ', '').replace('s', '').replace('number', '') == 'grant' and len(
-                            row[x].strip()) > 1:
-                        self.data['grants'] = self.data.get('grants', []) + [row[x].strip()]
-                    # 2019-02-25 TD : Instead of 'postcode' we will support 'keywords' here!
-                    # elif x.strip().lower().replace(' ','').strip('s') == 'postcode' and len(row[x].strip()) > 1:
-                    #    self.data['postcodes'] = self.data.get('postcodes',[]) + [row[x].strip()]
-                    elif x.strip().lower().replace(' ', '').strip('s') == 'keyword' and len(row[x].strip()) > 1:
-                        self.data['keywords'] = self.data.get('keywords', []) + [row[x].strip()]
-                    # 2019-02-25 TD
-                    elif x.strip().lower().replace(' ', '').replace('s', '') == 'namevariant' and len(
-                            row[x].strip()) > 1:
-                        self.data['name_variants'] = self.data.get('name_variants', []) + [row[x].strip()]
-                    elif x.strip().lower().replace(' ', '').replace('s', '') == 'domain' and len(row[x].strip()) > 1:
-                        self.data['domains'] = self.data.get('domains', []) + [row[x].strip()]
-                    elif x.strip().lower().replace(' ', '') == 'institutionalidentifier' and len(row[x].strip()) > 1:
-                        self.data['institutional_identifier'] = row[x].strip()
+                for field in inp.fieldnames:
+                    fld = field.strip().lower().replace(' ', '').rstrip('s').replace('number', '')
+                    val = row.get(field, '').strip()
+                    if len(val) > 1:
+                        if fld == 'grant':
+                            self.data['grants'] = self.data.get('grants', []) + [val]
+                        elif fld == 'keyword':
+                            self.data['keywords'] = self.data.get('keywords', []) + [val]
+                        elif fld == 'namevariant':
+                            self.data['name_variants'] = self.data.get('name_variants', []) + [val]
+                        elif fld == 'domain':
+                            self.data['domains'] = self.data.get('domains', []) + [val]
+                        elif fld == 'institutionalidentifier':
+                            self.data['institutional_identifier'] = val
+                        # 2019-02-25 TD : Instead of 'postcode' we will support 'keywords' here!
+                        # elif fld == 'postcode':
+                        #    self.data['postcodes'] = self.data.get('postcodes',[]) + [val]
             app.logger.debug("Extracted complex config from .csv file for repo: {x}".format(x=repoid))
             # app.logger.debug("Extracted complex config from .csv file for repo: {x}".format(x=self.id))
             self.data['repo'] = repoid

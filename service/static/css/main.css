@@ -196,7 +196,7 @@ margin-bottom:0;
   display: block;
 }
 
-.btn { background-color: #00800; }
+.btn { background-color: #008000; }
 
 }
 
@@ -418,3 +418,14 @@ div.actions div {
     padding-bottom: 10px;
     margin-bottom: 10px;
 }
+
+.details {
+    margin-bottom: 20px;
+}
+
+.details label {
+    min-width: 150px;
+    display: inline-block;
+    margin-bottom: 5px;
+}
+

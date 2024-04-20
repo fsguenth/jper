@@ -1,6 +1,5 @@
 {% extends "base.html" %} 
-{% block content %} 
-
+{% block content %}
     {% if not current_user.is_anonymous %}
         <h1 class="visuallyhidden">My account</h1>
         {% include 'account/user/_account_details.html' %}
@@ -34,7 +33,6 @@
         </div>
         <!-- 2016-08-18 TD : *** Do not want to display this *** -->
         {#% include 'account/user/repository/_search.html' %#}
-
     {% endif %}
 {% endblock %} 
 {% block extra_js_bottom %}
