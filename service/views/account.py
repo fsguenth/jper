@@ -1061,8 +1061,7 @@ def routing_activate(username):
     if current_user.id != username and not current_user.is_super:
         abort(401)
     acc = models.Account.pull(username)
-    routing_status = acc.publisher_routing_status
-    if routing_status != 'active':
+    if acc.publisher_routing_status != 'active':
         acc.publisher_routing_status = 'active'
         acc.save()
         flash('The publisher routing status has been set to active.', "success")
@@ -1074,7 +1073,7 @@ def routing_deactivate(username):
     if current_user.id != username and not current_user.is_super:
         abort(401)
     acc = models.Account.pull(username)
-    if routing_status != 'inactive':
+    if acc.publisher_routing_status != 'inactive':
         acc.publisher_routing_status = 'inactive'
         acc.save()
         flash('The publisher routing status has been set to inactive.', "success")
