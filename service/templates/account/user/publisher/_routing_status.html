@@ -3,7 +3,7 @@
             <div class="row dl-table">
                 <dl>
                     <dt>Routing status</dt>
-                    <dd>{{ account.publisher_routing_status }}
+                    <dd>
                         {% if account.publisher_routing_status == 'active' %}
                             <div><span class="status box--info" >
                                 {{ account.publisher_routing_status }}</span></div>
@@ -14,7 +14,7 @@
                     </dd>
                 </dl>
             </div>
-			<div class="row">
+            <div class="row">
                 {% set routing_action = "activate" %}
                 {% set action_label = "Set routing status to active" %}
                 {% if account.publisher_routing_status == 'active' %}
