@@ -73,6 +73,1118 @@ class XSLT(object):
 </monthNameMap>
   '''
 
+    # 2017-03-22 TD : static(!!) strings containing the xsl code JATS --> OPUS4
+  #                 Note that there MUST NOT be any kind of '<?xml ...?>' header!
+  #
+  # 2019-08-13 TD : Change of the output "issn" in the tag "identifiers": no distinction
+  #                 between eISSN and pISSN anymore! In fact, OPUS4 article data model
+  #                 does not support these subtypes as identifier.
+  #
+  # 2019-08-28 TD : Keywords are checked for string-length() > 0: 'empty' keywords are skipped!
+  #
+  # 2019-09-24 TD : Eliminate the tag 'journal-title-group' in xpath since a publisher
+  #                 (i.e. Frontiers) apparently is not using it
+  #
+  jats2opus4 = '''
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+
+  <!-- <xsl:import href="outputTokens.xsl"/> -->
+  <xsl:output method="xml" omit-xml-declaration="yes" indent="yes" encoding="utf-8"/>
+
+  <xsl:variable name="inject1">
+    {xmlinject1}
+  </xsl:variable>
+   <xsl:variable name="inject2">
+    {xmlinject2}
+  </xsl:variable>
+  <xsl:variable name="langIn" select="translate(/article/@xml:lang,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz')"/>
+  <!-- <xsl:variable name="langOut">eng</xsl:variable> -->
+  <xsl:variable name="langOut" select="document('')//langCodeMap/langCodes[@iso639-1=$langIn]/@iso639-2"/>
+
+  <xsl:template match="/">
+  <import>
+    <opusDocument>
+          <xsl:attribute name="language">
+            <xsl:value-of select="$langOut"/>
+          </xsl:attribute>
+          <xsl:attribute name="type">
+            <xsl:text>article</xsl:text>
+          </xsl:attribute>
+          <xsl:if test="//article-meta/fpage">
+            <xsl:attribute name="pageFirst">
+              <xsl:value-of select="//article-meta/fpage"/>
+            </xsl:attribute>
+          </xsl:if>
+          <xsl:if test="//article-meta/lpage">
+            <xsl:attribute name="pageLast">
+              <xsl:value-of select="//article-meta/lpage"/>
+            </xsl:attribute>
+          </xsl:if>
+          <xsl:if test="//article-meta/volume">
+            <xsl:attribute name="volume">
+              <xsl:value-of select="//article-meta/volume"/>
+            </xsl:attribute>
+          </xsl:if>
+          <xsl:if test="//article-meta/issue">
+            <xsl:attribute name="issue">
+              <xsl:value-of select="//article-meta/issue"/>
+            </xsl:attribute>
+          </xsl:if>
+          <xsl:attribute name="publisherName">
+            <xsl:value-of select="//journal-meta/publisher/publisher-name"/>
+          </xsl:attribute>
+          <xsl:if test="//journal-meta/publisher/publisher-loc">
+            <xsl:attribute name="publisherPlace">
+              <xsl:value-of select="//journal-meta/publisher/publisher-loc"/>
+            </xsl:attribute>
+          </xsl:if>
+          <xsl:attribute name="belongsToBibliography">
+            <xsl:text>false</xsl:text>
+          </xsl:attribute>
+          <xsl:attribute name="serverState">
+            <xsl:text>unpublished</xsl:text>
+          </xsl:attribute>
+          <xsl:if test="//article-meta/counts/page-count/@count">
+            <xsl:attribute name="pageNumber">
+              <xsl:value-of select="//article-meta/counts/page-count/@count"/>
+            </xsl:attribute>
+          </xsl:if>
+          <!--
+          language="eng"
+          type="article|bachelorthesis|bookpart|book|conferenceobject|contributiontoperiodical|coursematerial|diplom|doctoralthesis|examen|habilitation|image|lecture|magister|masterthesis|movingimage|other|periodical|preprint|report|review|studythesis|workingpaper"
+          pageFirst=""
+          pageLast=""
+          edition=""
+          volume=""
+          issue=""
+          publisherName=""
+          publisherPlace=""
+          creatingCorporation=""
+          contributingCorporation=""
+          belongsToBibliography="true|false"
+          serverState="audited|published|restricted|inprogress|unpublished"
+          -->
+
+      <!-- Title Information -->
+      <titlesMain>
+          <titleMain>
+            <xsl:attribute name="language"><xsl:value-of select="$langOut"/></xsl:attribute>
+            <xsl:value-of select="normalize-space(//article-meta/title-group/article-title)"/>
+          </titleMain>
+          <xsl:for-each select="//article-meta/title-group/trans-title-group/trans-title">
+            <titleMain>
+              <xsl:call-template name="insert-lang-attribute"/>
+              <xsl:value-of select="normalize-space()"/>
+            </titleMain>
+          </xsl:for-each>
+      </titlesMain>
+      <titles>
+          <xsl:for-each select="//journal-meta//journal-title">
+            <title>
+              <xsl:attribute name="language"><xsl:value-of select="$langOut"/></xsl:attribute>
+              <xsl:attribute name="type"><xsl:text>parent</xsl:text></xsl:attribute>
+              <xsl:value-of select="normalize-space()"/>
+            </title>
+          </xsl:for-each>
+          <xsl:if test="//article-meta/title-group/subtitle">
+            <title>
+              <xsl:attribute name="language"><xsl:value-of select="$langOut"/></xsl:attribute>
+              <xsl:attribute name="type"><xsl:text>sub</xsl:text></xsl:attribute>
+              <xsl:value-of select="normalize-space(//article-meta/title-group/subtitle)"/>
+            </title>
+          </xsl:if>
+          <xsl:for-each select="//article-meta/title-group/trans-title-group/trans-subtitle">
+            <title>
+              <xsl:call-template name="insert-lang-attribute"/>
+              <xsl:attribute name="type"><xsl:text>sub</xsl:text></xsl:attribute>
+              <xsl:value-of select="normalize-space()"/>
+            </title>
+          </xsl:for-each>
+      </titles>
+
+      <!-- Abstract(s) -->
+      <xsl:if test="//article-meta/abstract or //article-meta/trans-abstract">
+      <abstracts>
+          <xsl:for-each select="//article-meta/abstract[1]">
+          <!-- selecting only the first abstract since opus only accepts one abstract per language! -->
+            <abstract>
+              <xsl:attribute name="language"><xsl:value-of select="$langOut"/></xsl:attribute>
+              <xsl:call-template name="abstract-nested-whitespacing"/>
+            </abstract>
+          </xsl:for-each>
+          <xsl:for-each select="//article-meta/trans-abstract">
+            <abstract>
+              <xsl:call-template name="insert-lang-attribute"/>
+              <xsl:call-template name="abstract-nested-whitespacing"/>
+            </abstract>
+          </xsl:for-each>
+      </abstracts>
+      </xsl:if>
+
+      <!-- Author Information -->
+      <persons>
+          <xsl:for-each select="//article-meta/contrib-group/contrib">
+            <person>
+              <xsl:attribute name="role">
+                <xsl:choose>
+                  <xsl:when test="@contrib-type='guest-editor'">
+                     <xsl:text>editor</xsl:text>
+                  </xsl:when>
+                  <xsl:otherwise>
+                     <xsl:value-of select="@contrib-type"/>
+                  </xsl:otherwise>
+                </xsl:choose>
+              </xsl:attribute>
+              <xsl:choose>
+                  <xsl:when test="collab">
+                    <xsl:attribute name="firstName">-</xsl:attribute>
+                    <xsl:choose>
+                      <xsl:when test="collab/institution">
+                      <xsl:attribute name="lastName"><xsl:value-of select="collab/institution/text()"/></xsl:attribute>
+                      </xsl:when>
+                      <xsl:otherwise>
+                      <xsl:attribute name="lastName"><xsl:value-of select="collab/text()"/></xsl:attribute>
+                      </xsl:otherwise>
+                    </xsl:choose>
+                  </xsl:when>
+                  <xsl:otherwise>
+                      <xsl:attribute name="firstName"><xsl:value-of select=".//given-names"/></xsl:attribute>
+                      <xsl:attribute name="lastName"><xsl:value-of select=".//surname"/></xsl:attribute>
+                  </xsl:otherwise>
+              </xsl:choose>
+              <!--
+              role="advisor|author|contributor|editor|referee|translator|submitter|other"
+              academicTitle=""
+              allowEmailContact="true|false"
+              placeOfBirth=""
+              dateOfBirth="1999-12-31"
+              -->
+              <!--
+              <identifiers>
+                <identifier type="gnd|intern">?????</identifier>
+              </identifiers>
+              -->
+              <xsl:if test=".//email">
+                <xsl:attribute name="email"><xsl:value-of select=".//email"/></xsl:attribute>
+              </xsl:if>
+              <xsl:if test="contains(contrib-id/@contrib-id-type,'orcid')">
+              <identifiers>
+                <identifier>
+                  <xsl:attribute name="type"><xsl:text>orcid</xsl:text></xsl:attribute>
+                  <xsl:variable name='orcid' select="contrib-id[@contrib-id-type='orcid']/text()"/>
+
+                  <xsl:choose>
+                  <xsl:when test="substring($orcid, string-length($orcid))='/'">
+                    <xsl:variable name="orcid2" select="substring($orcid, 1, string-length($orcid)-1)"/>
+                    <xsl:call-template name="cut-orcid">
+                      <xsl:with-param name="orcid" select="$orcid2"/>
+                    </xsl:call-template>
+                    <!--xsl:message>Last slash was cut.</xsl:message>
+                    <xsl:message>Parameter given to template is <xsl:value-of select="$orcid2"/></xsl:message-->
+                  </xsl:when>
+                  <xsl:otherwise>
+                    <xsl:call-template name="cut-orcid">
+                      <xsl:with-param name="orcid" select="$orcid"/>
+                    </xsl:call-template>
+                    <!--xsl:message>Template called on: <xsl:value-of select="$orcid"/> </xsl:message-->
+                  </xsl:otherwise>
+                  </xsl:choose>
+                </identifier>
+              </identifiers>
+              </xsl:if>
+            </person>
+          </xsl:for-each>
+      </persons>
+
+      <!-- Topical Keywords -->
+      <keywords>
+          <keyword>
+            <xsl:attribute name="language"><xsl:value-of select="$langOut"/></xsl:attribute>
+            <xsl:attribute name="type"><xsl:text>swd</xsl:text></xsl:attribute>
+            <xsl:text>-</xsl:text>
+          </keyword>
+          <xsl:for-each select="//article-meta/kwd-group/kwd">
+            <xsl:if test="string-length(normalize-space(text()))>0">
+              <keyword>
+                <xsl:call-template name="insert-lang-attribute"/>
+                <xsl:attribute name="type"><xsl:text>uncontrolled</xsl:text></xsl:attribute>
+                <xsl:value-of select="normalize-space(text())"/>
+              </keyword>
+            </xsl:if>
+          </xsl:for-each>
+      </keywords>
+
+      <!--
+      <dnbInstitutions>
+          <dnbInstitution id="<integer>" role="grantor|publisher"/>
+      </dnbInstitutions>
+      -->
+
+      <!-- Publication Dates -->
+      <dates>
+        <xsl:for-each select="//article-meta/pub-date">
+        <xsl:choose>
+          <xsl:when test="(contains(@pub-type,'epub') and year) or
+              (contains(@pub-type,'ppub') and year) or
+              (contains(@pub-type, 'epub-ppub') and year) or
+              (contains(@date-type,'pub') and year) or
+              not(@*)">
+              <xsl:call-template name="compose-date"> </xsl:call-template>
+          </xsl:when>
+          <xsl:otherwise>
+            <xsl:if test="not(year)">
+            <!--to comply with opus requirement that a date has to be given-->
+            <date>
+              <xsl:attribute name="type"><xsl:text>completed</xsl:text></xsl:attribute>
+              <xsl:attribute name="monthDay">
+                <xsl:text>--11-11</xsl:text>
+              </xsl:attribute>
+              <xsl:attribute name="year">
+                <xsl:text>1111</xsl:text>
+              </xsl:attribute>
+            </date>
+            </xsl:if>
+          </xsl:otherwise>
+        </xsl:choose>
+        </xsl:for-each>
+      </dates>
+
+      <!-- Identifiers, ISSN, DOI, PMID -->
+      <identifiers>
+        <xsl:for-each select="//journal-meta/issn[@pub-type='ppub' or @pub-type='epub' or @publication-format='ppub' or @publication-format='epub' or @publication-format='print' or @publication-format='electronic']">
+          <identifier>
+            <xsl:attribute name="type"><xsl:text>issn</xsl:text></xsl:attribute>
+            <xsl:value-of select="normalize-space(text())"/>
+          </identifier>
+        </xsl:for-each>
+        <xsl:if test="//article-meta/article-id[@pub-id-type='doi']">
+          <identifier>
+             <xsl:attribute name="type"><xsl:text>doi</xsl:text></xsl:attribute>
+             <xsl:value-of select="//article-meta/article-id[@pub-id-type='doi']"/>
+          </identifier>
+        </xsl:if>
+        <xsl:if test="//article-meta/article-id[@pub-id-type='pmid']">
+          <identifier>
+             <xsl:attribute name="type"><xsl:text>pmid</xsl:text></xsl:attribute>
+             <xsl:value-of select="//article-meta/article-id[@pub-id-type='pmid']"/>
+          </identifier>
+        </xsl:if>
+      </identifiers>
+
+
+      <!--
+      <identifiers>
+          <identifier>
+             <xsl:attribute name="type"><xsl:text>issn</xsl:text></xsl:attribute>
+             <xsl:for-each select="//journal-meta/issn[@pub-type='ppub' or @publication-format='print']">
+                <xsl:value-of select="normalize-space(text())"/>
+                <xsl:if test="position() != last()">
+                   <xsl:text> , </xsl:text>
+                </xsl:if>
+                <xsl:if test="position() = last()">
+                   <xsl:text> (pISSN)</xsl:text>
+                </xsl:if>
+             </xsl:for-each>
+             <xsl:if test="//journal-meta/issn[@pub-type='epub' or @publication-format='electronic']">
+                <xsl:text> ; </xsl:text>
+                <xsl:for-each select="//journal-meta/issn[@pub-type='epub' or @publication-format='electronic']">
+                   <xsl:value-of select="normalize-space(text())"/>
+                   <xsl:if test="position() != last()">
+                      <xsl:text> , </xsl:text>
+                   </xsl:if>
+                   <xsl:if test="position() = last()">
+                      <xsl:text> (eISSN)</xsl:text>
+                   </xsl:if>
+                </xsl:for-each>
+             </xsl:if>
+          </identifier>
+          <identifier>
+             <xsl:attribute name="type"><xsl:text>doi</xsl:text></xsl:attribute>
+             <xsl:value-of select="//article-meta/article-id[@pub-id-type='doi']"/>
+          </identifier>
+        <xsl:if test="//article-meta/article-id[@pub-id-type='pmid']">
+          <identifier>
+             <xsl:attribute name="type"><xsl:text>pmid</xsl:text></xsl:attribute>
+             <xsl:value-of select="//article-meta/article-id[@pub-id-type='pmid']"/>
+          </identifier>
+        </xsl:if>
+      </identifiers>
+      -->
+
+      <!--
+      <notes>
+          <note visibility="private|public">?????</note>
+      </notes>
+      <collections>
+          <collection id="<integer>"/>
+      </collections>
+      <series>
+          <seriesItem id="<integer>" number=""/>
+      </series>
+      <enrichments>
+          <enrichment key="">?????</enrichment>
+      </enrichments>
+      <licences>
+          <licence id="<integer>"/>
+      </licences>
+      <files basedir="">
+          <file
+                path=""
+                name=""
+                language=""
+                displayName=""
+                visibleInOai="true|false"
+                visibleInFrontdoor="true|false"
+                sortOrder="<int>">
+            <comment>?????</comment>
+            <checksum type="md5|sha256|sha512">?????</checksum>
+          </file>
+      </files>
+      -->
+    </opusDocument>
+  </import>
+  </xsl:template>
+
+  <xsl:template name="compose-date">
+    <xsl:param name="xpath" select="."/>
+          <date>
+             <xsl:attribute name="type"><xsl:text>published</xsl:text></xsl:attribute>
+             <xsl:if test="$xpath/month">
+                <xsl:variable name="mnth" select="$xpath/month"/>
+                <xsl:attribute name="monthDay">
+                  <xsl:text>--</xsl:text>
+                   <xsl:choose>
+                        <xsl:when test="number($mnth) = $mnth">
+                            <xsl:value-of select="format-number($mnth,'00')"/>
+                        </xsl:when>
+                        <xsl:when test="document('')//monthNameMap/monthNames[@text=$mnth]/@number">
+                            <xsl:value-of select="document('')//monthNameMap/monthNames[@text=$mnth]/@number"/>
+                        </xsl:when>
+                        <xsl:otherwise>
+                            <xsl:text>01</xsl:text>
+                        </xsl:otherwise>
+                    </xsl:choose>
+                  <xsl:text>-</xsl:text>
+                  <xsl:choose>
+                    <xsl:when test="$xpath/day">
+                      <xsl:value-of select="format-number($xpath/day,'00')"/>
+                    </xsl:when>
+                    <xsl:otherwise>
+                      <xsl:text>01</xsl:text>
+                    </xsl:otherwise>
+                  </xsl:choose>
+                </xsl:attribute>
+             </xsl:if>
+             <xsl:attribute name="year">
+                <xsl:value-of select="$xpath/year"/>
+             </xsl:attribute>
+          </date>
+  </xsl:template>
+
+  <xsl:template name="insert-lang-attribute">
+    <xsl:choose>
+        <xsl:when test="@xml:lang">
+            <xsl:variable name="lang2" select="translate(@xml:lang,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz')"/>
+            <xsl:variable name="lang3" select="document('')//langCodeMap/langCodes[@iso639-1=$lang2]/@iso639-2"/>
+            <xsl:attribute name="language"><xsl:value-of select="$lang3"/></xsl:attribute>
+        </xsl:when>
+        <xsl:when test="../@xml:lang">
+            <xsl:variable name="lang2" select="translate(../@xml:lang,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz')"/>
+            <xsl:variable name="lang3" select="document('')//langCodeMap/langCodes[@iso639-1=$lang2]/@iso639-2"/>
+            <xsl:attribute name="language"><xsl:value-of select="$lang3"/></xsl:attribute>
+        </xsl:when>
+        <xsl:otherwise>
+          <xsl:attribute name="language"><xsl:value-of select="$langOut"/></xsl:attribute>
+        </xsl:otherwise>
+        </xsl:choose>
+  </xsl:template>
+
+  <xsl:template name="cut-orcid">
+    <xsl:param name="orcid"/>
+    <!-- This template accepts an url as input and selects the substring after the last "/".
+    orcids consist of four 4-digit blocks, separated by dashes. i.e. the resulting string should be precisely 19 characters long.
+    Lacking any regex capabilities in xslt 1.0, the template makes a last check for string-length before returning the orcid-id.
+    Recursive template, as substring-after() can only ever select the substring after the first instance of a character.
+    -->
+    <xsl:choose>
+      <xsl:when test="not(contains($orcid,'/'))">
+        <xsl:if test="string-length($orcid)=19">
+          <xsl:value-of select="$orcid"/>
+        </xsl:if>
+      </xsl:when>
+      <xsl:otherwise>
+        <xsl:call-template name="cut-orcid">
+        <xsl:with-param name="orcid" select="substring-after($orcid,'/')"/>
+        </xsl:call-template>
+      </xsl:otherwise>
+    </xsl:choose>
+  </xsl:template>
+
+  <xsl:template name="abstract-nested-whitespacing">
+    <!-- this template transforms abstract content to normalize whitespacing between child elements.
+    if abstract contains sub elements, it likely contains chemical formulas and the text contents will be used as is.
+    Otherwise, this template deliberately adds white spaces between the text contents of each child element. If the current element is a title element, line breaks will be added before and after the current text to improve readability and approximate intended document structure. -->
+    <xsl:choose>
+      <xsl:when test="descendant::sub">
+        <xsl:for-each select="descendant-or-self::text()">
+          <xsl:if test="string-length(normalize-space())&gt;0">
+            <xsl:choose>
+              <xsl:when test="local-name(parent::*) = 'tex-math'">
+              <!--ignore tex-math elements-->
+              </xsl:when>
+              <xsl:otherwise>
+                <xsl:value-of select="."/>
+              </xsl:otherwise>
+            </xsl:choose>
+          </xsl:if>
+        </xsl:for-each>
+      </xsl:when>
+      <xsl:otherwise>
+        <xsl:for-each select="descendant-or-self::text()">
+          <xsl:if test="string-length(normalize-space())&gt;0">
+            <xsl:choose>
+              <xsl:when test="local-name(parent::*)='title' "> <!-- when text of title element is selected, add line breaks before and after-->
+                <xsl:text>
+                </xsl:text>
+                <xsl:value-of select="normalize-space()"/>
+                <xsl:text>
+                </xsl:text>
+              </xsl:when>
+              <xsl:when test="local-name(parent::*) = 'tex-math'">
+              <!--ignore tex-math elements-->
+              </xsl:when>
+              <xsl:when test="contains(name(parent::*),'mml:')">
+                <xsl:value-of select="."/>
+              </xsl:when>
+              <xsl:otherwise> <!--otherwise select space-normalized text and add a whitespace afterward-->
+                <xsl:value-of select="normalize-space()"/>
+                <xsl:text> </xsl:text>
+              </xsl:otherwise>
+            </xsl:choose>
+          </xsl:if>
+        </xsl:for-each>
+      </xsl:otherwise>
+    </xsl:choose>
+  </xsl:template>
+
+
+</xsl:stylesheet>
+'''.format(xmlinject1=iso639codes,xmlinject2=mnth2number)
+
+
+
+
+  # 2017-07-11 TD : static string containing the xsl code for JATS --> METSMODS
+  #                 Note that there MUST NOT be any kind of '<?xml ...?>' header!
+  #
+  # 2019-09-24 TD : Eliminate the tag 'journal-title-group' in xpath since a publisher
+  #                 (i.e. Frontiers) apparently is not using it
+  #
+  jats2metsmods = '''
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+
+    <!-- <xsl:import href="jats2mods.xsl"/> -->
+    <xsl:output method="xml" omit-xml-declaration="no" standalone="no" indent="yes" encoding="utf-8"/>
+
+    <xsl:param name="currdatetime">1970-01-01T00:00:00</xsl:param>
+
+    <xsl:variable name="inject">
+      {xmlinject}
+    </xsl:variable>
+
+    <xsl:template match="/">
+        <mets:mets xmlns:mets="http://www.loc.gov/METS/"
+                   xmlns:mods="http://www.loc.gov/mods/v3"
+              xmlns:xlink="http://www.w3.org/1999/xlink"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://www.loc.gov/METS/ http://www.loc.gov/mets/mets.xsd http://www.loc.gov/mods/v3 https://www.loc.gov/standards/mods/v3/mods.xsd">
+            <xsl:attribute name="ID"><xsl:text>sword-mets_mets</xsl:text></xsl:attribute>
+            <xsl:attribute name="OBJID"><xsl:text>sword-mets</xsl:text></xsl:attribute>
+            <xsl:attribute name="LABEL"><xsl:text>METS/MODS SWORD Item</xsl:text></xsl:attribute>
+            <xsl:attribute name="PROFILE"><xsl:text>METS/MODS SIP Profile 1.0</xsl:text></xsl:attribute>
+            <mets:metsHdr>
+                <xsl:attribute name="CREATEDATE"><xsl:value-of select="$currdatetime"/></xsl:attribute>
+                <mets:agent>
+                    <xsl:attribute name="ROLE">CUSTODIAN</xsl:attribute>
+                    <xsl:attribute name="TYPE">ORGANIZATION</xsl:attribute>
+                    <mets:name>DeepGreen</mets:name>
+                </mets:agent>
+            </mets:metsHdr>
+            <mets:dmdSec>
+                <xsl:attribute name="ID">sword-mets-dmd-1</xsl:attribute>
+                <xsl:attribute name="GROUPID">sword-mets-dmd-1_group-1</xsl:attribute>
+                <mets:mdWrap>
+                    <xsl:attribute name="LABEL"><xsl:text>SWAP Metadata</xsl:text></xsl:attribute>
+                    <xsl:attribute name="MDTYPE">MODS</xsl:attribute>
+                    <xsl:attribute name="MIMETYPE"><xsl:text>text/xml</xsl:text></xsl:attribute>
+                    <mets:xmlData>
+                        <xsl:apply-templates/>
+                    </mets:xmlData>
+                </mets:mdWrap>
+            </mets:dmdSec>
+        </mets:mets>
+    </xsl:template>
+
+
+    <!--
+    <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="xml" omit-xml-declaration="no" standalone="no" indent="yes" encoding="utf-8"/>
+    -->
+
+    <!-- (Possible) mapping of affiliation(s) -->
+    <xsl:key name="kAffById" match="//aff" use="@id"/>
+
+    <xsl:template match="/article">
+        <mods:mods xmlns:mods="http://www.loc.gov/mods/v3"
+                   xmlns:xlink="http://www.w3.org/1999/xlink"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.loc.gov/mods/v3 https://www.loc.gov/standards/mods/v3/mods-3-6.xsd">
+
+            <!--
+                Since we are mapping JATS, we are only dealing with journal articles.
+                According to a LOC example, these are attributed as follows.
+                See https://www.loc.gov/standards/mods/v3/mods-userguide-examples.html#journal_article
+            -->
+            <mods:typeOfResource>text</mods:typeOfResource>
+            <mods:genre>journal article</mods:genre>
+
+            <!-- Language -->
+            <mods:language>
+                <mods:languageTerm type="code" authority="rfc3066">
+                    <xsl:choose>
+                        <xsl:when test="//article/@xml:lang">
+                            <xsl:value-of select="//article/@xml:lang"/>
+                        </xsl:when>
+                        <xsl:otherwise>
+                            <xsl:text>en</xsl:text>
+                        </xsl:otherwise>
+                    </xsl:choose>
+                </mods:languageTerm>
+            </mods:language>
+
+            <!-- Title -->
+            <mods:titleInfo>
+                <xsl:for-each select="//article-meta/title-group/article-title">
+                    <mods:title>
+                        <xsl:call-template name="insert-lang-attribute"/>
+                        <xsl:value-of select="normalize-space()"/>
+                    </mods:title>
+                </xsl:for-each>
+                <xsl:for-each select="//article-meta/title-group/subtitle">
+                    <mods:subTitle>
+                        <xsl:call-template name="insert-lang-attribute"/>
+                        <xsl:value-of select="normalize-space()"/>
+                    </mods:subTitle>
+                </xsl:for-each>
+            </mods:titleInfo>
+            <xsl:for-each select="//article-meta/title-group/trans-title-group/trans-title">
+                <mods:titleInfo type="translated">
+                    <mods:title>
+                        <xsl:call-template name="insert-lang-attribute"/>
+                        <xsl:value-of select="normalize-space()"/>
+                    </mods:title>
+                </mods:titleInfo>
+            </xsl:for-each>
+            <xsl:for-each select="//article-meta/title-group/trans-title-group/trans-subtitle">
+                <mods:titleInfo type="translated">
+                    <mods:subTitle>
+                        <xsl:call-template name="insert-lang-attribute"/>
+                        <xsl:value-of select="normalize-space()"/>
+                    </mods:subTitle>
+                </mods:titleInfo>
+            </xsl:for-each>
+
+            <!-- Appearance -->
+            <mods:relatedItem type="host">
+                <mods:titleInfo>
+                    <xsl:for-each select="//journal-meta//journal-title">
+                        <mods:title>
+                            <xsl:call-template name="insert-lang-attribute"/>
+                            <xsl:value-of select="normalize-space()"/>
+                        </mods:title>
+                    </xsl:for-each>
+                </mods:titleInfo>
+                <xsl:for-each select="//journal-meta//abbrev-journal-title">
+                  <mods:titleInfo>
+                    <xsl:attribute name="type">abbreviated</xsl:attribute>
+                    <mods:title>
+                      <xsl:call-template name="insert-lang-attribute"/>
+                      <xsl:value-of select="normalize-space()"/>
+                    </mods:title>
+                  </mods:titleInfo>
+                </xsl:for-each>
+                <xsl:if test="//journal-meta/issn[@pub-type='ppub']">
+                    <mods:identifier type="issn"><xsl:value-of select="//journal-meta/issn[@pub-type='ppub']"/></mods:identifier>
+                </xsl:if>
+                <xsl:if test="//journal-meta/issn[@pub-type='epub']">
+                    <mods:identifier type="eIssn"><xsl:value-of select="//journal-meta/issn[@pub-type='epub']"/></mods:identifier>
+                </xsl:if>
+                <xsl:if test="//journal-meta/issn[@publication-format='print']">
+                    <mods:identifier type="issn"><xsl:value-of select="//journal-meta/issn[@publication-format='print']"/></mods:identifier>
+                </xsl:if>
+                <xsl:if test="//journal-meta/issn[@publication-format='electronic']">
+                    <mods:identifier type="eIssn"><xsl:value-of select="//journal-meta/issn[@publication-format='electronic']"/></mods:identifier>
+                </xsl:if>
+                <xsl:if test="//journal-meta/issn[@publication-format='ppub']">
+                    <mods:identifier type="issn"><xsl:value-of select="//journal-meta/issn[@publication-format='ppub']"/></mods:identifier>
+                </xsl:if>
+                <xsl:if test="//journal-meta/issn[@publication-format='epub']">
+                    <mods:identifier type="issn"><xsl:value-of select="//journal-meta/issn[@publication-format='epub']"/></mods:identifier>
+                </xsl:if>
+                <xsl:for-each select="//journal-meta/issn[not(@pub-type) and not(@publication-format)]">
+                  <mods:identifier type="issn">
+                    <xsl:value-of select="."/>
+                  </mods:identifier>
+                </xsl:for-each>
+                <xsl:for-each select="//journal-meta/journal-id">
+                    <mods:identifier>
+                        <xsl:attribute name="type"><xsl:value-of select="@journal-id-type"/></xsl:attribute>
+                        <xsl:value-of select="."/>
+                    </mods:identifier>
+                </xsl:for-each>
+                <mods:part>
+                    <xsl:if test="//article-meta/volume">
+                        <mods:detail type="volume">
+                            <mods:number><xsl:value-of select="//article-meta/volume"/></mods:number>
+                        </mods:detail>
+                    </xsl:if>
+                    <xsl:if test="//article-meta/issue">
+                        <mods:detail type="issue">
+                            <mods:number><xsl:value-of select="//article-meta/issue"/></mods:number>
+                        </mods:detail>
+                    </xsl:if>
+                    <xsl:if test="//article-meta/fpage or //article-meta/counts/page-count/@count">
+                        <mods:extent unit="pages">
+                            <xsl:if test="//article-meta/fpage">
+                                <mods:start><xsl:value-of select="//article-meta/fpage"/></mods:start>
+                            </xsl:if>
+                            <xsl:if test="//article-meta/lpage">
+                                <mods:end><xsl:value-of select="//article-meta/lpage"/></mods:end>
+                            </xsl:if>
+                            <xsl:if test="//article-meta/counts/page-count/@count">
+                                <mods:total><xsl:value-of select="//article-meta/counts/page-count/@count"/></mods:total>
+                            </xsl:if>
+                        </mods:extent>
+                    </xsl:if>
+                </mods:part>
+            </mods:relatedItem>
+
+            <!-- Creator / Contributor (Author, Editor...)-->
+            <xsl:for-each select="//article-meta/contrib-group/contrib">
+              <xsl:choose>
+                    <!-- if contributor is a non-person entity -->
+                    <xsl:when test="collab">
+                        <mods:name type="corporate">
+                        <mods:namePart>
+                        <xsl:choose>
+                            <xsl:when test="collab/institution">
+                                <xsl:value-of select="collab/institution/text()"/>
+                            </xsl:when>
+                            <xsl:otherwise>
+                                <xsl:value-of select="collab/text()"/>
+                            </xsl:otherwise>
+                        </xsl:choose>
+                        </mods:namePart>
+                        <mods:role>
+                            <mods:roleTerm type="text"><xsl:value-of select="@contrib-type"/></mods:roleTerm>
+                        </mods:role>
+                        </mods:name>
+
+                    </xsl:when>
+
+
+                  <!-- if contributor is a person -->
+                  <xsl:when test="//string-name or //name">
+                      <mods:name type="personal">
+                          <mods:namePart type="family"><xsl:value-of select=".//surname"/></mods:namePart>
+                          <xsl:if test="string-length(.//given-names/text()) > 0">
+                            <mods:namePart type="given"><xsl:value-of select=".//given-names"/></mods:namePart>
+                          </xsl:if>
+                          <mods:role>
+                              <mods:roleTerm type="text"><xsl:value-of select="@contrib-type"/></mods:roleTerm>
+                          </mods:role>
+                          <!-- Identifier: So far, support of ORCIDs (and email adresses?) only -->
+                          <xsl:if test="contains(contrib-id/@contrib-id-type,'orcid')">
+                              <mods:nameIdentifier type="orcid">
+                                  <xsl:copy-of select="contrib-id[@contrib-id-type='orcid']/text()"/>
+                              </mods:nameIdentifier>
+                          </xsl:if>
+                          <xsl:if test="string-length(.//email/text()) > 0">
+                            <mods:nameIdentifier type="email">
+                              <xsl:value-of select=".//email"/>
+                            </mods:nameIdentifier>
+                          </xsl:if>
+
+                          <!-- Affiliations -->
+                          <xsl:for-each select="xref[@ref-type='aff']">
+                            <xsl:choose>
+                              <xsl:when test="contains(./@ref-type,'aff') and string-length(@rid) > 0">
+                                <mods:affiliation>
+
+                                  <xsl:call-template name="build_aff_string">
+                                    <xsl:with-param name="aff_node" select="key('kAffById',@rid)"/>
+                                    <xsl:with-param name="combined_string" select="''"/>
+                                    <xsl:with-param name="current_position" select="1"/>
+                                  </xsl:call-template>
+                                </mods:affiliation>
+                              </xsl:when>
+                              <xsl:when test="string-length(//aff[position()=last()]/text()) > 0">
+                                  <mods:affiliation>
+                                    <xsl:call-template name="build_aff_string">
+                                      <xsl:with-param name="aff_node" select="//aff[position()=last()]"/>
+                                      <xsl:with-param name="combined_string" select="''"/>
+                                      <xsl:with-param name="current_position" select="1"/>
+                                    </xsl:call-template>
+                                  </mods:affiliation>
+                              </xsl:when>
+                            </xsl:choose>
+                          </xsl:for-each>
+
+                          <!-- accommodate aff linking via @rid in contrib element, multiple ids separated by spaces -->
+                          <xsl:if test="not(xref[@ref-type='aff']) and @rid">
+                              <xsl:call-template name="parse-multiple-rids-for-affs">
+                                  <xsl:with-param name="rid_string" select="@rid"/>
+                              </xsl:call-template>
+                          </xsl:if>
+
+                          <!-- if the current contrib element contains the affiliation itself, without any rids: -->
+                          <xsl:if test=".//aff">
+                              <mods:affiliation>
+                                  <xsl:value-of select="normalize-space(.//aff)"/>
+                              </mods:affiliation>
+                          </xsl:if>
+                      </mods:name>
+                    </xsl:when>
+
+                </xsl:choose>
+
+            </xsl:for-each>
+
+            <!-- Description: Abstract / TOC -->
+            <xsl:for-each select="//article-meta/abstract">
+                <xsl:choose>
+                    <xsl:when test="@type = 'toc'">
+                        <mods:tableOfContents>
+                            <xsl:call-template name="insert-lang-attribute"/>
+                            <xsl:value-of select="."/>
+                        </mods:tableOfContents>
+                    </xsl:when>
+                    <xsl:otherwise>
+                        <mods:abstract>
+                            <xsl:call-template name="insert-lang-attribute"/>
+                            <xsl:call-template name="abstract-nested-whitespacing"/>
+                        </mods:abstract>
+                    </xsl:otherwise>
+                </xsl:choose>
+            </xsl:for-each>
+            <xsl:for-each select="//article-meta/trans-abstract">
+              <mods:abstract>
+                <xsl:call-template name="insert-lang-attribute"/>
+                <xsl:call-template name="abstract-nested-whitespacing" />
+              </mods:abstract>
+            </xsl:for-each>
+
+            <!-- Description: Subject (Keywords) -->
+            <xsl:if test="//article-meta/kwd-group/kwd">
+                <mods:subject>
+                    <xsl:for-each select="//article-meta/kwd-group/kwd">
+                        <mods:topic>
+                          <xsl:call-template name="insert-lang-attribute"/>
+                          <xsl:value-of select="."/>
+                        </mods:topic>
+                    </xsl:for-each>
+                </mods:subject>
+            </xsl:if>
+
+            <!-- Publisher, Dates (in MODS under originInfo) -->
+            <mods:originInfo>
+                <xsl:if test="//journal-meta/publisher/publisher-name">
+                    <mods:publisher><xsl:value-of select="//journal-meta/publisher/publisher-name"/></mods:publisher>
+                </xsl:if>
+                <xsl:if test="//journal-meta/publisher/publisher-loc">
+                    <mods:place>
+                        <mods:placeTerm type="text"><xsl:value-of select="//journal-meta/publisher/publisher-loc"/></mods:placeTerm>
+                    </mods:place>
+                </xsl:if>
+
+
+                <!-- Publication date (= date available/issued) -->
+                <xsl:for-each select="//article-meta/pub-date">
+                    <xsl:if test="(contains(@pub-type, 'epub') and year and month) or
+                        (contains(@pub-type, 'epub-ppub') and year and month) or
+                        (contains(@pub-type, 'ppub') and year and month) or
+                        (contains(@date-type, 'pub') and year and month)
+                        or not(@*)">
+                            <mods:dateIssued encoding="w3cdtf">
+                            <xsl:call-template name="compose-date"></xsl:call-template>
+                        </mods:dateIssued>
+                    </xsl:if>
+                </xsl:for-each>
+
+                <!-- Other dates (received, accepted...) -->
+                <xsl:for-each select="//article-meta/history/date">
+                    <xsl:if test="year and month">
+                        <mods:dateOther encoding="w3cdtf">
+                            <xsl:attribute name="type"><xsl:value-of select="@date-type"/></xsl:attribute>
+                            <xsl:call-template name="compose-date"></xsl:call-template>
+                        </mods:dateOther>
+                    </xsl:if>
+                </xsl:for-each>
+
+                <!-- another uncommon variation of the same:-->
+                <xsl:for-each select="//article-meta/pub-history/event/date">
+                    <xsl:if test="year and month">
+                            <xsl:if test="@date-type">
+                                <mods:dateOther encoding="w3cdtf">
+                                <xsl:attribute name="type"><xsl:value-of select="@date-type"/></xsl:attribute>
+                                <xsl:call-template name="compose-date"></xsl:call-template>
+                                </mods:dateOther>
+                            </xsl:if>
+                            <xsl:if test="../@event-type">
+                                <mods:dateOther encoding="w3cdtf">
+                                <xsl:attribute name="type"><xsl:value-of select="../@event-type"/></xsl:attribute>
+                                <xsl:call-template name="compose-date"></xsl:call-template>
+                            </mods:dateOther>
+                            </xsl:if>
+                    </xsl:if>
+                </xsl:for-each>
+            </mods:originInfo>
+
+            <!-- Identifiers -->
+            <xsl:for-each select="//article-meta/article-id">
+                <mods:identifier>
+                    <xsl:attribute name="type"><xsl:value-of select="@pub-id-type"/></xsl:attribute>
+                    <xsl:value-of select="."/>
+                </mods:identifier>
+            </xsl:for-each>
+
+            <!-- License / Copyright -->
+            <xsl:for-each select="//article-meta/permissions/license">
+                <mods:accessCondition type="use and reproduction">
+                    <xsl:if test=".//@xlink:href">
+                        <xsl:attribute name="xlink:href"><xsl:value-of select=".//@xlink:href"/></xsl:attribute>
+                    </xsl:if>
+                    <xsl:value-of select="normalize-space(license-p|p)"/>
+                </mods:accessCondition>
+            </xsl:for-each>
+
+            <!-- Funding -->
+            <xsl:for-each select="//funding-statement">
+                <mods:note type="funding">
+                    <xsl:value-of select="normalize-space()" />
+                </mods:note>
+            </xsl:for-each>
+
+            <xsl:for-each select="//article-meta/funding-group/award-group/funding-source">
+                <mods:note type="funding">
+                    <xsl:value-of select="normalize-space()" />
+                </mods:note>
+            </xsl:for-each>
+
+        </mods:mods>
+
+    </xsl:template>
+
+    <xsl:template name="compose-date">
+        <xsl:value-of select="year"/>
+        <xsl:variable name="mnth" select="month"/>
+        <!-- check if month is a number -->
+        <xsl:choose>
+            <xsl:when test="number(month) = month">
+                <xsl:text>-</xsl:text>
+                <xsl:value-of select="format-number(month,'00')"/>
+            </xsl:when>
+            <xsl:when test="document('')//monthNameMap/monthNames[@text=$mnth]/@number">
+                <xsl:text>-</xsl:text>
+                <xsl:value-of select="document('')//monthNameMap/monthNames[@text=$mnth]/@number"/>
+            </xsl:when>
+            <xsl:otherwise>
+                <xsl:text>-12</xsl:text>
+        </xsl:choose>
+        <xsl:if test="day">
+            <xsl:text>-</xsl:text>
+            <xsl:value-of select="format-number(day,'00')"/>
+        </xsl:if>
+    </xsl:template>
+
+    <xsl:template name="insert-lang-attribute">
+        <xsl:choose>
+        <xsl:when test="@xml:lang">
+            <xsl:attribute name="xml:lang"><xsl:value-of select="@xml:lang"/></xsl:attribute>
+        </xsl:when>
+        <xsl:when test="../@xml:lang">
+            <xsl:attribute name="xml:lang"><xsl:value-of select="../@xml:lang"/></xsl:attribute>
+        </xsl:when>
+        </xsl:choose>
+    </xsl:template>
+
+    <xsl:template name="abstract-nested-whitespacing">
+    <!-- this template transforms abstract content to normalize whitespacing between child elements.
+    if abstract contains sub elements, it likely contains chemical formulas and the text contents will be used as is.
+    Otherwise, this template deliberately adds white spaces between the text contents of each child element. If the current element is a title element, line breaks will be added before and after the current text to improve readability and approximate intended document structure. -->
+      <xsl:choose>
+      <xsl:when test="descendant::sub">
+        <xsl:for-each select="descendant-or-self::text()">
+          <xsl:if test="string-length(normalize-space())&gt;0">
+            <xsl:choose>
+              <xsl:when test="local-name(parent::*) = 'tex-math'">
+              <!--ignore tex-math elements-->
+              </xsl:when>
+              <xsl:otherwise>
+                <xsl:value-of select="."/>
+              </xsl:otherwise>
+            </xsl:choose>
+          </xsl:if>
+        </xsl:for-each>
+      </xsl:when>
+      <xsl:otherwise>
+        <xsl:for-each select="descendant-or-self::text()">
+          <xsl:if test="string-length(normalize-space())&gt;0">
+            <xsl:choose>
+              <xsl:when test="local-name(parent::*)='title' ">
+                <!-- when text of title element is selected, add line breaks before and after-->
+                <xsl:text>
+                </xsl:text>
+                <xsl:value-of select="normalize-space()"/>
+                <xsl:text>
+                </xsl:text>
+              </xsl:when>
+              <xsl:when test="local-name(parent::*) = 'tex-math'">
+              </xsl:when>
+              <xsl:when test="contains(name(parent::*),'mml:')">
+                <xsl:value-of select="."/>
+              </xsl:when>
+              <xsl:otherwise> <!--otherwise select space-normalized text and add a whitespace afterward-->
+                <xsl:value-of select="normalize-space()"/>
+                <xsl:text> </xsl:text>
+              </xsl:otherwise>
+            </xsl:choose>
+          </xsl:if>
+        </xsl:for-each>
+      </xsl:otherwise>
+    </xsl:choose>
+  </xsl:template>
+
+  <xsl:template name="build_aff_string">
+  <!-- builds string recursively, by going through each node and adding its text to the string. end condition: counter > total no of nodes. -->
+        <xsl:param name="combined_string"/>
+        <xsl:param name="aff_node"/>
+        <xsl:param name="current_position"/>
+        <xsl:variable name="total_nodes" select="count($aff_node/descendant-or-self::text())"/>
+        <xsl:choose>
+            <xsl:when test="number($current_position) &gt; $total_nodes">
+                <!-- exit condition, prints out value of combined_string -->
+                <xsl:value-of select="$combined_string"/>
+            </xsl:when>
+            <xsl:otherwise>
+            <xsl:for-each select="$aff_node/descendant-or-self::text()[$current_position]">
+            <!--selects current node-->
+                <xsl:variable name="stripped_string" select="normalize-space()"/>
+                <xsl:choose>
+                    <xsl:when test="local-name(parent::*)='sub' or local-name(parent::*)='label' or local-name(parent::*) = 'sup' or local-name(parent::*)='email' or local-name(parent::*)='institution-id' or local-name(parent::*)='postal-code'">
+                    <!-- if text belongs to irrelevant element, simply call template again with counter +1 -->
+                            <xsl:call-template name="build_aff_string">
+                                <xsl:with-param name="combined_string" select="$combined_string"/>
+                                <xsl:with-param name="aff_node" select="$aff_node"/>
+                                <xsl:with-param name="current_position" select="number($current_position)+1"/>
+                            </xsl:call-template>
+                    </xsl:when>
+                    <xsl:when test="string-length($stripped_string) &gt; 0 and
+                    $stripped_string != ',' and
+                    $stripped_string != '.' and
+                    $stripped_string != ';'">
+                    <!-- if stripped_string is not empty and not only a punctuation character -->
+                        <xsl:choose>
+                            <xsl:when test="string-length($combined_string) &gt; 0"> <!-- if there is already text in the combined string, add stripped_string with separators depending on preceding / succeeding punctuation -->
+                                <xsl:variable name="last_char" select="substring($combined_string, string-length($combined_string))"/>
+                                <xsl:variable name="first_char" select="substring($stripped_string, 1,1)"/>
+                                <xsl:choose>
+                                    <xsl:when test="$last_char = ',' or $last_char = '.' or $last_char = ';'"> <!-- if there's a separator at the end of the combined string -->
+                                        <xsl:variable name="edited_string" select="concat($combined_string,' ', $stripped_string)"/>
+                                        <xsl:call-template name="build_aff_string">
+                                            <xsl:with-param name="combined_string" select="$edited_string"/>
+                                            <xsl:with-param name="aff_node" select="$aff_node"/>
+                                            <xsl:with-param name="current_position" select="number($current_position)+1"/>
+                                        </xsl:call-template>
+                                    </xsl:when>
+                                    <xsl:when test="$first_char = ',' or $first_char = '.' or $first_char = ';'"> <!-- if there's a separator at the start of the new string -->
+                                        <xsl:variable name="edited_string" select="concat($combined_string, $stripped_string)"/>
+                                        <xsl:call-template name="build_aff_string">
+                                            <xsl:with-param name="combined_string" select="$edited_string"/>
+                                            <xsl:with-param name="aff_node" select="$aff_node"/>
+                                            <xsl:with-param name="current_position" select="number($current_position)+1"/>
+                                        </xsl:call-template>
+                                    </xsl:when>
+                                    <xsl:otherwise> <!-- normal case: add to combined_string with ', ' as separator -->
+                                        <xsl:variable name="edited_string" select="concat($combined_string,', ', $stripped_string)"/>
+                                        <xsl:call-template name="build_aff_string">
+                                            <xsl:with-param name="combined_string" select="$edited_string"/>
+                                            <xsl:with-param name="aff_node" select="$aff_node"/>
+                                            <xsl:with-param name="current_position" select="number($current_position)+1"/>
+                                        </xsl:call-template>
+                                    </xsl:otherwise>
+                                </xsl:choose>
+                            </xsl:when>
+                            <xsl:otherwise>
+                            <!-- if combined_string is empty, then set stripped_string as combined_string and call template again. -->
+                                <xsl:call-template name="build_aff_string">
+                                <xsl:with-param name="combined_string" select="$stripped_string"/>
+                                <xsl:with-param name="aff_node" select="$aff_node"/>
+                                <xsl:with-param name="current_position" select="number($current_position)+1"/>
+                                </xsl:call-template>
+                            </xsl:otherwise>
+                        </xsl:choose>
+                    </xsl:when>
+                    <xsl:otherwise>
+                        <!-- if stripped_string is either empty or contains only punctuation, call template again with counter +1 -->
+                        <xsl:call-template name="build_aff_string">
+                            <xsl:with-param name="combined_string" select="$combined_string"/>
+                            <xsl:with-param name="aff_node" select="$aff_node"/>
+                            <xsl:with-param name="current_position" select="number($current_position)+1"/>
+                        </xsl:call-template>
+                    </xsl:otherwise>
+                </xsl:choose>
+                </xsl:for-each>
+            </xsl:otherwise>
+        </xsl:choose>
+    </xsl:template>
+
+    <xsl:template name="parse-multiple-rids-for-affs">
+        <xsl:param name="rid_string"/>
+        <!-- Template recursively parses the affiliation rids contained in contrib elements. Copernicus flavor.
+        i.e. <contrib ... rid="aff1 aff2"/>
+        -->
+        <xsl:choose>
+        <xsl:when test="contains($rid_string,' ')">
+            <mods:affiliation xmlns:mods="http://www.loc.gov/mods/v3">
+            <xsl:call-template name="build_aff_string">
+                <xsl:with-param name="aff_node" select="key('kAffById', substring-before($rid_string, ' '))"/>
+                <xsl:with-param name="combined_string" select="''"/>
+                <xsl:with-param name="current_position" select="1"/>
+            </xsl:call-template>
+            </mods:affiliation>
+            <xsl:call-template name="parse-multiple-rids-for-affs">
+                <xsl:with-param name="rid_string" select="substring-after($rid_string,' ')"/>
+            </xsl:call-template>
+        </xsl:when>
+        <xsl:otherwise>
+            <mods:affiliation xmlns:mods="http://www.loc.gov/mods/v3">
+            <xsl:call-template name="build_aff_string">
+                <xsl:with-param name="aff_node" select="key('kAffById', $rid_string)"/>
+                <xsl:with-param name="combined_string" select="''"/>
+                <xsl:with-param name="current_position" select="1"/>
+            </xsl:call-template>
+            </mods:affiliation>
+        </xsl:otherwise>
+        </xsl:choose>
+  </xsl:template>
+
+
+</xsl:stylesheet>
+  '''.format(xmlinject=mnth2number)
+
+
+
   # 2017-04-20 TD : static(!!) strings containing the xsl code RSC --> OPUS4
   #                 Note that there MUST NOT be any kind of '<?xml ...?>' header!
   #
@@ -1207,422 +2319,6 @@ class XSLT(object):
   # -----------------------------------------------------------------------------
 
 
-  # 2017-03-22 TD : static(!!) strings containing the xsl code JATS --> OPUS4
-  #                 Note that there MUST NOT be any kind of '<?xml ...?>' header!
-  #
-  # 2019-08-13 TD : Change of the output "issn" in the tag "identifiers": no distinction 
-  #                 between eISSN and pISSN anymore! In fact, OPUS4 article data model 
-  #                 does not support these subtypes as identifier.
-  #
-  # 2019-08-28 TD : Keywords are checked for string-length() > 0: 'empty' keywords are skipped! 
-  #
-  # 2019-09-24 TD : Eliminate the tag 'journal-title-group' in xpath since a publisher 
-  #                 (i.e. Frontiers) apparently is not using it
-  #
-  jats2opus4 = '''
-<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
-
-  <!-- <xsl:import href="outputTokens.xsl"/> -->
-  <xsl:output method="xml" omit-xml-declaration="yes" indent="yes" encoding="utf-8"/>
-
-  <xsl:variable name="inject">
-    {xmlinject}
-  </xsl:variable>
-  <xsl:variable name="langIn" select="translate(/article/@xml:lang,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz')"/>
-  <!-- <xsl:variable name="langOut">eng</xsl:variable> -->
-  <xsl:variable name="langOut" select="document('')//langCodeMap/langCodes[@iso639-1=$langIn]/@iso639-2"/>
-
-  <xsl:template match="/">
-  <import>
-    <opusDocument>
-          <xsl:attribute name="language"> 
-            <xsl:value-of select="$langOut"/>
-          </xsl:attribute>
-          <xsl:attribute name="type">
-            <xsl:text>article</xsl:text>
-          </xsl:attribute>
-          <xsl:if test="//article-meta/fpage">
-            <xsl:attribute name="pageFirst">
-              <xsl:value-of select="//article-meta/fpage"/>
-            </xsl:attribute>
-          </xsl:if>
-          <xsl:if test="//article-meta/lpage">
-            <xsl:attribute name="pageLast">
-              <xsl:value-of select="//article-meta/lpage"/>
-            </xsl:attribute>
-          </xsl:if>
-          <xsl:if test="//article-meta/volume">
-            <xsl:attribute name="volume">
-              <xsl:value-of select="//article-meta/volume"/>
-            </xsl:attribute>
-          </xsl:if>
-          <xsl:if test="//article-meta/issue">
-            <xsl:attribute name="issue">
-              <xsl:value-of select="//article-meta/issue"/>
-            </xsl:attribute>
-          </xsl:if>
-          <xsl:attribute name="publisherName">
-            <xsl:value-of select="//journal-meta/publisher/publisher-name"/>
-          </xsl:attribute>
-          <xsl:if test="//journal-meta/publisher/publisher-loc">
-            <xsl:attribute name="publisherPlace">
-              <xsl:value-of select="//journal-meta/publisher/publisher-loc"/>
-            </xsl:attribute>
-          </xsl:if>
-          <xsl:attribute name="belongsToBibliography">
-            <xsl:text>false</xsl:text>
-          </xsl:attribute>
-          <xsl:attribute name="serverState">
-            <xsl:text>unpublished</xsl:text>
-          </xsl:attribute>
-          <xsl:if test="//article-meta/counts/page-count/@count">
-            <xsl:attribute name="pageNumber">
-              <xsl:value-of select="//article-meta/counts/page-count/@count"/>
-            </xsl:attribute>
-          </xsl:if>
-          <!-- 
-          language="eng"
-          type="article|bachelorthesis|bookpart|book|conferenceobject|contributiontoperiodical|coursematerial|diplom|doctoralthesis|examen|habilitation|image|lecture|magister|masterthesis|movingimage|other|periodical|preprint|report|review|studythesis|workingpaper"
-          pageFirst=""
-          pageLast=""
-          edition=""
-          volume=""
-          issue=""
-          publisherName=""
-          publisherPlace=""
-          creatingCorporation=""
-          contributingCorporation=""
-          belongsToBibliography="true|false"
-          serverState="audited|published|restricted|inprogress|unpublished"
-          -->
-      <titlesMain>
-          <titleMain>
-            <xsl:attribute name="language"><xsl:value-of select="$langOut"/></xsl:attribute>
-            <xsl:value-of select="normalize-space(//article-meta/title-group/article-title)"/>
-          </titleMain>
-          <xsl:for-each select="//article-meta/title-group/trans-title-group/trans-title">
-            <titleMain>
-              <xsl:call-template name="insert-lang-attribute"/>
-              <xsl:value-of select="normalize-space()"/>
-            </titleMain>
-          </xsl:for-each>
-      </titlesMain>
-      <titles>
-          <xsl:for-each select="//journal-meta//journal-title">
-            <title> 
-              <xsl:attribute name="language"><xsl:value-of select="$langOut"/></xsl:attribute>
-              <xsl:attribute name="type"><xsl:text>parent</xsl:text></xsl:attribute> 
-              <xsl:value-of select="normalize-space()"/>
-            </title>
-          </xsl:for-each>
-          <xsl:if test="//article-meta/title-group/subtitle">
-            <title>
-              <xsl:attribute name="language"><xsl:value-of select="$langOut"/></xsl:attribute>
-              <xsl:attribute name="type"><xsl:text>sub</xsl:text></xsl:attribute>
-              <xsl:value-of select="normalize-space(//article-meta/title-group/subtitle)"/>
-            </title>
-          </xsl:if>
-          <xsl:for-each select="//article-meta/title-group/trans-title-group/trans-subtitle">
-            <title>
-              <xsl:call-template name="insert-lang-attribute"/>
-              <xsl:attribute name="type"><xsl:text>sub</xsl:text></xsl:attribute>
-              <xsl:value-of select="normalize-space()"/>
-            </title>
-          </xsl:for-each>
-      </titles>
-      <xsl:if test="//article-meta/abstract or //article-meta/trans-abstract">
-      <abstracts>
-          <xsl:if test="//article-meta/abstract">
-            <abstract>
-              <xsl:attribute name="language"><xsl:value-of select="$langOut"/></xsl:attribute>
-              <xsl:text disable-output-escaping="yes">&lt;![CDATA[</xsl:text>
-              <xsl:copy-of select="//article-meta/abstract/*" disable-output-escaping="yes" />
-              <xsl:text disable-output-escaping="yes">]]&gt;</xsl:text>
-            </abstract>
-          </xsl:if>
-          <xsl:for-each select="//article-meta/trans-abstract">
-            <abstract>
-              <xsl:call-template name="insert-lang-attribute"/>
-              <xsl:text disable-output-escaping="yes">&lt;![CDATA[</xsl:text>
-              <xsl:copy-of select="./*" disable-output-escaping="yes" />
-              <xsl:text disable-output-escaping="yes">]]&gt;</xsl:text>
-            </abstract>
-          </xsl:for-each>
-      </abstracts>
-      </xsl:if>
-      <persons>
-          <xsl:for-each select="//article-meta/contrib-group/contrib">
-            <person>
-              <xsl:attribute name="role">
-                <xsl:choose>
-                  <xsl:when test="@contrib-type='guest-editor'">
-                     <xsl:text>editor</xsl:text>
-                  </xsl:when>
-                  <xsl:otherwise>
-                     <xsl:value-of select="@contrib-type"/>
-                  </xsl:otherwise>
-                </xsl:choose>
-              </xsl:attribute>
-              <xsl:attribute name="firstName"><xsl:value-of select=".//given-names"/></xsl:attribute>
-              <xsl:attribute name="lastName"><xsl:value-of select=".//surname"/></xsl:attribute>
-              <!--
-              role="advisor|author|contributor|editor|referee|translator|submitter|other"
-              academicTitle=""
-              allowEmailContact="true|false"
-              placeOfBirth=""
-              dateOfBirth="1999-12-31"
-              -->
-              <!--
-              <identifiers>
-                <identifier type="gnd|intern">?????</identifier>
-              </identifiers>
-              -->
-              <xsl:if test=".//email">
-                <xsl:attribute name="email"><xsl:value-of select=".//email"/></xsl:attribute>
-              </xsl:if>
-              <xsl:if test="contains(contrib-id/@contrib-id-type,'orcid')">
-              <identifiers>
-                <identifier>
-                  <xsl:attribute name="type"><xsl:text>orcid</xsl:text></xsl:attribute>
-                  <xsl:variable name='orcid' select="contrib-id[@contrib-id-type='orcid']/text()"/>
-
-                  <xsl:choose>
-                  <xsl:when test="substring($orcid, string-length($orcid))='/'">
-                    <xsl:variable name="orcid2" select="substring($orcid, 1, string-length($orcid)-1)"/>
-                    <xsl:call-template name="cut-orcid">
-                      <xsl:with-param name="orcid" select="$orcid2"/>
-                    </xsl:call-template>
-                    <!--xsl:message>Last slash was cut.</xsl:message>
-                    <xsl:message>Parameter given to template is <xsl:value-of select="$orcid2"/></xsl:message-->
-                  </xsl:when>
-                  <xsl:otherwise>
-                    <xsl:call-template name="cut-orcid">
-                      <xsl:with-param name="orcid" select="$orcid"/>
-                    </xsl:call-template>
-                    <!--xsl:message>Template called on: <xsl:value-of select="$orcid"/> </xsl:message-->
-                  </xsl:otherwise>
-                  </xsl:choose>
-                </identifier>
-              </identifiers>
-              </xsl:if>
-            </person>
-          </xsl:for-each>
-      </persons>
-      <keywords>
-          <keyword> 
-            <xsl:attribute name="language"><xsl:value-of select="$langOut"/></xsl:attribute>
-            <xsl:attribute name="type"><xsl:text>swd</xsl:text></xsl:attribute>
-            <xsl:text>-</xsl:text>
-          </keyword>
-          <xsl:for-each select="//article-meta/kwd-group/kwd">
-            <xsl:if test="string-length(normalize-space(text()))>0">
-              <keyword> 
-                <xsl:call-template name="insert-lang-attribute"/>
-                <xsl:attribute name="type"><xsl:text>uncontrolled</xsl:text></xsl:attribute>
-                <xsl:value-of select="normalize-space(text())"/>
-              </keyword>
-            </xsl:if>
-          </xsl:for-each>
-      </keywords>
-      <!--
-      <dnbInstitutions>
-          <dnbInstitution id="<integer>" role="grantor|publisher"/>
-      </dnbInstitutions>
-      -->
-      <dates>
-        <xsl:for-each select="//article-meta/pub-date">
-        <xsl:choose>
-          <xsl:when test="contains(@pub-type,'epub') and year and month">
-            <xsl:call-template name="compose-date"> </xsl:call-template>
-          </xsl:when>
-          <xsl:when test="contains(@pub-type,'ppub') and year and month">
-            <xsl:call-template name="compose-date"> </xsl:call-template>
-          </xsl:when>
-          <xsl:when test="contains(@date-type,'pub') and year and month">
-            <xsl:call-template name="compose-date"> </xsl:call-template>
-          </xsl:when>
-          <xsl:otherwise>
-            <xsl:if test="not(year)">
-            <date>
-              <xsl:attribute name="type"><xsl:text>completed</xsl:text></xsl:attribute>
-              <xsl:attribute name="monthDay">
-                <xsl:text>--11-11</xsl:text>
-              </xsl:attribute>
-              <xsl:attribute name="year">
-                <xsl:text>1111</xsl:text>
-              </xsl:attribute>
-            </date>
-            </xsl:if>
-          </xsl:otherwise>
-        </xsl:choose>
-        </xsl:for-each>
-      </dates>
-      <identifiers>
-        <xsl:for-each select="//journal-meta/issn[@pub-type='ppub' or @pub-type='epub' or @publication-format='ppub' or @publication-format='epub' or @publication-format='print' or @publication-format='electronic']">
-          <identifier>
-            <xsl:attribute name="type"><xsl:text>issn</xsl:text></xsl:attribute>
-            <xsl:value-of select="normalize-space(text())"/>
-          </identifier>
-        </xsl:for-each>
-        <xsl:if test="//article-meta/article-id[@pub-id-type='doi']">
-          <identifier>
-             <xsl:attribute name="type"><xsl:text>doi</xsl:text></xsl:attribute>
-             <xsl:value-of select="//article-meta/article-id[@pub-id-type='doi']"/>
-          </identifier>
-        </xsl:if>
-        <xsl:if test="//article-meta/article-id[@pub-id-type='pmid']">
-          <identifier>
-             <xsl:attribute name="type"><xsl:text>pmid</xsl:text></xsl:attribute>
-             <xsl:value-of select="//article-meta/article-id[@pub-id-type='pmid']"/>
-          </identifier>
-        </xsl:if>
-      </identifiers>
-      <!--
-      <identifiers>
-          <identifier>
-             <xsl:attribute name="type"><xsl:text>issn</xsl:text></xsl:attribute>
-             <xsl:for-each select="//journal-meta/issn[@pub-type='ppub' or @publication-format='print']">
-                <xsl:value-of select="normalize-space(text())"/>
-                <xsl:if test="position() != last()">
-                   <xsl:text> , </xsl:text>
-                </xsl:if>
-                <xsl:if test="position() = last()">
-                   <xsl:text> (pISSN)</xsl:text>
-                </xsl:if>
-             </xsl:for-each>
-             <xsl:if test="//journal-meta/issn[@pub-type='epub' or @publication-format='electronic']">
-                <xsl:text> ; </xsl:text>
-                <xsl:for-each select="//journal-meta/issn[@pub-type='epub' or @publication-format='electronic']">
-                   <xsl:value-of select="normalize-space(text())"/>
-                   <xsl:if test="position() != last()">
-                      <xsl:text> , </xsl:text>
-                   </xsl:if>
-                   <xsl:if test="position() = last()">
-                      <xsl:text> (eISSN)</xsl:text>
-                   </xsl:if>
-                </xsl:for-each>
-             </xsl:if>
-          </identifier>
-          <identifier>
-             <xsl:attribute name="type"><xsl:text>doi</xsl:text></xsl:attribute>
-             <xsl:value-of select="//article-meta/article-id[@pub-id-type='doi']"/>
-          </identifier>
-        <xsl:if test="//article-meta/article-id[@pub-id-type='pmid']">
-          <identifier>
-             <xsl:attribute name="type"><xsl:text>pmid</xsl:text></xsl:attribute>
-             <xsl:value-of select="//article-meta/article-id[@pub-id-type='pmid']"/>
-          </identifier>
-        </xsl:if>
-      </identifiers>
-      -->
-      <!--
-      <notes>
-          <note visibility="private|public">?????</note>
-      </notes>
-      <collections>
-          <collection id="<integer>"/>
-      </collections>
-      <series>
-          <seriesItem id="<integer>" number=""/>
-      </series>
-      <enrichments>
-          <enrichment key="">?????</enrichment>
-      </enrichments>
-      <licences>
-          <licence id="<integer>"/>
-      </licences>
-      <files basedir="">
-          <file 
-                path=""
-                name=""
-                language=""
-                displayName=""
-                visibleInOai="true|false"
-                visibleInFrontdoor="true|false"
-                sortOrder="<int>">
-            <comment>?????</comment>
-            <checksum type="md5|sha256|sha512">?????</checksum>
-          </file>
-      </files>
-      -->
-    </opusDocument>
-  </import>
-  </xsl:template>
-
-  <xsl:template name="compose-date">
-    <xsl:param name="xpath" select="."/>
-          <date>
-             <xsl:attribute name="type"><xsl:text>published</xsl:text></xsl:attribute>
-             <xsl:attribute name="monthDay">
-                <xsl:text>--</xsl:text>
-                <xsl:choose>
-                  <xsl:when test="$xpath/month">
-                    <xsl:value-of select="format-number($xpath/month,'00')"/>
-                  </xsl:when>
-                  <xsl:otherwise>
-                    <xsl:text>12</xsl:text>
-                  </xsl:otherwise>
-                </xsl:choose>
-                <xsl:text>-</xsl:text>
-                <xsl:choose>
-                  <xsl:when test="$xpath/day">
-                     <xsl:value-of select="format-number($xpath/day,'00')"/>
-                  </xsl:when>
-                  <xsl:otherwise>
-                     <xsl:text>01</xsl:text>
-                  </xsl:otherwise>
-                </xsl:choose>
-             </xsl:attribute>
-             <xsl:attribute name="year">
-                <xsl:value-of select="$xpath/year"/>
-             </xsl:attribute>
-          </date>
-  </xsl:template>
-  
-  <xsl:template name="insert-lang-attribute">
-    <xsl:choose>
-        <xsl:when test="@xml:lang">
-            <xsl:variable name="lang2" select="translate(@xml:lang,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz')"/>
-            <xsl:variable name="lang3" select="document('')//langCodeMap/langCodes[@iso639-1=$lang2]/@iso639-2"/>
-            <xsl:attribute name="language"><xsl:value-of select="$lang3"/></xsl:attribute>
-        </xsl:when>
-        <xsl:when test="../@xml:lang">
-            <xsl:variable name="lang2" select="translate(../@xml:lang,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz')"/>
-            <xsl:variable name="lang3" select="document('')//langCodeMap/langCodes[@iso639-1=$lang2]/@iso639-2"/>
-            <xsl:attribute name="language"><xsl:value-of select="$lang3"/></xsl:attribute>
-        </xsl:when>
-        <xsl:otherwise>
-          <xsl:attribute name="language"><xsl:value-of select="$langOut"/></xsl:attribute>
-        </xsl:otherwise>
-        </xsl:choose>
-  </xsl:template>
-
-  <xsl:template name="cut-orcid">
-    <xsl:param name="orcid"/>
-    <!-- This template accepts an url as input and selects the substring after the last "/".
-    orcids consist of four 4-digit blocks, separated by dashes. i.e. the resulting string should be precisely 19 characters long.
-    Lacking any regex capabilities in xslt 1.0, the template makes a last check for string-length before returning the orcid-id.
-    Recursive template, as substring-after() can only ever select the substring after the first instance of a character.
-    -->
-    <xsl:choose>
-      <xsl:when test="not(contains($orcid,'/'))">
-        <xsl:if test="string-length($orcid)=19">
-          <xsl:value-of select="$orcid"/>
-        </xsl:if>
-      </xsl:when>
-      <xsl:otherwise>
-        <xsl:call-template name="cut-orcid">
-        <xsl:with-param name="orcid" select="substring-after($orcid,'/')"/>
-        </xsl:call-template>
-      </xsl:otherwise>
-    </xsl:choose>
-  </xsl:template>
-  
-
-</xsl:stylesheet>
-'''.format(xmlinject=iso639codes)
-
-
   # 2017-05-15 TD : static string containing the xsl code for JATS --> ESciDoc
   #                 Note that there MUST NOT be any kind of '<?xml ...?>' header!
   #
@@ -2132,365 +2828,6 @@ class XSLT(object):
   '''.format(xmlinject=iso639codes)
 
 
-  # 2017-07-11 TD : static string containing the xsl code for JATS --> METSMODS
-  #                 Note that there MUST NOT be any kind of '<?xml ...?>' header!
-  #
-  # 2019-09-24 TD : Eliminate the tag 'journal-title-group' in xpath since a publisher 
-  #                 (i.e. Frontiers) apparently is not using it
-  #
-  jats2metsmods = '''
-<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
-
-    <!-- <xsl:import href="jats2mods.xsl"/> -->
-    <xsl:output method="xml" omit-xml-declaration="no" standalone="no" indent="yes" encoding="utf-8"/>
-
-    <xsl:param name="currdatetime">1970-01-01T00:00:00</xsl:param>
-
-    <xsl:template match="/">
-        <mets:mets xmlns:mets="http://www.loc.gov/METS/"
-                   xmlns:mods="http://www.loc.gov/mods/v3"
-              xmlns:xlink="http://www.w3.org/1999/xlink"
-              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-              xsi:schemaLocation="http://www.loc.gov/METS/ http://www.loc.gov/mets/mets.xsd http://www.loc.gov/mods/v3 https://www.loc.gov/standards/mods/v3/mods.xsd">
-            <xsl:attribute name="ID"><xsl:text>sword-mets_mets</xsl:text></xsl:attribute>
-            <xsl:attribute name="OBJID"><xsl:text>sword-mets</xsl:text></xsl:attribute>
-            <xsl:attribute name="LABEL"><xsl:text>METS/MODS SWORD Item</xsl:text></xsl:attribute>
-            <xsl:attribute name="PROFILE"><xsl:text>METS/MODS SIP Profile 1.0</xsl:text></xsl:attribute>
-            <mets:metsHdr>
-                <xsl:attribute name="CREATEDATE"><xsl:value-of select="$currdatetime"/></xsl:attribute>
-                <mets:agent>
-                    <xsl:attribute name="ROLE">CUSTODIAN</xsl:attribute>
-                    <xsl:attribute name="TYPE">ORGANIZATION</xsl:attribute>
-                    <mets:name>DeepGreen</mets:name>
-                </mets:agent>
-            </mets:metsHdr>
-            <mets:dmdSec>
-                <xsl:attribute name="ID">sword-mets-dmd-1</xsl:attribute>
-                <xsl:attribute name="GROUPID">sword-mets-dmd-1_group-1</xsl:attribute>
-                <mets:mdWrap>
-                    <xsl:attribute name="LABEL"><xsl:text>SWAP Metadata</xsl:text></xsl:attribute>
-                    <xsl:attribute name="MDTYPE">MODS</xsl:attribute>
-                    <xsl:attribute name="MIMETYPE"><xsl:text>text/xml</xsl:text></xsl:attribute>
-                    <mets:xmlData>
-                        <xsl:apply-templates/>
-                    </mets:xmlData>
-                </mets:mdWrap>
-            </mets:dmdSec>
-        </mets:mets>
-    </xsl:template>
-
-
-    <!--
-    <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
-        <xsl:output method="xml" omit-xml-declaration="no" standalone="no" indent="yes" encoding="utf-8"/>
-    -->
-
-    <!-- (Possible) mapping of affiliation(s) -->
-    <xsl:key name="kAffById" match="//aff" use="@id"/>
-    
-    <xsl:template match="/article">
-        <mods:mods xmlns:mods="http://www.loc.gov/mods/v3"
-                   xmlns:xlink="http://www.w3.org/1999/xlink"
-                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                   xsi:schemaLocation="http://www.loc.gov/mods/v3 https://www.loc.gov/standards/mods/v3/mods-3-6.xsd">
-
-            <!--
-                Since we are mapping JATS, we are only dealing with journal articles.
-                According to a LOC example, these are attributed as follows.
-                See https://www.loc.gov/standards/mods/v3/mods-userguide-examples.html#journal_article
-            -->
-            <mods:typeOfResource>text</mods:typeOfResource>
-            <mods:genre>journal article</mods:genre>
-
-            <!-- Language -->
-            <mods:language>
-                <mods:languageTerm type="code" authority="rfc3066">
-                    <xsl:choose>
-                        <xsl:when test="//article/@xml:lang">
-                            <xsl:value-of select="//article/@xml:lang"/>
-                        </xsl:when>
-                        <xsl:otherwise>
-                            <xsl:text>en</xsl:text>
-                        </xsl:otherwise>
-                    </xsl:choose>
-                </mods:languageTerm>
-            </mods:language>
-
-            <!-- Title -->
-            <mods:titleInfo>
-                <xsl:for-each select="//article-meta/title-group/article-title">
-                    <mods:title>
-                        <xsl:call-template name="insert-lang-attribute"/>
-                        <xsl:value-of select="."/>
-                    </mods:title>
-                </xsl:for-each>
-                <xsl:for-each select="//article-meta/title-group/subtitle">
-                    <mods:subTitle>
-                        <xsl:call-template name="insert-lang-attribute"/>
-                        <xsl:value-of select="."/>
-                    </mods:subTitle>
-                </xsl:for-each>
-            </mods:titleInfo>
-            <xsl:for-each select="//article-meta/title-group/trans-title-group/trans-title">
-                <mods:titleInfo type="translated">
-                    <mods:title>
-                        <xsl:call-template name="insert-lang-attribute"/>
-                        <xsl:value-of select="."/>
-                    </mods:title>
-                </mods:titleInfo>
-            </xsl:for-each>
-            <xsl:for-each select="//article-meta/title-group/trans-title-group/trans-subtitle">
-                <mods:titleInfo type="translated">
-                    <mods:subTitle>
-                        <xsl:call-template name="insert-lang-attribute"/>
-                        <xsl:value-of select="."/>
-                    </mods:subTitle>
-                </mods:titleInfo>
-            </xsl:for-each>
-
-            <!-- Appearance -->
-            <mods:relatedItem type="host">
-                <mods:titleInfo>
-                    <xsl:for-each select="//journal-meta//journal-title">
-                        <mods:title>
-                            <xsl:call-template name="insert-lang-attribute"/>
-                            <xsl:value-of select="."/>
-                        </mods:title>
-                    </xsl:for-each>
-                </mods:titleInfo>
-                <xsl:for-each select="//journal-meta//abbrev-journal-title">
-                  <mods:titleInfo>
-                    <xsl:attribute name="type">abbreviated</xsl:attribute>
-                    <mods:title>
-                      <xsl:call-template name="insert-lang-attribute"/>
-                      <xsl:value-of select="."/>
-                    </mods:title>
-                  </mods:titleInfo>
-                </xsl:for-each>
-                <xsl:if test="//journal-meta/issn[@pub-type='ppub']">
-                    <mods:identifier type="issn"><xsl:value-of select="//journal-meta/issn[@pub-type='ppub']"/></mods:identifier>
-                </xsl:if>
-                <xsl:if test="//journal-meta/issn[@pub-type='epub']">
-                    <mods:identifier type="eIssn"><xsl:value-of select="//journal-meta/issn[@pub-type='epub']"/></mods:identifier>
-                </xsl:if>
-                <xsl:if test="//journal-meta/issn[@publication-format='print']">
-                    <mods:identifier type="issn"><xsl:value-of select="//journal-meta/issn[@publication-format='print']"/></mods:identifier>
-                </xsl:if>
-                <xsl:if test="//journal-meta/issn[@publication-format='electronic']">
-                    <mods:identifier type="eIssn"><xsl:value-of select="//journal-meta/issn[@publication-format='electronic']"/></mods:identifier>
-                </xsl:if>
-                <xsl:if test="//journal-meta/issn[@publication-format='ppub']">
-                    <mods:identifier type="issn"><xsl:value-of select="//journal-meta/issn[@publication-format='ppub']"/></mods:identifier>
-                </xsl:if>
-                <xsl:if test="//journal-meta/issn[@publication-format='epub']">
-                    <mods:identifier type="issn"><xsl:value-of select="//journal-meta/issn[@publication-format='epub']"/></mods:identifier>
-                </xsl:if>
-                <xsl:for-each select="//journal-meta/issn[not(@pub-type) and not(@publication-format)]">
-                  <mods:identifier type="issn">
-                    <xsl:value-of select="."/>
-                  </mods:identifier>
-                </xsl:for-each>
-                <xsl:for-each select="//journal-meta/journal-id">
-                    <mods:identifier>
-                        <xsl:attribute name="type"><xsl:value-of select="@journal-id-type"/></xsl:attribute>
-                        <xsl:value-of select="."/>
-                    </mods:identifier>
-                </xsl:for-each>
-                <mods:part>
-                    <xsl:if test="//article-meta/volume">
-                        <mods:detail type="volume">
-                            <mods:number><xsl:value-of select="//article-meta/volume"/></mods:number>
-                        </mods:detail>
-                    </xsl:if>
-                    <xsl:if test="//article-meta/issue">
-                        <mods:detail type="issue">
-                            <mods:number><xsl:value-of select="//article-meta/issue"/></mods:number>
-                        </mods:detail>
-                    </xsl:if>
-                    <xsl:if test="//article-meta/fpage or //article-meta/counts/page-count/@count">
-                        <mods:extent unit="pages">
-                            <xsl:if test="//article-meta/fpage">
-                                <mods:start><xsl:value-of select="//article-meta/fpage"/></mods:start>
-                            </xsl:if>
-                            <xsl:if test="//article-meta/lpage">
-                                <mods:end><xsl:value-of select="//article-meta/lpage"/></mods:end>
-                            </xsl:if>
-                            <xsl:if test="//article-meta/counts/page-count/@count">
-                                <mods:total><xsl:value-of select="//article-meta/counts/page-count/@count"/></mods:total>
-                            </xsl:if>
-                        </mods:extent>
-                    </xsl:if>
-                </mods:part>
-            </mods:relatedItem>
-
-            <!-- Creator / Contributor (Author, Editor...)-->
-            <xsl:for-each select="//article-meta/contrib-group/contrib">
-                <mods:name type="personal">
-                    <mods:namePart type="family"><xsl:value-of select=".//surname"/></mods:namePart>
-                    <xsl:if test="string-length(.//given-names/text()) > 0">
-                      <mods:namePart type="given"><xsl:value-of select=".//given-names"/></mods:namePart>
-                    </xsl:if>
-                    <mods:role>
-                        <mods:roleTerm type="text"><xsl:value-of select="@contrib-type"/></mods:roleTerm>
-                    </mods:role>
-                    <!-- Identifier: So far, support of ORCIDs (and email adresses?) only -->
-                    <xsl:if test="contains(contrib-id/@contrib-id-type,'orcid')">
-                        <mods:nameIdentifier type="orcid">
-                            <xsl:copy-of select="contrib-id[@contrib-id-type='orcid']/text()"/>
-                        </mods:nameIdentifier>
-                    </xsl:if>
-                    <xsl:if test="string-length(.//email/text()) > 0">
-                      <mods:nameIdentifier type="email">
-                        <xsl:value-of select=".//email"/>
-                      </mods:nameIdentifier>
-                    </xsl:if>
-                    
-                    <xsl:for-each select="xref[@ref-type='aff']">
-                      <xsl:choose>
-                        <xsl:when test="contains(./@ref-type,'aff') and string-length(@rid) > 0">
-                          <mods:affiliation>
-                            <xsl:copy-of select="key('kAffById',@rid)/text()"/>
-                          </mods:affiliation>
-                        </xsl:when>
-                        <xsl:otherwise>
-                          <xsl:if test="string-length(//aff[position()=last()]/text()) > 0">
-                            <mods:affiliation>
-                              <xsl:copy-of select="//aff[position()=last()]"/>
-                            </mods:affiliation>
-                          </xsl:if>
-                        </xsl:otherwise>
-                      </xsl:choose>
-                    </xsl:for-each> 
-                </mods:name>
-            </xsl:for-each>
-
-            <!-- Description: Abstract / TOC -->
-            <xsl:for-each select="//article-meta/abstract">
-                <xsl:choose>
-                    <xsl:when test="@type = 'toc'">
-                        <mods:tableOfContents>
-                            <xsl:call-template name="insert-lang-attribute"/>
-                            <xsl:text disable-output-escaping="yes">&lt;![CDATA[</xsl:text>
-                            <xsl:copy-of select="./*" disable-output-escaping="yes" />
-                            <xsl:text disable-output-escaping="yes">]]&gt;</xsl:text>
-                        </mods:tableOfContents>
-                    </xsl:when>
-                    <xsl:otherwise>
-                        <mods:abstract>
-                            <xsl:call-template name="insert-lang-attribute"/>
-                            <xsl:text disable-output-escaping="yes">&lt;![CDATA[</xsl:text>
-                            <xsl:copy-of select="./*" disable-output-escaping="yes" />
-                            <xsl:text disable-output-escaping="yes">]]&gt;</xsl:text>
-                        </mods:abstract>
-                    </xsl:otherwise>
-                </xsl:choose>
-            </xsl:for-each>
-            <xsl:for-each select="//article-meta/trans-abstract">
-              <mods:abstract>
-                <xsl:call-template name="insert-lang-attribute"/>
-                <xsl:text disable-output-escaping="yes">&lt;![CDATA[</xsl:text>
-                <xsl:copy-of select="./*" disable-output-escaping="yes" />
-                <xsl:text disable-output-escaping="yes">]]&gt;</xsl:text>
-              </mods:abstract>
-            </xsl:for-each>
-            <!-- Description: Subject (Keywords) -->
-            <xsl:if test="//article-meta/kwd-group/kwd">
-                <mods:subject>
-                    <xsl:for-each select="//article-meta/kwd-group/kwd">
-                        <mods:topic>
-                          <xsl:call-template name="insert-lang-attribute"/>
-                          <xsl:value-of select="."/>
-                        </mods:topic>
-                    </xsl:for-each>
-                </mods:subject>
-            </xsl:if>
-
-            <!-- Publisher, Dates (in MODS under originInfo) -->
-            <mods:originInfo>
-                <mods:publisher><xsl:value-of select="//journal-meta/publisher/publisher-name"/></mods:publisher>
-                <mods:place>
-                    <mods:placeTerm type="text"><xsl:value-of select="//journal-meta/publisher/publisher-loc"/></mods:placeTerm>
-                </mods:place>
-
-                <!-- Publication date (= date available/issued) -->
-                <xsl:for-each select="//article-meta/pub-date">
-                    <xsl:if test="(contains(@pub-type, 'epub') and year and month) or
-                        (contains(@publication-format, 'electronic') and contains(@date-type, 'pub') and year and month) or
-                        (contains(@pub-type, 'ppub') and year and month) ">
-                        <mods:dateIssued encoding="iso8601">
-                            <xsl:call-template name="compose-date"></xsl:call-template>
-                        </mods:dateIssued>
-                    </xsl:if>
-                </xsl:for-each>
-
-                <!-- Other dates (received, accepted...) -->
-                <xsl:for-each select="//article-meta/history/date">
-                    <xsl:if test="year and month">
-                        <mods:dateOther encoding="iso8601">
-                            <xsl:attribute name="type"><xsl:value-of select="@date-type"/></xsl:attribute>
-                            <xsl:call-template name="compose-date"></xsl:call-template>
-                        </mods:dateOther>
-                    </xsl:if>
-                </xsl:for-each>
-            </mods:originInfo>
-
-            <!-- Identifiers -->
-            <xsl:for-each select="//article-meta/article-id">
-                <mods:identifier>
-                    <xsl:attribute name="type"><xsl:value-of select="@pub-id-type"/></xsl:attribute>
-                    <xsl:value-of select="."/>
-                </mods:identifier>
-            </xsl:for-each>
-
-            <!-- License / Copyright -->
-            <xsl:for-each select="//article-meta/permissions/license">
-                <mods:accessCondition type="use and reproduction">
-                    <xsl:choose>
-                        <xsl:when test="@xlink:href"> 
-                            <xsl:attribute name="description">uri</xsl:attribute>
-                            <xsl:value-of select="@xlink:href"/>
-                        </xsl:when>
-                        <xsl:otherwise>
-                            <xsl:value-of select="license-p"/>
-                        </xsl:otherwise>
-                    </xsl:choose>
-                </mods:accessCondition>
-            </xsl:for-each>
-
-            <!-- Funding -->
-            <xsl:for-each select="//article-meta/funding-group/award-group/funding-source">
-                <mods:note type="funding">
-                    <xsl:value-of select="." />
-                </mods:note>
-            </xsl:for-each>
-
-        </mods:mods>
-
-    </xsl:template>
-
-    <xsl:template name="compose-date">
-        <xsl:value-of select="year"/>
-        <xsl:text>-</xsl:text>
-        <xsl:value-of select="format-number(month,'00')"/>
-        <xsl:if test="day">
-            <xsl:text>-</xsl:text>
-            <xsl:value-of select="format-number(day,'00')"/>
-        </xsl:if>
-    </xsl:template>
-
-    <xsl:template name="insert-lang-attribute">
-        <xsl:choose>
-        <xsl:when test="@xml:lang">
-            <xsl:attribute name="xml:lang"><xsl:value-of select="@xml:lang"/></xsl:attribute>
-        </xsl:when>
-        <xsl:when test="../@xml:lang">
-            <xsl:attribute name="xml:lang"><xsl:value-of select="../@xml:lang"/></xsl:attribute>
-        </xsl:when>
-        </xsl:choose>
-    </xsl:template>
-
-</xsl:stylesheet>
-  '''
 
   # -----------------------------------------------------------------------------
   # =============================================================================
