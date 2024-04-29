@@ -1000,6 +1000,7 @@ class XSLT(object):
             </xsl:when>
             <xsl:otherwise>
                 <xsl:text>-12</xsl:text>
+            </xsl:otherwise>
         </xsl:choose>
         <xsl:if test="day">
             <xsl:text>-</xsl:text>
