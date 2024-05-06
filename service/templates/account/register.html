@@ -11,7 +11,10 @@
 		<div class="col span-12">
 			<fieldset class="form__fieldset">
 				<ul class="form-fields">
-					<li class="form-fields__item--text"> 
+					<li class="form-fields__item--text">
+						{{render_field(form.id,'form-fields__item--text','form-fields__label-text')}}
+					</li>
+					<li class="form-fields__item--text">
 						{{render_field(form.email,'form-fields__item--text','form-fields__label-text')}}
 					</li>
 					<li class="form-fields__item--text">
@@ -29,7 +32,7 @@
 					{{render_field(form.radio,'form-fields__item--text','form-fields__label-text')}}
 					</li>
 				</ul>
-				<div class="rolers repository">
+				<div class="roles repository">
 					<ul class="form-fields">
 						<li class="form-fields__item--text">
 							{{render_field(form.repository_name,'form-fields__item--text','form-fields__label-text')}}
@@ -60,7 +63,7 @@
 						</li>
 					</ul>
 				</div>
-				<div class="rolers publisher">
+				<div class="roles publisher">
 					<ul class="form-fields">
 						<li class="form-fields__item--text">
 							{{render_field(form.embargo_duration,'form-fields__item--text','form-fields__label-text')}}
@@ -99,10 +102,10 @@
 
 <script>
 $( document ).ready(function() {
-	$('.rolers').hide();
+	$('.roles').hide();
 	var name = 'input[name=radio]';
 	$(name).on('change',function(){
-		$('.rolers').hide();
+		$('.roles').hide();
 		$('.'+$(name+':checked').prop('value')).show();
 	});
 	$(name).trigger('change');

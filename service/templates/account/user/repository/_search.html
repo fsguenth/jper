@@ -1,0 +1,37 @@
+<!-- 2016-08-18 TD : *** Do not want to display this *** -->
+{% set display = false %}
+{% if display and account.has_role('repository') %}
+<div class="row">
+	<div class="col-md-12">
+		<div id="matchholder">
+            <div class="panel panel-default holder holder-ui">
+                <div class="panel-heading" >
+                    <div class="input-group" >
+                        <div class="input-group-btn pagination">
+                        	<a href="#" class="holder holder-function" holder-function="prev" alt="previous" title="previous">
+                          		<span class="left-arrow"></span>
+                          		<span class="pagination__text">Previous</span>
+                        	</a>
+                            <!-- <a href="#" class="btn btn-default holder holder-function" holder-function="prev" alt="previous" title="previous"><h2>&lt;</h2></a> -->
+                        	<input type="text" class="input--large form-control holder holder-search holder-function" holder-function="add" placeholder="search...">
+                            <a href="#" class="holder holder-function" holder-function="next" alt="next" title="next">
+                          		<span class="pagination__text">Next</span>
+                          		<span class="right-arrow"></span>
+                        	</a>
+                            <!-- <a href="#" class="btn btn-default holder holder-function" holder-function="next" alt="next" title="next"><h2>&gt;</h2></a> -->
+                        </div>
+                    </div>
+                    <div class="holder holder-filters" style="margin-top:5px;"></div>
+                </div>
+			</div>
+		</div>
+	</div>
+</div>
+<div class="row">
+	<div class="col-md-12">
+		<div class="holder holder-results">
+
+		</div>
+	</div>
+</div>
+{% endif %}

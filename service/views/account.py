@@ -12,8 +12,10 @@ from octopus.lib import dates
 from service.api import JPER, ParameterException
 from service.views.webapi import _bad_request
 from service.repository_licenses import get_matching_licenses
+from service.lib import csv_helper, email_helper
 import math
 import csv
+import sys
 from jsonpath_rw_ext import parse
 from itertools import zip_longest
 from service import models
@@ -577,7 +579,6 @@ def username(username):
                 if repoconfig is not None:
                     repoconfig.delete()
             acc.remove()
-            time.sleep(1)
             # 2017-03-03 TD : ... and be verbose about it!
             if repoconfig is not None:
                 flash('Account ' + acc.id + ' and RepoConfig ' + repoconfig.id + ' deleted')
@@ -596,29 +597,51 @@ def username(username):
         license_ids = None
         sword_status = None
 
+    ssh_help_text = """Begins with 'ssh-rsa', 'ecdsa-sha2-nistp256', 'ecdsa-sha2-nistp384', 'ecdsa-sha2-nistp521', 'ssh-ed25519', 'sk-ecdsa-sha2-nistp256@openssh.com', or 'sk-ssh-ed25519@openssh.com'"""
+    deepgreen_ssh_key = {
+        "title": "Deepgreen service",
+        "public_key": app.config.get("DEEPGREEN_SSH_PUBLIC_KEY", ''),
+    }
+    default_sftp_server = {
+        'url':  app.config.get("DEFAULT_SFTP_SERVER_URL", ''),
+        'port':  app.config.get("DEFAULT_SFTP_SERVER_PORT", '')
+    }
+
     if request.method == 'POST':
         if current_user.id != acc.id and not current_user.is_super:
             abort(401)
 
         if request.values.get('email', False):
-            acc.data['email'] = request.values['email']
+            acc.email = request.values['email']
 
         if 'password' in request.values and not request.values['password'].startswith('sha1'):
             if len(request.values['password']) < 8:
                 flash("Sorry. Password must be at least eight characters long", "error")
                 return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
-                                       license_ids=license_ids, sword_status=sword_status)
-            else:
+                                       license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text,
+                                       default_sftp_server=default_sftp_server, deepgreen_ssh_key=deepgreen_ssh_key)
+            try:
                 acc.set_password(request.values['password'])
+            except Exception as e:
+                ex_type, ex_value, ex_traceback = sys.exc_info()
+                flash('Error updating account: ' + str(ex_value), 'error')
+                return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
+                                       license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text,
+                                       default_sftp_server=default_sftp_server, deepgreen_ssh_key=deepgreen_ssh_key)
 
-        acc.save()
-        time.sleep(2)
-        flash("Record updated", "success")
+        try:
+            acc.save()
+            flash("Record updated", "success")
+        except Exception as e:
+            ex_type, ex_value, ex_traceback = sys.exc_info()
+            flash('Error updating account: ' + str(ex_value), 'error')
         return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
-                               license_ids=license_ids, sword_status=sword_status)
+                               license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text,
+                               default_sftp_server=default_sftp_server, deepgreen_ssh_key=deepgreen_ssh_key)
     elif current_user.id == acc.id or current_user.is_super:
         return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
-                               license_ids=license_ids, sword_status=sword_status)
+                               license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text,
+                               default_sftp_server=default_sftp_server, deepgreen_ssh_key=deepgreen_ssh_key)
     else:
         abort(404)
 
@@ -629,29 +652,37 @@ def pubinfo(username):
     if current_user.id != acc.id and not current_user.is_super:
         abort(401)
 
-    if request.values.get('embargo_form', False):
-        if request.values.get('embargo_duration', False):
-            acc.embargo = {'duration': request.values['embargo_duration']}
-        else:
-            acc.embargo = {'duration': 0}
-
+    add_license = False
     license_details = {}
     if request.values.get('license_form', False):
-        if request.values.get('license_title', False):
+        add_license = True
+        if 'license_title' in request.values:
             license_details['title'] = request.values['license_title']
-        if request.values.get('license_type', False):
+        if 'license_type' in request.values:
             license_details['type'] = request.values['license_type']
-        if request.values.get('license_url', False):
+        if 'license_url' in request.values:
             license_details['url'] = request.values['license_url']
-        if request.values.get('license_version', False):
+        if 'license_version' in request.values:
             license_details['version'] = request.values['license_version']
-        if request.values.get('license_gold_license', False):
+        if 'license_gold_license' in request.values:
             license_details['gold_license'] = request.values['license_gold_license']
-    if license_details:
-        acc.license = license_details
-    acc.save()
-    time.sleep(2)
-    flash('Thank you. Your publisher details have been updated.', "success")
+
+    add_embargo = False
+    embargo_details = {'duration': 0}
+    if request.values.get('embargo_form', False):
+        add_embargo = True
+        if request.values.get('embargo_duration', False):
+            embargo_details = {'duration': request.values['embargo_duration']}
+    try:
+        if add_license:
+            acc.license = license_details
+        if add_embargo:
+            acc.embargo = embargo_details
+        acc.save()
+        flash('Thank you. Your publisher details have been updated.', "success")
+    except Exception as e:
+        ex_type, ex_value, ex_traceback = sys.exc_info()
+        flash('Error updating publisher details: ' + str(ex_value), 'error')
     return redirect(url_for('.username', username=username))
 
 
@@ -661,60 +692,53 @@ def repoinfo(username):
     if current_user.id != acc.id and not current_user.is_super:
         abort(401)
 
-    if 'repository' not in acc.data:
-        acc.data['repository'] = {}
-    # 2016-10-04 TD: proper handling of two independent forms using hidden input fields
-    # if request.values.get('repo_profile_form',False):
-    if request.values.get('repository_software', False):
-        acc.data['repository']['software'] = request.values['repository_software']
-    else:
-        acc.data['repository']['software'] = ''
-    if request.values.get('repository_url', False):
-        acc.data['repository']['url'] = request.values['repository_url'].strip()
-    else:
-        acc.data['repository']['url'] = ''
-    if request.values.get('repository_name', False):
-        acc.data['repository']['name'] = request.values['repository_name']
-    else:
-        acc.data['repository']['name'] = ''
-    if request.values.get('repository_sigel', False):
-        acc.data['repository']['sigel'] = request.values['repository_sigel'].split(',')
-    else:
-        acc.data['repository']['sigel'] = []
-    if request.values.get('repository_bibid', False):
-        acc.data['repository']['bibid'] = request.values['repository_bibid'].strip().upper()
-    else:
-        acc.data['repository']['bibid'] = ''
+    add_repository = False
+    repository = {}
+    if request.values.get('repository_form', False):
+        add_repository = True
+        if 'repository_software' in request.values:
+            repository['software'] = request.values['repository_software']
+        if 'repository_url' in request.values:
+            repository['url'] = request.values['repository_url'].strip()
+        if 'repository_name' in request.values:
+            repository['name'] = request.values['repository_name']
+        if 'repository_sigel' in request.values:
+            repository['sigel'] = request.values['repository_sigel'].split(',')
+        if 'repository_bibid' in request.values:
+            repository['bibid'] = request.values['repository_bibid'].strip().upper()
 
-    if 'sword' not in acc.data:
-        acc.data['sword'] = {}
-    # 2016-10-04 TD: proper handling of two independent forms using hidden input fields
-    # if request.values.get('repo_sword_form',False):
-    if request.values.get('sword_username', False):
-        acc.data['sword']['username'] = request.values['sword_username']
-    else:
-        acc.data['sword']['username'] = ''
-    if request.values.get('sword_password', False):
-        acc.data['sword']['password'] = request.values['sword_password']
-    else:
-        acc.data['sword']['password'] = ''
-    if request.values.get('sword_collection', False):
-        acc.data['sword']['collection'] = request.values['sword_collection'].strip()
-    else:
-        acc.data['sword']['collection'] = ''
-    if request.values.get('sword_deposit_method', False):
-        acc.data['sword']['deposit_method'] = request.values['sword_deposit_method'].strip()
-    else:
-        acc.data['sword']['deposit_method'] = ''
+    add_sword = False
+    sword = {}
+    if request.values.get('sword_form', False):
+        add_sword = True
+        if 'sword_username' in request.values:
+            sword['username'] = request.values['sword_username']
+        if 'sword_password' in request.values:
+            sword['password'] = request.values['sword_password']
+        if 'sword_collection' in request.values:
+            sword['collection'] = request.values['sword_collection'].strip()
+        if 'sword_deposit_method' in request.values:
+            sword['deposit_method'] = request.values['sword_deposit_method'].strip()
 
+    add_packaging = False
+    packaging = []
+    if 'packaging' in request.values:
+        add_packaging = True
     if request.values.get('packaging', False):
-        acc.data['packaging'] = [s.strip() for s in request.values['packaging'].split(',')]
-    else:
-        acc.data['packaging'] = []
+        packaging = [s.strip() for s in request.values['packaging'].split(',')]
 
-    acc.save()
-    time.sleep(2)
-    flash('Thank you. Your repository details have been updated.', "success")
+    try:
+        if add_repository:
+            acc.data['repository'] = repository
+        if add_sword:
+            acc.data['sword'] = sword
+        if add_packaging:
+            acc.data['packaging'] = packaging
+        acc.save()
+        flash('Thank you. Your repository details have been updated.', "success")
+    except Exception as e:
+        ex_type, ex_value, ex_traceback = sys.exc_info()
+        flash('Error updating repository details: ' + str(ex_value), 'error')
     return redirect(url_for('.username', username=username))
 
 
@@ -723,10 +747,13 @@ def apikey(username):
     if current_user.id != username and not current_user.is_super:
         abort(401)
     acc = models.Account.pull(username)
-    acc.api_key = str(uuid.uuid4())
-    acc.save()
-    time.sleep(2)
-    flash('Thank you. Your API key has been updated.', "success")
+    try:
+        acc.api_key = str(uuid.uuid4())
+        acc.save()
+        flash('Thank you. Your API key has been updated.', "success")
+    except Exception as e:
+        ex_type, ex_value, ex_traceback = sys.exc_info()
+        flash('Error updating API key details: ' + str(ex_value), 'error')
     return redirect(url_for('.username', username=username))
 
 
@@ -778,8 +805,14 @@ def config(username):
                         saved = rec.set_repo_config(textfile=strm, repository=username)
             else:
                 if request.files['file'].filename.endswith('.csv'):
-                    saved = rec.set_repo_config(csvfile=TextIOWrapper(request.files['file'], encoding='utf-8'),
-                                                repository=username)
+                    uploaded_file = request.files.get('file')
+                    file_bytes = csv_helper.read_uploaded_file(uploaded_file)
+                    status, decoded_file_str = csv_helper.decode_csv_bytes(file_bytes)
+                    if not status:
+                        flash('Sorry, there was an error reading your config upload. Please try again.', "error")
+                        return redirect(url_for('.username', username=username))
+
+                    saved = rec.set_repo_config(csvfile=StringIO(decoded_file_str), repository=username)
                 elif request.files['file'].filename.endswith('.txt'):
                     saved = rec.set_repo_config(textfile=TextIOWrapper(request.files['file'], encoding='utf-8'),
                                                 repository=username)
@@ -791,7 +824,6 @@ def config(username):
             flash('Sorry, there was an exception detected while your config upload was processed. Please try again.',
                   "error")
             app.logger.error(str(e))
-        time.sleep(1)
 
     return redirect(url_for('.username', username=username))
 
@@ -802,30 +834,33 @@ def changerole(username, role):
     acc = models.Account.pull(username)
     if acc is None:
         abort(404)
-    elif request.method == 'POST' and current_user.is_super:
+    if request.method == 'POST':
+        if not current_user.is_super:
+            abort(401)
         if 'become' in request.path:
-            if role == 'publisher':
-                acc.become_publisher()
-            elif role == 'active' and acc.has_role('repository'):
-                acc.set_active()
-                acc.save()
-            elif role == 'passive' and acc.has_role('repository'):
-                acc.set_passive()
-                acc.save()
-            else:
-                acc.add_role(role)
-                acc.save()
+            try:
+                if role == 'active' and acc.has_role('repository'):
+                    acc.set_active()
+                    acc.save()
+                elif role == 'passive' and acc.has_role('repository'):
+                    acc.set_passive()
+                    acc.save()
+                else:
+                    acc.add_role(role)
+                    acc.save()
+                flash("Role updated", "success")
+            except Exception as e:
+                ex_type, ex_value, ex_traceback = sys.exc_info()
+                flash('Error updating account role: ' + str(ex_value), 'error')
         elif 'cease' in request.path:
-            if role == 'publisher':
-                acc.cease_publisher()
-            else:
+            try:
                 acc.remove_role(role)
                 acc.save()
-        time.sleep(1)
-        flash("Record updated", "success")
+                flash("Role removed", "success")
+            except Exception as e:
+                ex_type, ex_value, ex_traceback = sys.exc_info()
+                flash('Error removing account role: ' + str(ex_value), 'error')
         return redirect(url_for('.username', username=username))
-    else:
-        abort(401)
 
 
 @blueprint.route('/<username>/sword_activate', methods=['POST'])
@@ -837,7 +872,6 @@ def sword_activate(username):
     if sword_status and sword_status.status == 'failing':
         sword_status.activate()
         sword_status.save()
-    time.sleep(2)
     flash('The sword connection has been activated.', "success")
     return redirect(url_for('.username', username=username))
 
@@ -851,7 +885,6 @@ def sword_deactivate(username):
     if sword_status and sword_status.status in ['succeeding', 'problem']:
         sword_status.deactivate()
         sword_status.save()
-    time.sleep(2)
     flash('The sword connection has been deactivated.', "success")
     return redirect(url_for('.username', username=username))
 
@@ -873,7 +906,6 @@ def excluded_license(username):
         rec = models.RepositoryConfig.pull_by_repo(username)
         rec.excluded_license = excluded_licenses
         rec.save()
-        time.sleep(1)
     return redirect(url_for('.username', username=username))
 
 
@@ -908,6 +940,145 @@ def resend_notification(username):
     return msg, 201
 
 
+@blueprint.route('/<username>/add_ssh_key', methods=["POST"])
+def add_ssh_key(username):
+    if current_user.id != username and not current_user.is_super:
+        abort(401)
+    acc = models.Account.pull(username)
+    if acc is None:
+        abort(404)
+    ssh_key = request.values.get('ssh_key', None)
+    title = request.values.get('title', None)
+    if not ssh_key:
+        flash("Sorry. SSH key is required", "error")
+        return redirect(url_for('.username', username=username))
+    try:
+        acc.add_ssh_key(ssh_key, title)
+        acc.save()
+        subject = f"New SSH key for #{acc.id}"
+        message = f"""New SSH key has been added to the account #{acc.id}.
+        The key has to be copied to the publisher account and when ready needs to be activated in Deepgreen."""
+        email_helper.send_email_to_admin(subject, message)
+        flash('The ssh key has been added', "success")
+    except Exception as e:
+        ex_type, ex_value, ex_traceback = sys.exc_info()
+        flash('Error saving SSH key: ' + str(ex_value), 'error')
+    return redirect(url_for('.username', username=username))
+
+
+@blueprint.route('/<username>/activate_ssh_key', methods=["POST"])
+def activate_ssh_key(username):
+    if not current_user.is_super:
+        abort(401)
+    acc = models.Account.pull(username)
+    if acc is None:
+        abort(404)
+    ssh_key = request.values.get('id', None)
+    try:
+        acc.activate_ssh_key(ssh_key)
+        acc.save()
+        flash('The ssh key has been activated', "success")
+    except Exception as e:
+        ex_type, ex_value, ex_traceback = sys.exc_info()
+        flash('Error activating SSH key: ' + str(ex_value), 'error')
+    return redirect(url_for('.username', username=username))
+
+
+@blueprint.route('/<username>/deactivate_ssh_key', methods=["POST"])
+def deactivate_ssh_key(username):
+    if not current_user.is_super:
+        abort(401)
+    acc = models.Account.pull(username)
+    if acc is None:
+        abort(404)
+    ssh_key = request.values.get('id', None)
+    try:
+        acc.deactivate_ssh_key(ssh_key)
+        acc.save()
+        flash('The ssh key has been set to inactive', "success")
+    except Exception as e:
+        ex_type, ex_value, ex_traceback = sys.exc_info()
+        flash('Error making SSH key inactive: ' + str(ex_value), 'error')
+    return redirect(url_for('.username', username=username))
+
+
+@blueprint.route('/<username>/delete_ssh_key', methods=["POST"])
+def delete_ssh_key(username):
+    if current_user.id != username and not current_user.is_super:
+        abort(401)
+    acc = models.Account.pull(username)
+    if acc is None:
+        abort(404)
+    ssh_key = request.values.get('id', None)
+    try:
+        acc.delete_ssh_key(ssh_key)
+        acc.save()
+        flash('The ssh key has been deleted', "success")
+    except Exception as e:
+        ex_type, ex_value, ex_traceback = sys.exc_info()
+        flash('Error deleting SSH key: ' + str(ex_value), 'error')
+    return redirect(url_for('.username', username=username))
+
+
+@blueprint.route('/<username>/sftp_server', methods=['POST', 'DELETE'])
+def sftp_server(username):
+    acc = models.Account.pull(username)
+    if not current_user.is_super:
+        abort(401)
+    if (request.method == 'DELETE' or
+          (request.method == 'POST' and
+           request.values.get('submit', '').split(' ')[0].lower() == 'delete')):
+        if request.values.get('sftp_server_url', '') == acc.sftp_server_url:
+            sftp_server_details = {'username':'', 'url': '', 'port': ''}
+            try:
+                acc.sftp_server = sftp_server_details
+                acc.save()
+                flash('SFTP server details have been deleted.', "success")
+            except Exception as e:
+                ex_type, ex_value, ex_traceback = sys.exc_info()
+                flash('Error deleting SFTP server details: ' + str(ex_value), 'error')
+    else:
+        sftp_server_details = {}
+        if 'sftp_server_username' in request.values:
+            sftp_server_details['username'] = request.values['sftp_server_username']
+        if 'sftp_server_url' in request.values:
+            sftp_server_details['url'] = request.values['sftp_server_url']
+        if 'sftp_server_port' in request.values:
+            sftp_server_details['port'] = request.values['sftp_server_port']
+        if sftp_server_details:
+            try:
+                acc.sftp_server = sftp_server_details
+                acc.save()
+                flash('SFTP server details have been updated.', "success")
+            except Exception as e:
+                ex_type, ex_value, ex_traceback = sys.exc_info()
+                flash('Error saving SFTP server details: ' + str(ex_value), 'error')
+    return redirect(url_for('.username', username=username))
+
+
+@blueprint.route('/<username>/routing_activate', methods=['POST'])
+def routing_activate(username):
+    if current_user.id != username and not current_user.is_super:
+        abort(401)
+    acc = models.Account.pull(username)
+    if acc.publisher_routing_status != 'active':
+        acc.publisher_routing_status = 'active'
+        acc.save()
+        flash('The publisher routing status has been set to active.', "success")
+    return redirect(url_for('.username', username=username))
+
+
+@blueprint.route('/<username>/routing_deactivate', methods=['POST'])
+def routing_deactivate(username):
+    if current_user.id != username and not current_user.is_super:
+        abort(401)
+    acc = models.Account.pull(username)
+    if acc.publisher_routing_status != 'inactive':
+        acc.publisher_routing_status = 'inactive'
+        acc.save()
+        flash('The publisher routing status has been set to inactive.', "success")
+    return redirect(url_for('.username', username=username))
+
 @blueprint.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'GET':
@@ -940,16 +1111,20 @@ def register():
         abort(401)
 
     form = AdduserForm(request.form)
-    vals = request.json if request.json else request.values
+    vals = request.json if request.json else request.values.to_dict()
 
     if request.method == 'POST' and form.validate():
         role = vals.get('radio', None)
+        if not vals.get('id', None):
+            vals['id'] = str(uuid.uuid4())
         account = models.Account()
-        account.add_account(vals)
-        account.save()
-        if role == 'publisher':
-            account.become_publisher()
-        time.sleep(1)
+        try:
+            account.add_account(vals)
+            account.save()
+        except Exception as e:
+            ex_type, ex_value, ex_traceback = sys.exc_info()
+            flash('Error creating account: ' + str(ex_value), 'error')
+            return render_template('account/register.html', vals=vals, form=form)
         flash('Account created for ' + account.id, 'success')
         return redirect('/account')
 
