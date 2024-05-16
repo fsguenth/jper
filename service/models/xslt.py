@@ -351,7 +351,7 @@ class XSLT(object):
 
       <!-- Identifiers, ISSN, DOI, PMID -->
       <identifiers>
-        <xsl:for-each select="//journal-meta/issn[@pub-type='ppub' or @pub-type='epub' or @publication-format='ppub' or @publication-format='epub' or @publication-format='print' or @publication-format='electronic']">
+        <xsl:for-each select="//journal-meta/issn">
           <identifier>
             <xsl:attribute name="type"><xsl:text>issn</xsl:text></xsl:attribute>
             <xsl:value-of select="normalize-space(text())"/>
@@ -697,45 +697,37 @@ class XSLT(object):
             <!-- Appearance -->
             <mods:relatedItem type="host">
                 <mods:titleInfo>
+                
                     <xsl:for-each select="//journal-meta//journal-title">
                         <mods:title>
                             <xsl:call-template name="insert-lang-attribute"/>
                             <xsl:value-of select="normalize-space()"/>
                         </mods:title>
                     </xsl:for-each>
-                </mods:titleInfo>
+                    
                 <xsl:for-each select="//journal-meta//abbrev-journal-title">
-                  <mods:titleInfo>
                     <xsl:attribute name="type">abbreviated</xsl:attribute>
                     <mods:title>
                       <xsl:call-template name="insert-lang-attribute"/>
                       <xsl:value-of select="normalize-space()"/>
                     </mods:title>
-                  </mods:titleInfo>
                 </xsl:for-each>
-                <xsl:if test="//journal-meta/issn[@pub-type='ppub']">
-                    <mods:identifier type="issn"><xsl:value-of select="//journal-meta/issn[@pub-type='ppub']"/></mods:identifier>
-                </xsl:if>
-                <xsl:if test="//journal-meta/issn[@pub-type='epub']">
-                    <mods:identifier type="eIssn"><xsl:value-of select="//journal-meta/issn[@pub-type='epub']"/></mods:identifier>
-                </xsl:if>
-                <xsl:if test="//journal-meta/issn[@publication-format='print']">
-                    <mods:identifier type="issn"><xsl:value-of select="//journal-meta/issn[@publication-format='print']"/></mods:identifier>
-                </xsl:if>
-                <xsl:if test="//journal-meta/issn[@publication-format='electronic']">
-                    <mods:identifier type="eIssn"><xsl:value-of select="//journal-meta/issn[@publication-format='electronic']"/></mods:identifier>
-                </xsl:if>
-                <xsl:if test="//journal-meta/issn[@publication-format='ppub']">
-                    <mods:identifier type="issn"><xsl:value-of select="//journal-meta/issn[@publication-format='ppub']"/></mods:identifier>
-                </xsl:if>
-                <xsl:if test="//journal-meta/issn[@publication-format='epub']">
-                    <mods:identifier type="issn"><xsl:value-of select="//journal-meta/issn[@publication-format='epub']"/></mods:identifier>
-                </xsl:if>
-                <xsl:for-each select="//journal-meta/issn[not(@pub-type) and not(@publication-format)]">
-                  <mods:identifier type="issn">
-                    <xsl:value-of select="."/>
-                  </mods:identifier>
+                
+                </mods:titleInfo>
+                  
+                <xsl:for-each select="//journal-meta/issn">
+                    <xsl:choose>
+                        <xsl:when test="@pub-type='epub' or @publication-format='electronic' or @publication-format='epub'">
+                            <mods:identifier type="eIssn"><xsl:value-of select="."/></mods:identifier>
+                        </xsl:when>
+                        <xsl:otherwise>
+                        <mods:identifier type="issn">
+                            <xsl:value-of select="."/>
+                        </mods:identifier>
+                        </xsl:otherwise>
+                    </xsl:choose>
                 </xsl:for-each>
+
                 <xsl:for-each select="//journal-meta/journal-id">
                     <mods:identifier>
                         <xsl:attribute name="type"><xsl:value-of select="@journal-id-type"/></xsl:attribute>
