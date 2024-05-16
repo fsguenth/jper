@@ -694,27 +694,27 @@ class XSLT(object):
                 </mods:titleInfo>
             </xsl:for-each>
 
-            <!-- Appearance -->
+            <!-- Appearance (journal title, issn, volume, issue, pages) -->
             <mods:relatedItem type="host">
                 <mods:titleInfo>
-                
                     <xsl:for-each select="//journal-meta//journal-title">
                         <mods:title>
                             <xsl:call-template name="insert-lang-attribute"/>
                             <xsl:value-of select="normalize-space()"/>
                         </mods:title>
                     </xsl:for-each>
-                    
+                </mods:titleInfo>
+                  
                 <xsl:for-each select="//journal-meta//abbrev-journal-title">
+                  <mods:titleInfo> 
                     <xsl:attribute name="type">abbreviated</xsl:attribute>
                     <mods:title>
                       <xsl:call-template name="insert-lang-attribute"/>
                       <xsl:value-of select="normalize-space()"/>
                     </mods:title>
+                  </mods:titleInfo>
                 </xsl:for-each>
-                
-                </mods:titleInfo>
-                  
+
                 <xsl:for-each select="//journal-meta/issn">
                     <xsl:choose>
                         <xsl:when test="@pub-type='epub' or @publication-format='electronic' or @publication-format='epub'">
@@ -734,6 +734,7 @@ class XSLT(object):
                         <xsl:value-of select="."/>
                     </mods:identifier>
                 </xsl:for-each>
+                
                 <mods:part>
                     <xsl:if test="//article-meta/volume">
                         <mods:detail type="volume">
