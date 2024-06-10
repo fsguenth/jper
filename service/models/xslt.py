@@ -954,9 +954,14 @@ class XSLT(object):
             <!-- License / Copyright -->
             <xsl:for-each select="//article-meta/permissions/license">
                 <mods:accessCondition type="use and reproduction">
-                    <xsl:if test=".//@xlink:href">
-                        <xsl:attribute name="xlink:href"><xsl:value-of select=".//@xlink:href"/></xsl:attribute>
-                    </xsl:if>
+                    <xsl:choose>
+                        <xsl:when test=".//@xlink:href">
+                            <xsl:attribute name="xlink:href"><xsl:value-of select=".//@xlink:href"/></xsl:attribute>
+                        </xsl:when>
+                        <xsl:when test=".//ali:license_ref">
+                            <xsl:attribute name="xlink:href"><xsl:value-of select=".//ali:license_ref"/></xsl:attribute>
+                        </xsl:when>
+                    </xsl:choose>
                     <xsl:value-of select="normalize-space(license-p|p)"/>
                 </mods:accessCondition>
             </xsl:for-each>
