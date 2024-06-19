@@ -221,78 +221,71 @@ class XSLT(object):
       </abstracts>
       </xsl:if>
 
-      <!-- Author Information -->
+      <!-- Author Information, only editors and authors due to value constraints in OPUS-xml-->
       <persons>
           <xsl:for-each select="//article-meta/contrib-group/contrib">
-            <person>
-              <xsl:attribute name="role">
-                <xsl:choose>
-                  <xsl:when test="@contrib-type='guest-editor'">
-                     <xsl:text>editor</xsl:text>
-                  </xsl:when>
-                  <xsl:otherwise>
-                     <xsl:value-of select="@contrib-type"/>
-                  </xsl:otherwise>
-                </xsl:choose>
-              </xsl:attribute>
-              <xsl:choose>
-                  <xsl:when test="collab">
-                    <xsl:attribute name="firstName">-</xsl:attribute>
-                    <xsl:choose>
-                      <xsl:when test="collab/institution">
-                      <xsl:attribute name="lastName"><xsl:value-of select="collab/institution/text()"/></xsl:attribute>
-                      </xsl:when>
-                      <xsl:otherwise>
-                      <xsl:attribute name="lastName"><xsl:value-of select="collab/text()"/></xsl:attribute>
-                      </xsl:otherwise>
-                    </xsl:choose>
-                  </xsl:when>
-                  <xsl:otherwise>
-                      <xsl:attribute name="firstName"><xsl:value-of select=".//given-names"/></xsl:attribute>
-                      <xsl:attribute name="lastName"><xsl:value-of select=".//surname"/></xsl:attribute>
-                  </xsl:otherwise>
-              </xsl:choose>
-              <!--
-              role="advisor|author|contributor|editor|referee|translator|submitter|other"
-              academicTitle=""
-              allowEmailContact="true|false"
-              placeOfBirth=""
-              dateOfBirth="1999-12-31"
-              -->
-              <!--
-              <identifiers>
-                <identifier type="gnd|intern">?????</identifier>
-              </identifiers>
-              -->
-              <xsl:if test=".//email">
-                <xsl:attribute name="email"><xsl:value-of select=".//email"/></xsl:attribute>
-              </xsl:if>
-              <xsl:if test="contains(contrib-id/@contrib-id-type,'orcid')">
-              <identifiers>
-                <identifier>
-                  <xsl:attribute name="type"><xsl:text>orcid</xsl:text></xsl:attribute>
-                  <xsl:variable name='orcid' select="contrib-id[@contrib-id-type='orcid']/text()"/>
-
+            <xsl:if test="@contrib-type='guest-editor' or
+                          @contrib-type='editor' or
+                          @contrib-type='author'">
+              <person>
+                <xsl:attribute name="role">
                   <xsl:choose>
-                  <xsl:when test="substring($orcid, string-length($orcid))='/'">
-                    <xsl:variable name="orcid2" select="substring($orcid, 1, string-length($orcid)-1)"/>
-                    <xsl:call-template name="cut-orcid">
-                      <xsl:with-param name="orcid" select="$orcid2"/>
-                    </xsl:call-template>
-                    <!--xsl:message>Last slash was cut.</xsl:message>
-                    <xsl:message>Parameter given to template is <xsl:value-of select="$orcid2"/></xsl:message-->
-                  </xsl:when>
-                  <xsl:otherwise>
-                    <xsl:call-template name="cut-orcid">
-                      <xsl:with-param name="orcid" select="$orcid"/>
-                    </xsl:call-template>
-                    <!--xsl:message>Template called on: <xsl:value-of select="$orcid"/> </xsl:message-->
-                  </xsl:otherwise>
+                      <xsl:when test="@contrib-type='author'">
+                      <xsl:value-of select="@contrib-type"/>
+                    </xsl:when>
+                    <xsl:when test="@contrib-type='guest-editor' or
+                                    @contrib-type='editor'">
+                      <xsl:text>editor</xsl:text>
+                    </xsl:when>
                   </xsl:choose>
-                </identifier>
-              </identifiers>
-              </xsl:if>
-            </person>
+                </xsl:attribute>
+
+                <xsl:choose>
+                    <xsl:when test="collab">
+                      <xsl:attribute name="firstName">-</xsl:attribute>
+                      <xsl:choose>
+                        <xsl:when test="collab/institution">
+                        <xsl:attribute name="lastName"><xsl:value-of select="collab/institution/text()"/></xsl:attribute>
+                        </xsl:when>
+                        <xsl:otherwise>
+                        <xsl:attribute name="lastName"><xsl:value-of select="collab/text()"/></xsl:attribute>
+                        </xsl:otherwise>
+                      </xsl:choose>
+                    </xsl:when>
+                    <xsl:otherwise>
+                        <xsl:attribute name="firstName"><xsl:value-of select=".//given-names"/></xsl:attribute>
+                        <xsl:attribute name="lastName"><xsl:value-of select=".//surname"/></xsl:attribute>
+                    </xsl:otherwise>
+                </xsl:choose>
+
+                <xsl:if test=".//email">
+                  <xsl:attribute name="email"><xsl:value-of select=".//email"/></xsl:attribute>
+                </xsl:if>
+
+                <xsl:if test="contains(contrib-id/@contrib-id-type,'orcid')">
+                <identifiers>
+                  <identifier>
+                    <xsl:attribute name="type"><xsl:text>orcid</xsl:text></xsl:attribute>
+                    <xsl:variable name='orcid' select="contrib-id[@contrib-id-type='orcid']/text()"/>
+
+                    <xsl:choose>
+                    <xsl:when test="substring($orcid, string-length($orcid))='/'">
+                      <xsl:variable name="orcid2" select="substring($orcid, 1, string-length($orcid)-1)"/>
+                      <xsl:call-template name="cut-orcid">
+                        <xsl:with-param name="orcid" select="$orcid2"/>
+                      </xsl:call-template>
+                    </xsl:when>
+                    <xsl:otherwise>
+                      <xsl:call-template name="cut-orcid">
+                        <xsl:with-param name="orcid" select="$orcid"/>
+                      </xsl:call-template>
+                    </xsl:otherwise>
+                    </xsl:choose>
+                  </identifier>
+                </identifiers>
+                </xsl:if>
+              </person>
+            </xsl:if>
           </xsl:for-each>
       </persons>
 
