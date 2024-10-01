@@ -14,25 +14,32 @@ args = parser.parse_args()
 if os.path.isfile(args.file):
     xml_tree = etree.parse(args.file)
     jats = JATS(xml=xml_tree)
-
+    normalize = lambda x: " ".join(str(x).split())
     try:
         print('\nFile parsed:\t{}'.format(os.path.realpath(args.file)))
-        print('Title:\t\t%s' % jats.title)
+        print('Title:\t\t%s' % normalize(jats.title))
         print('DOI:\t\t%s' % jats.doi)
-        print('in:\t\t{} {}({}), {}'.format(jats.journal, jats.volume, jats.issue, jats.publication_date))
+        print('ISSN:\t\t{}'.format(jats.issn))
+        print('in:\t\t{} {}({})'.format(normalize(jats.journal), jats.volume, jats.issue))
+        print("on:\t\t{}".format(jats.publication_date))
         print('Publisher:\t{}'.format(jats.publisher))
-        print('Authors:\t', end="")
+        print('License:\t{}'.format(jats.get_licence_details()))
+        print('Emails:\t\t{}'.format(jats.emails))
+        print('Authors:')
         for person in jats.authors:
-            print(person['given-names'], person['surname'], end=", ")
-
-        aff_list = []
-        for person in jats.contribs:
-            if 'affiliations' in person:
-                affiliations = person['affiliations']
-                for affiliation in affiliations:
-                    if affiliation not in aff_list:
-                        aff_list.append(affiliation)
-        print('\nAffiliations:\t{}'.format(aff_list))
+            print(person['given-names'], person['surname'], end="")
+            if person.get('orcid', None) is not None:
+                print(", ORICD: {}".format(person['orcid']))
+            else: print()
+            affs = person.get('affiliations', [])
+            print("Affiliations:", "; ".join(affs))
+            ids = {}
+            if person.get('ror', None) is not None:
+                ids['ROR'] = person['ror']
+            if person.get('ringgold', None) is not None:
+                ids['Ringgold'] = person['ringgold']
+            if len(ids) > 0: print(", ".join([ kind+": "+str(id) for kind, id in ids.items() ]))
+            print()
 
     except UnicodeError:
         print(f'\n\n{traceback.format_exc()}')

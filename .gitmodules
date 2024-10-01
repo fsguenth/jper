@@ -1,4 +1,4 @@
 [submodule "magnificent-octopus"]
 	path = magnificent-octopus
-	url = git@github.com:OA-DeepGreen/magnificent-octopus
-	branch = master
+	url = git@github.com:fsguenth/magnificent-octopus
+	branch = institutional-identifiers
