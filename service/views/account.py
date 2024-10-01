@@ -12,20 +12,22 @@ from octopus.lib import dates
 from service.api import JPER, ParameterException
 from service.views.webapi import _bad_request
 from service.repository_licenses import get_matching_licenses
+from service.lib import csv_helper, email_helper, request_deposit_helper
 import math
 import csv
+import sys
 from jsonpath_rw_ext import parse
 from itertools import zip_longest
 from service import models
 from io import StringIO, TextIOWrapper, BytesIO
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 blueprint = Blueprint('account', __name__)
 
 # Notification table/csv for repositories
 ntable = {
             "screen" : ["Send Date", ["DOI","Publisher"], ["Publication Date", "Embargo"], "Title", "Analysis Date"],
-            "header" : ["Send Date", "DOI", "Publisher", "Publication Date", "Embargo", "Title", "Analysis Date"],
+            "header" : ["ID", "Send Date", "DOI", "Publisher", "Publication Date", "Embargo", "Title", "Analysis Date"],
      "Analysis Date" : "notifications[*].analysis_date",
          "Send Date" : "notifications[*].created_date",
            "Embargo" : "notifications[*].embargo.duration",
@@ -38,7 +40,7 @@ ntable = {
 # Matching table/csv for providers (with detailed reasoning)
 mtable = {
          "screen" : ["Analysis Date", "ISSN or EISSN", "DOI", "License", "Forwarded to {EZB-Id}", "Term", "Appears in {notification_field}"],
-         "header" : ["Analysis Date", "ISSN or EISSN", "DOI", "License", "Forwarded to", "Term", "Appears in"],
+         "header" : ["ID", "Analysis Date", "ISSN or EISSN", "DOI", "License", "Forwarded to", "Term", "Appears in"],
   "Analysis Date" : "matches[*].created_date",
   "ISSN or EISSN" : "matches[*].alliance.issn",
             "DOI" : "matches[*].alliance.doi",
@@ -51,7 +53,7 @@ mtable = {
 # Rejected table/csv for providers
 ftable = {
          "screen" : ["Send Date", "ISSN or EISSN", "DOI", "Reason", "Analysis Date"],
-         "header" : ["Send Date", "ISSN or EISSN", "DOI", "Reason", "Analysis Date"],
+         "header" : ["ID", "Send Date", "ISSN or EISSN", "DOI", "Reason", "Analysis Date"],
       "Send Date" : "failed[*].created_date",
   "Analysis Date" : "failed[*].analysis_date",
   "ISSN or EISSN" : "failed[*].issn_data",
@@ -61,23 +63,23 @@ ftable = {
 
 # Config table/csv for repositories
 ctable = {
-        # "screen" : ["Name Variants", "Domains", "Grant Numbers", "ORCIDs", "Author Emails", "Keywords"],
-        # "header" : ["Name Variants", "Domains", "Grant Numbers", "ORCIDs", "Author Emails", "Keywords"],
-        "screen" : ["Name Variants", "Domains", "Grant Numbers", "Keywords"],
-        "header" : ["Name Variants", "Domains", "Grant Numbers", "Dummy1", "Dummy2", "Keywords"],
- "Name Variants" : "repoconfig[0].name_variants[*]",
-       "Domains" : "repoconfig[0].domains[*]",
-#     "Postcodes" : "repoconfig[0].postcodes[*]",
- "Grant Numbers" : "repoconfig[0].grants[*]",
-        "Dummy1" : "repoconfig[0].author_ids[?(@.type=='xyz1')].id",
-        "Dummy2" : "repoconfig[0].author_ids[?(@.type=='xyz2')].id",
-#        "ORCIDs" : "repoconfig[0].author_ids[?(@.type=='orcid')].id",
-# "Author Emails" : "repoconfig[0].author_ids[?(@.type=='email')].id",
-      "Keywords" : "repoconfig[0].keywords[*]",
+        "screen": ["Name Variants", "Domains", "Grant Numbers", "Keywords", "RoR", "Ringgold",
+                    "Excluded Name Variants", "Excluded Domains", "Excluded Keywords"],
+        "header": ["Name Variants", "Domains", "Grant Numbers", "Keywords", "RoR", "Ringgold",
+                   "Excluded Name Variants", "Excluded Domains", "Excluded Keywords"],
+ "Name Variants": "repoconfig[0].name_variants[*]",
+       "Domains": "repoconfig[0].domains[*]",
+ "Grant Numbers": "repoconfig[0].grants[*]",
+      "Keywords": "repoconfig[0].keywords[*]",
+           "RoR": "repoconfig[0].author_ids[?(@.type=='ror')].id",
+      "Ringgold": "repoconfig[0].author_ids[?(@.type=='ringgold')].id",
+"Excluded Name Variants": "repoconfig[0].excluded_name_variants[*]",
+"Excluded Domains": "repoconfig[0].excluded_domains[*]",
+    "Excluded Keywords": "repoconfig[0].excluded_keywords[*]",
 }
 
 
-def _list_failrequest(provider_id=None, bulk=False):
+def _list_failrequest(provider_id=None, since=None, upto=None, bulk=False):
     """
     Process a list request, either against the full dataset or the specific provider_id supplied
     This function will pull the arguments it requires out of the Flask request object.  See the API documentation
@@ -87,22 +89,25 @@ def _list_failrequest(provider_id=None, bulk=False):
     :param bulk: (boolean) whether bulk (e.g. *not* paginated) is returned or not
     :return: Flask response containing the list of notifications that are appropriate to the parameters
     """
-    since = _validate_date(param='since')
+
+
+    since = _validate_date(since, param='since')
+    upto = _validate_date(upto, param='upto')
     page = _validate_page()
     page_size = _validate_page_size()
 
     try:
         if bulk is True:
-            flist = JPER.bulk_failed(current_user, since, provider_id=provider_id)
+            flist = JPER.bulk_failed(current_user, since, upto=upto, provider_id=provider_id)
         else:
-            flist = JPER.list_failed(current_user, since, page=page, page_size=page_size, provider_id=provider_id)
+            flist = JPER.list_failed(current_user, since, upto=upto, page=page, page_size=page_size, provider_id=provider_id)
     except ParameterException as e:
         return _bad_request(str(e))
 
     return flist.json()
 
 
-def _list_matchrequest(repo_id=None, provider=False, bulk=False):
+def _list_matchrequest(repo_id=None, since=None, upto=None, provider=False, bulk=False):
     """
     Process a list request, either against the full dataset or the specific repo_id supplied
     This function will pull the arguments it requires out of the Flask request object.  See the API documentation
@@ -113,7 +118,8 @@ def _list_matchrequest(repo_id=None, provider=False, bulk=False):
     :param bulk: (boolean) whether bulk (e.g. *not* paginated) is returned or not
     :return: Flask response containing the list of notifications that are appropriate to the parameters
     """
-    since = _validate_date(param='since')
+    since = _validate_date(since, param='since')
+    upto = _validate_date(upto, param='upto')
     page = _validate_page()
     page_size = _validate_page_size()
 
@@ -121,10 +127,10 @@ def _list_matchrequest(repo_id=None, provider=False, bulk=False):
         # nlist = JPER.list_notifications(current_user, since, page=page, page_size=page_size, repository_id=repo_id)
         # 2016-11-24 TD : bulk switch to decrease the number of different calls
         if bulk:
-            mlist = JPER.bulk_matches(current_user, since, repository_id=repo_id, provider=provider)
+            mlist = JPER.bulk_matches(current_user, since, upto=upto, repository_id=repo_id, provider=provider)
         else:
             # 2016-09-07 TD : trial to include some kind of reporting for publishers here!
-            mlist = JPER.list_matches(current_user, since, page=page, page_size=page_size, repository_id=repo_id,
+            mlist = JPER.list_matches(current_user, since, upto=upto, page=page, page_size=page_size, repository_id=repo_id,
                                       provider=provider)
     except ParameterException as e:
         return _bad_request(str(e))
@@ -132,7 +138,7 @@ def _list_matchrequest(repo_id=None, provider=False, bulk=False):
     return mlist.json()
 
 
-def _list_request(repo_id=None, provider=False, bulk=False):
+def _list_request(repo_id=None, since=None, upto=None, provider=False, bulk=False):
     """
     Process a list request, either against the full dataset or the specific repo_id supplied
     This function will pull the arguments it requires out of the Flask request object.  See the API documentation
@@ -143,7 +149,8 @@ def _list_request(repo_id=None, provider=False, bulk=False):
     :param bulk: (boolean) whether bulk (e.g. *not* paginated) is returned or not
     :return: Flask response containing the list of notifications that are appropriate to the parameters
     """
-    since = _validate_date(param='since')
+    since = _validate_date(since, param='since')
+    upto = _validate_date(upto, param='upto')
     page = _validate_page()
     page_size = _validate_page_size()
 
@@ -151,10 +158,10 @@ def _list_request(repo_id=None, provider=False, bulk=False):
         # nlist = JPER.list_notifications(current_user, since, page=page, page_size=page_size, repository_id=repo_id)
         # 2016-11-24 TD : bulk switch to decrease the number of different calls
         if bulk is True:
-            nlist = JPER.bulk_notifications(current_user, since, repository_id=repo_id, provider=provider)
+            nlist = JPER.bulk_notifications(current_user, since, upto=upto, repository_id=repo_id, provider=provider)
         else:
             # 2016-09-07 TD : trial to include some kind of reporting for publishers here!
-            nlist = JPER.list_notifications(current_user, since, page=page, page_size=page_size, repository_id=repo_id,
+            nlist = JPER.list_notifications(current_user, since, upto=upto, page=page, page_size=page_size, repository_id=repo_id,
                                             provider=provider)
     except ParameterException as e:
         return _bad_request(str(e))
@@ -221,17 +228,16 @@ def _sword_logs(repo_id, from_date, to_date):
     return logs, deposit_record_logs
 
 
-def _validate_date(param='since'):
-    since = request.values.get(param, None)
-    if since is None or since == "":
-        return _bad_request("Missing required parameter 'since'")
+def _validate_date(dt, param='since'):
+    if dt is None or dt == "":
+        return _bad_request("Missing required parameter {param}".format(param=param))
 
     try:
-        since = dates.reformat(since)
+        dt = dates.reformat(dt)
     except ValueError:
-        return _bad_request("Unable to understand since date '{x}'".format(x=since))
+        return _bad_request("Unable to understand {y} date '{x}'".format(y=param, x=dt))
 
-    return since
+    return dt
 
 
 def _validate_page():
@@ -253,19 +259,43 @@ def _validate_page_size():
 
 
 def _get_notification_value(header, notification):
-    if header == 'id':
+    if header == 'ID':
         return notification.get('id', '')
-    elif header == 'Analysis Date':
-        return notification.get('analysis_date', '')
+    if header == 'Analysis Date':
+        value = notification.get('analysis_date', '')# ntable
+        if value == '': #mtable, ftable
+            value = notification.get('created_date', 'ERROR')
+        return value
+    elif header == "ISSN or EISSN":
+        value = notification.get('alliance',{}).get('issn','') # mtable
+        if value == "":
+            value = notification.get('issn_data', '')#ftable
+        return value
     elif header == 'Send Date':
         return notification.get('created_date', '')
     elif header == 'Embargo':
         return notification.get('embargo', {}).get('duration', '')
     elif header == 'DOI':
+        # ntable, ftable
+        doi_value = ''
         identifiers = notification.get('metadata', {}).get('identifier', [])
         for identifier in identifiers:
             if identifier.get('type', '') == 'doi':
-                return identifier.get('id', '')
+                doi_value = identifier.get('id', '')
+        # mtable
+        if doi_value == '':
+            doi_value = notification.get('alliance', {}).get('doi', '')
+        return doi_value
+    elif header == "License": # mtable only
+        return notification.get('alliance', {}).get('link', '')
+    elif header == "Forwarded to": # mtable only
+        return notification.get("bibid",'')
+    elif header == "Term": # mtable only
+        return notification.get('provenance', [])[0].get('term', '')
+    elif header == "Appears in": # mtable only
+        return notification.get('provenance', [])[0].get('notification_field', '')
+    elif header == "Reason": # ftable only
+        return notification.get('reason', '')
     elif header == 'Publisher':
         return notification.get('metadata', {}).get('publisher', '')
     elif header == 'Title':
@@ -283,35 +313,34 @@ def _get_notification_value(header, notification):
     return ''
 
 
-def _notifications_for_display(results, table):
+def _notifications_for_display(results, table, include_deposit_details=True):
     notifications = []
     # header
-    header_row = ['id']
+    header_row = []
     for header in table['header']:
         if isinstance(header, list):
             header_row.append(' / '.join(header))
         else:
             header_row.append(header)
     # I've appended columns to display sword deposit details
-    header_row.append('deposit_date')
-    header_row.append('deposit_count')
-    header_row.append('deposit_status')
-    header_row.append('request_status')
+    if include_deposit_details:
+        header_row.append('deposit_date')
+        header_row.append('deposit_count')
+        header_row.append('deposit_status')
+        header_row.append('request_status')
     notifications.append(header_row)
     # results
-    for result in results.get('notifications', []):
-        row = {
-            'id': _get_notification_value('id', result)
-        }
-        for header in table['header'] + ['deposit_date', 'deposit_count', 'deposit_status', 'request_status']:
-            cell = []
+    for result in results:
+        row = {}
+        fields = table['header']
+        if include_deposit_details:
+            fields = table['header'] + ['deposit_date', 'deposit_count', 'deposit_status', 'request_status']
+        for header in fields:
             val = _get_notification_value(header, result)
-            cell.append(val)
             key = header.lower().replace(' ', '_')
-            row[key] = cell
+            row[key] = val
         notifications.append(row)
     return notifications
-
 
 @blueprint.before_request
 def restrict():
@@ -350,33 +379,43 @@ def download(account_id):
     provider = acc.has_role('publisher')
     data = None
 
+    since = request.args.get('since')
+    if since == '' or since is None:
+        since = '01/06/2019'
+    upto = request.args.get('upto')
+    if upto == '' or upto is None:
+        upto = datetime.today().strftime("%d/%m/%Y")
+
     if provider:
         if request.args.get('rejected', False):
             fprefix = "failed"
+            notification_prefix = "failed"
             xtable = ftable
-            html = _list_failrequest(provider_id=account_id, bulk=True)
+            json_results = _list_failrequest(provider_id=account_id, since=since, upto=upto, bulk=True)
         else:
             fprefix = "matched"
+            notification_prefix = "matches"
             xtable = mtable
-            html = _list_matchrequest(repo_id=account_id, provider=provider, bulk=True)
+            json_results = _list_matchrequest(repo_id=account_id, since=since, upto=upto, provider=provider, bulk=True)
     else:
         fprefix = "routed"
+        notification_prefix = "notifications"
         xtable = ntable
-        html = _list_request(repo_id=account_id, provider=provider, bulk=True)
+        json_results = _list_request(repo_id=account_id, since=since, upto=upto, provider=provider, bulk=True)
 
-    res = json.loads(html)
-
-    rows = []
-    for hdr in xtable["header"]:
-        rows.append((m.value for m in parse(xtable[hdr]).find(res)), )
-
-    rows = list(zip_longest(*rows, fillvalue=''))
-    #
-    # Python 3 you need to use StringIO with csv.write. send_file requires BytesIO, so you have to do both.
+    results = json.loads(json_results)
+    notifications = results.get(notification_prefix, [])
+    data_to_display = _notifications_for_display(notifications, xtable, include_deposit_details=False)
+    fieldnames = []
+    for val in xtable["header"]:
+        fieldnames.append(val.lower().replace(' ', '_'))
     strm = StringIO()
-    writer = csv.writer(strm, delimiter=',', quoting=csv.QUOTE_ALL)
-    writer.writerow(xtable["header"])
-    writer.writerows(rows)
+    writer = csv.DictWriter(strm, fieldnames=fieldnames, extrasaction='ignore')
+    writer.writeheader()
+    for notification in data_to_display:
+        if isinstance(notification, list):
+            continue
+        writer.writerow(notification)
     mem = BytesIO()
     mem.write(strm.getvalue().encode('utf-8-sig'))
     mem.seek(0)
@@ -384,40 +423,51 @@ def download(account_id):
     fname = "{z}_{y}_{x}.csv".format(z=fprefix, y=account_id, x=dates.now())
     return send_file(mem, as_attachment=True, attachment_filename=fname, mimetype='text/csv')
 
-
 @blueprint.route('/details/<repo_id>', methods=["GET", "POST"])
 def details(repo_id):
     acc = models.Account.pull(repo_id)
     if acc is None:
         abort(404)
     provider = acc.has_role('publisher')
+    since = request.args.get('since')
+    if since == '' or since is None:
+        since = '01/06/2019'
+    upto = request.args.get('upto')
+    if upto == '' or upto is None:
+        upto = datetime.today().strftime("%d/%m/%Y")
     if provider:
-        data = _list_matchrequest(repo_id=repo_id, provider=provider)
+        notification_prefix = "matches"
+        xtable = mtable
+        include_deposit_details = False
+        data = _list_matchrequest(repo_id=repo_id, since=since, upto=upto, provider=provider)
     else:
-        data = _list_request(repo_id=repo_id, provider=provider)
-    #
-    link = '/account/details'
-    date = request.args.get('since')
-    if date == '':
-        date = '01/06/2019'
-    if current_user.has_role('admin'):
-        link += '/' + acc.id + '?since=' + date + '&api_key=' + current_user.data['api_key']
-    else:
-        link += '/' + acc.id + '?since=01/06/2019&api_key=' + acc.data['api_key']
+        notification_prefix = "notifications"
+        xtable = ntable
+        include_deposit_details = True
+        data = _list_request(repo_id=repo_id, since=since, upto=upto, provider=provider)
 
+    link = '/account/details'
+
+    api_key = acc.data['api_key']
+    if current_user.has_role('admin'):
+        api_key = current_user.data['api_key']
+    link += '/' + acc.id + '?since=' + since + '&upto=' + upto + '&api_key=' + api_key
     # NOTE: The data is returned is json. I then convert it back to python object
     #       I have not fixed all notification views.
     #       So keeping this unnecessary conversion to and from json.
     results = json.loads(data)
-    data_to_display = _notifications_for_display(results, ntable)
+    data_to_display = _notifications_for_display(results.get(notification_prefix, []), xtable,
+                                                 include_deposit_details=include_deposit_details)
 
     page_num = int(request.values.get("page", app.config.get("DEFAULT_LIST_PAGE_START", 1)))
     num_of_pages = int(math.ceil(results['total'] / results['pageSize']))
     if provider:
-        return render_template('account/matching.html', repo=data, tabl=[json.dumps(mtable)], total=results['total'],
-                               page_size=results['pageSize'], num_of_pages=num_of_pages, page_num=page_num, link=link, date=date)
-    return render_template('account/details.html', repo=data, results=data_to_display, total=results['total'],
-                           page_size=results['pageSize'], num_of_pages=num_of_pages, page_num=page_num, link=link, date=date, repo_id=repo_id)
+        return render_template('account/notifications/matched.html', results=data_to_display, total=results['total'],
+                               page_size=results['pageSize'], num_of_pages=num_of_pages, page_num=page_num, link=link,
+                               since=since, upto=upto, email=acc.email, repo_id=repo_id, api_key=api_key, type='matched')
+    return render_template('account/notifications/routed.html', results=data_to_display, total=results['total'],
+                           page_size=results['pageSize'], num_of_pages=num_of_pages, page_num=page_num, link=link,
+                           since=since, upto=upto, email=acc.email, repo_id=repo_id, api_key=api_key, type='routed')
 
 
 # 2016-10-19 TD : restructure matching and(!!) failing history output (primarily for publishers) -- start --
@@ -426,25 +476,34 @@ def matching(repo_id):
     acc = models.Account.pull(repo_id)
     if acc is None:
         abort(404)
-    #
+
     provider = acc.has_role('publisher')
-    data = _list_matchrequest(repo_id=repo_id, provider=provider)
-    #
+    since = request.args.get('since')
+    if since == '' or since is None:
+        since = '01/06/2019'
+    upto = request.args.get('upto')
+    if upto == '' or upto is None:
+        upto = datetime.today().strftime("%d/%m/%Y")
+
+    data = _list_matchrequest(repo_id=repo_id, since=since, upto=upto, provider=provider)
+    notification_prefix = "matches"
+    xtable = mtable
+    include_deposit_details = False
     link = '/account/matching'
-    date = request.args.get('since')
-    if date == '':
-        date = '01/06/2019'
+    api_key = acc.data['api_key']
     if current_user.has_role('admin'):
-        link += '/' + acc.id + '?since=' + date + '&api_key=' + current_user.data['api_key']
-    else:
-        link += '/' + acc.id + '?since=01/06/2019&api_key=' + acc.data['api_key']
+        api_key = current_user.data['api_key']
+    link += '/' + acc.id + '?since=' + since + '&upto=' + upto + '&api_key=' + api_key
 
     results = json.loads(data)
+    data_to_display = _notifications_for_display(results.get(notification_prefix, []), xtable,
+                                                 include_deposit_details=include_deposit_details)
 
     page_num = int(request.values.get("page", app.config.get("DEFAULT_LIST_PAGE_START", 1)))
     num_of_pages = int(math.ceil(results['total'] / results['pageSize']))
-    return render_template('account/matching.html', repo=data, tabl=[json.dumps(mtable)],
-                           num_of_pages=num_of_pages, page_num=page_num, link=link, date=date)
+    return render_template('account/notifications/matched.html', results=data_to_display, total=results['total'],
+                           page_size=results['pageSize'], num_of_pages=num_of_pages, page_num=page_num, link=link,
+                           since=since, upto=upto, email=acc.email, repo_id=repo_id, api_key=api_key, type="matched")
 
 
 @blueprint.route('/failing/<provider_id>', methods=["GET", "POST"])
@@ -452,26 +511,32 @@ def failing(provider_id):
     acc = models.Account.pull(provider_id)
     if acc is None:
         abort(404)
-    #
-    # provider = acc.has_role('publisher')
+    since = request.args.get('since')
+    if since == '' or since is None:
+        since = '01/06/2019'
+    upto = request.args.get('upto')
+    if upto == '' or upto is None:
+        upto = datetime.today().strftime("%d/%m/%Y")
+
     # 2016-10-19 TD : not needed here for the time being
-    data = _list_failrequest(provider_id=provider_id)
-    #
+    data = _list_failrequest(provider_id=provider_id, since=since, upto=upto)
+    notification_prefix = "failed"
+    xtable = ftable
+    include_deposit_details = False
     link = '/account/failing'
-    date = request.args.get('since')
-    if date == '':
-        date = '01/06/2019'
+    api_key = acc.data['api_key']
     if current_user.has_role('admin'):
-        link += '/' + acc.id + '?since=' + date + '&api_key=' + current_user.data['api_key']
-    else:
-        link += '/' + acc.id + '?since=01/06/2019&api_key=' + acc.data['api_key']
+        api_key = current_user.data['api_key']
+    link += '/' + acc.id + '?since=' + since + '&upto=' + upto + '&api_key=' + api_key
 
     results = json.loads(data)
-
+    data_to_display = _notifications_for_display(results.get(notification_prefix, []), xtable,
+                                                 include_deposit_details=include_deposit_details)
     page_num = int(request.values.get("page", app.config.get("DEFAULT_LIST_PAGE_START", 1)))
     num_of_pages = int(math.ceil(results['total'] / results['pageSize']))
-    return render_template('account/failing.html', repo=data, tabl=[json.dumps(ftable)], num_of_pages=num_of_pages,
-                           page_num=page_num, link=link, date=date)
+    return render_template('account/notifications/rejected.html', results=data_to_display, total=results['total'],
+                           page_size=results['pageSize'], num_of_pages=num_of_pages, page_num=page_num, link=link,
+                           since=since, upto=upto, email=acc.email, repo_id=provider_id, api_key=api_key, type="failed")
 
 
 @blueprint.route('/sword_logs/<repo_id>', methods=["GET"])
@@ -490,17 +555,18 @@ def sword_logs(repo_id):
     to_date = None
     to_date_display = ''
     if request.args.get('to', None) and len(request.args.get('to')) > 0:
-        to_date = _validate_date(param='to')
+        to_date = _validate_date(request.args.get('to', None), param='to')
         to_date_display = str(dates.parse(to_date).strftime("%d/%m/%Y"))
     # From date
     from_date = None
     if request.args.get('from', None) and len(request.args.get('from')) > 0:
-        from_date = _validate_date(param='from')
+        from_date = _validate_date(request.args.get('from', None), param='from')
     # From and to date
     if request.args.get('date', None) and len(request.args.get('date')) > 0:
-        from_date = _validate_date(param='date')
+        from_date = _validate_date(request.args.get('date', None), param='date')
         to_date = dates.format(dates.parse(from_date) + timedelta(days=1))
     # Default from and to dates
+
     if not from_date:
         from_date = deposit_dates[0].get('key_as_string').split('T')[0]
     from_date_display = str(dates.parse(from_date).strftime("%d/%m/%Y"))
@@ -514,42 +580,41 @@ def sword_logs(repo_id):
 
 
 @blueprint.route("/configview", methods=["GET", "POST"])
-@blueprint.route("/configview/<repoid>", methods=["GET", "POST"])
-def configView(repoid=None):
+@blueprint.route("/configview/<repo_id>", methods=["GET", "POST"])
+def configView(repo_id=None):
     app.logger.debug(current_user.id + " " + request.method + " to config route")
-    if repoid is None:
+    if repo_id is None:
         if current_user.has_role('repository'):
-            repoid = current_user.id
+            repo_id = current_user.id
         elif current_user.has_role('admin'):
             return ''  # the admin cannot do anything at /config, but gets a 200 so it is clear they are allowed
         else:
             abort(400)
     elif not current_user.has_role('admin'):  # only the superuser can set a repo id directly
         abort(401)
-    rec = models.RepositoryConfig().pull_by_repo(repoid)
+    acc = models.Account.pull(repo_id)
+    if acc is None:
+        abort(404)
+    rec = models.RepositoryConfig().pull_by_repo(repo_id)
     if rec is None:
         rec = models.RepositoryConfig()
-        rec.repo = repoid
+        rec.repo = repo_id
         # rec.repository = repoid
         # 2016-09-16 TD : The field 'repository' has changed to 'repo' due to
         #                 a bug fix coming with a updated version ES 2.3.3 
     if request.method == 'GET':
-        # get the config for the current user and return it
-        # this route may not actually be needed, but is convenient during development
-        # also it should be more than just the strings data once complex configs are accepted
-        json_data = json.dumps(rec.data, ensure_ascii=False)
-        return render_template('account/configview.html', repo=json_data)
+        return render_template('account/configview.html', repo=rec, email=acc.email, repo_id=repo_id)
     elif request.method == 'POST':
         if request.json:
-            saved = rec.set_repo_config(jsoncontent=request.json, repository=repoid)
+            saved = rec.set_repo_config(jsoncontent=request.json, repository=repo_id)
         else:
             try:
                 if request.files['file'].filename.endswith('.csv'):
                     saved = rec.set_repo_config(csvfile=TextIOWrapper(request.files['file'], encoding='utf-8'),
-                                                repository=repoid)
+                                                repository=repo_id)
                 elif request.files['file'].filename.endswith('.txt'):
                     saved = rec.set_repo_config(textfile=TextIOWrapper(request.files['file'], encoding='utf-8'),
-                                                repository=repoid)
+                                                repository=repo_id)
             except:
                 saved = False
         if saved:
@@ -577,7 +642,6 @@ def username(username):
                 if repoconfig is not None:
                     repoconfig.delete()
             acc.remove()
-            time.sleep(1)
             # 2017-03-03 TD : ... and be verbose about it!
             if repoconfig is not None:
                 flash('Account ' + acc.id + ' and RepoConfig ' + repoconfig.id + ' deleted')
@@ -596,29 +660,51 @@ def username(username):
         license_ids = None
         sword_status = None
 
+    ssh_help_text = """Begins with 'ssh-rsa', 'ecdsa-sha2-nistp256', 'ecdsa-sha2-nistp384', 'ecdsa-sha2-nistp521', 'ssh-ed25519', 'sk-ecdsa-sha2-nistp256@openssh.com', or 'sk-ssh-ed25519@openssh.com'"""
+    deepgreen_ssh_key = {
+        "title": "Deepgreen service",
+        "public_key": app.config.get("DEEPGREEN_SSH_PUBLIC_KEY", ''),
+    }
+    default_sftp_server = {
+        'url':  app.config.get("DEFAULT_SFTP_SERVER_URL", ''),
+        'port':  app.config.get("DEFAULT_SFTP_SERVER_PORT", '')
+    }
+
     if request.method == 'POST':
         if current_user.id != acc.id and not current_user.is_super:
             abort(401)
 
         if request.values.get('email', False):
-            acc.data['email'] = request.values['email']
+            acc.email = request.values['email']
 
         if 'password' in request.values and not request.values['password'].startswith('sha1'):
             if len(request.values['password']) < 8:
                 flash("Sorry. Password must be at least eight characters long", "error")
                 return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
-                                       license_ids=license_ids, sword_status=sword_status)
-            else:
+                                       license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text,
+                                       default_sftp_server=default_sftp_server, deepgreen_ssh_key=deepgreen_ssh_key)
+            try:
                 acc.set_password(request.values['password'])
+            except Exception as e:
+                ex_type, ex_value, ex_traceback = sys.exc_info()
+                flash('Error updating account: ' + str(ex_value), 'error')
+                return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
+                                       license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text,
+                                       default_sftp_server=default_sftp_server, deepgreen_ssh_key=deepgreen_ssh_key)
 
-        acc.save()
-        time.sleep(2)
-        flash("Record updated", "success")
+        try:
+            acc.save()
+            flash("Record updated", "success")
+        except Exception as e:
+            ex_type, ex_value, ex_traceback = sys.exc_info()
+            flash('Error updating account: ' + str(ex_value), 'error')
         return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
-                               license_ids=license_ids, sword_status=sword_status)
+                               license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text,
+                               default_sftp_server=default_sftp_server, deepgreen_ssh_key=deepgreen_ssh_key)
     elif current_user.id == acc.id or current_user.is_super:
         return render_template('account/user.html', account=acc, repoconfig=repoconfig, licenses=licenses,
-                               license_ids=license_ids, sword_status=sword_status)
+                               license_ids=license_ids, sword_status=sword_status, ssh_help_text=ssh_help_text,
+                               default_sftp_server=default_sftp_server, deepgreen_ssh_key=deepgreen_ssh_key)
     else:
         abort(404)
 
@@ -629,29 +715,37 @@ def pubinfo(username):
     if current_user.id != acc.id and not current_user.is_super:
         abort(401)
 
-    if request.values.get('embargo_form', False):
-        if request.values.get('embargo_duration', False):
-            acc.embargo = {'duration': request.values['embargo_duration']}
-        else:
-            acc.embargo = {'duration': 0}
-
+    add_license = False
     license_details = {}
     if request.values.get('license_form', False):
-        if request.values.get('license_title', False):
+        add_license = True
+        if 'license_title' in request.values:
             license_details['title'] = request.values['license_title']
-        if request.values.get('license_type', False):
+        if 'license_type' in request.values:
             license_details['type'] = request.values['license_type']
-        if request.values.get('license_url', False):
+        if 'license_url' in request.values:
             license_details['url'] = request.values['license_url']
-        if request.values.get('license_version', False):
+        if 'license_version' in request.values:
             license_details['version'] = request.values['license_version']
-        if request.values.get('license_gold_license', False):
+        if 'license_gold_license' in request.values:
             license_details['gold_license'] = request.values['license_gold_license']
-    if license_details:
-        acc.license = license_details
-    acc.save()
-    time.sleep(2)
-    flash('Thank you. Your publisher details have been updated.', "success")
+
+    add_embargo = False
+    embargo_details = {'duration': 0}
+    if request.values.get('embargo_form', False):
+        add_embargo = True
+        if request.values.get('embargo_duration', False):
+            embargo_details = {'duration': request.values['embargo_duration']}
+    try:
+        if add_license:
+            acc.license = license_details
+        if add_embargo:
+            acc.embargo = embargo_details
+        acc.save()
+        flash('Thank you. Your publisher details have been updated.', "success")
+    except Exception as e:
+        ex_type, ex_value, ex_traceback = sys.exc_info()
+        flash('Error updating publisher details: ' + str(ex_value), 'error')
     return redirect(url_for('.username', username=username))
 
 
@@ -661,60 +755,53 @@ def repoinfo(username):
     if current_user.id != acc.id and not current_user.is_super:
         abort(401)
 
-    if 'repository' not in acc.data:
-        acc.data['repository'] = {}
-    # 2016-10-04 TD: proper handling of two independent forms using hidden input fields
-    # if request.values.get('repo_profile_form',False):
-    if request.values.get('repository_software', False):
-        acc.data['repository']['software'] = request.values['repository_software']
-    else:
-        acc.data['repository']['software'] = ''
-    if request.values.get('repository_url', False):
-        acc.data['repository']['url'] = request.values['repository_url'].strip()
-    else:
-        acc.data['repository']['url'] = ''
-    if request.values.get('repository_name', False):
-        acc.data['repository']['name'] = request.values['repository_name']
-    else:
-        acc.data['repository']['name'] = ''
-    if request.values.get('repository_sigel', False):
-        acc.data['repository']['sigel'] = request.values['repository_sigel'].split(',')
-    else:
-        acc.data['repository']['sigel'] = []
-    if request.values.get('repository_bibid', False):
-        acc.data['repository']['bibid'] = request.values['repository_bibid'].strip().upper()
-    else:
-        acc.data['repository']['bibid'] = ''
+    add_repository = False
+    repository = {}
+    if request.values.get('repository_form', False):
+        add_repository = True
+        if 'repository_software' in request.values:
+            repository['software'] = request.values['repository_software']
+        if 'repository_url' in request.values:
+            repository['url'] = request.values['repository_url'].strip()
+        if 'repository_name' in request.values:
+            repository['name'] = request.values['repository_name']
+        if 'repository_sigel' in request.values:
+            repository['sigel'] = request.values['repository_sigel'].split(',')
+        if 'repository_bibid' in request.values:
+            repository['bibid'] = request.values['repository_bibid'].strip().upper()
 
-    if 'sword' not in acc.data:
-        acc.data['sword'] = {}
-    # 2016-10-04 TD: proper handling of two independent forms using hidden input fields
-    # if request.values.get('repo_sword_form',False):
-    if request.values.get('sword_username', False):
-        acc.data['sword']['username'] = request.values['sword_username']
-    else:
-        acc.data['sword']['username'] = ''
-    if request.values.get('sword_password', False):
-        acc.data['sword']['password'] = request.values['sword_password']
-    else:
-        acc.data['sword']['password'] = ''
-    if request.values.get('sword_collection', False):
-        acc.data['sword']['collection'] = request.values['sword_collection'].strip()
-    else:
-        acc.data['sword']['collection'] = ''
-    if request.values.get('sword_deposit_method', False):
-        acc.data['sword']['deposit_method'] = request.values['sword_deposit_method'].strip()
-    else:
-        acc.data['sword']['deposit_method'] = ''
+    add_sword = False
+    sword = {}
+    if request.values.get('sword_form', False):
+        add_sword = True
+        if 'sword_username' in request.values:
+            sword['username'] = request.values['sword_username']
+        if 'sword_password' in request.values:
+            sword['password'] = request.values['sword_password']
+        if 'sword_collection' in request.values:
+            sword['collection'] = request.values['sword_collection'].strip()
+        if 'sword_deposit_method' in request.values:
+            sword['deposit_method'] = request.values['sword_deposit_method'].strip()
 
+    add_packaging = False
+    packaging = []
+    if 'packaging' in request.values:
+        add_packaging = True
     if request.values.get('packaging', False):
-        acc.data['packaging'] = [s.strip() for s in request.values['packaging'].split(',')]
-    else:
-        acc.data['packaging'] = []
+        packaging = [s.strip() for s in request.values['packaging'].split(',')]
 
-    acc.save()
-    time.sleep(2)
-    flash('Thank you. Your repository details have been updated.', "success")
+    try:
+        if add_repository:
+            acc.data['repository'] = repository
+        if add_sword:
+            acc.data['sword'] = sword
+        if add_packaging:
+            acc.data['packaging'] = packaging
+        acc.save()
+        flash('Thank you. Your repository details have been updated.', "success")
+    except Exception as e:
+        ex_type, ex_value, ex_traceback = sys.exc_info()
+        flash('Error updating repository details: ' + str(ex_value), 'error')
     return redirect(url_for('.username', username=username))
 
 
@@ -723,10 +810,13 @@ def apikey(username):
     if current_user.id != username and not current_user.is_super:
         abort(401)
     acc = models.Account.pull(username)
-    acc.api_key = str(uuid.uuid4())
-    acc.save()
-    time.sleep(2)
-    flash('Thank you. Your API key has been updated.', "success")
+    try:
+        acc.api_key = str(uuid.uuid4())
+        acc.save()
+        flash('Thank you. Your API key has been updated.', "success")
+    except Exception as e:
+        ex_type, ex_value, ex_traceback = sys.exc_info()
+        flash('Error updating API key details: ' + str(ex_value), 'error')
     return redirect(url_for('.username', username=username))
 
 
@@ -778,8 +868,14 @@ def config(username):
                         saved = rec.set_repo_config(textfile=strm, repository=username)
             else:
                 if request.files['file'].filename.endswith('.csv'):
-                    saved = rec.set_repo_config(csvfile=TextIOWrapper(request.files['file'], encoding='utf-8'),
-                                                repository=username)
+                    uploaded_file = request.files.get('file')
+                    file_bytes = csv_helper.read_uploaded_file(uploaded_file)
+                    status, decoded_file_str = csv_helper.decode_csv_bytes(file_bytes)
+                    if not status:
+                        flash('Sorry, there was an error reading your config upload. Please try again.', "error")
+                        return redirect(url_for('.username', username=username))
+
+                    saved = rec.set_repo_config(csvfile=StringIO(decoded_file_str), repository=username)
                 elif request.files['file'].filename.endswith('.txt'):
                     saved = rec.set_repo_config(textfile=TextIOWrapper(request.files['file'], encoding='utf-8'),
                                                 repository=username)
@@ -791,7 +887,6 @@ def config(username):
             flash('Sorry, there was an exception detected while your config upload was processed. Please try again.',
                   "error")
             app.logger.error(str(e))
-        time.sleep(1)
 
     return redirect(url_for('.username', username=username))
 
@@ -802,30 +897,33 @@ def changerole(username, role):
     acc = models.Account.pull(username)
     if acc is None:
         abort(404)
-    elif request.method == 'POST' and current_user.is_super:
+    if request.method == 'POST':
+        if not current_user.is_super:
+            abort(401)
         if 'become' in request.path:
-            if role == 'publisher':
-                acc.become_publisher()
-            elif role == 'active' and acc.has_role('repository'):
-                acc.set_active()
-                acc.save()
-            elif role == 'passive' and acc.has_role('repository'):
-                acc.set_passive()
-                acc.save()
-            else:
-                acc.add_role(role)
-                acc.save()
+            try:
+                if role == 'active' and acc.has_role('repository'):
+                    acc.set_active()
+                    acc.save()
+                elif role == 'passive' and acc.has_role('repository'):
+                    acc.set_passive()
+                    acc.save()
+                else:
+                    acc.add_role(role)
+                    acc.save()
+                flash("Role updated", "success")
+            except Exception as e:
+                ex_type, ex_value, ex_traceback = sys.exc_info()
+                flash('Error updating account role: ' + str(ex_value), 'error')
         elif 'cease' in request.path:
-            if role == 'publisher':
-                acc.cease_publisher()
-            else:
+            try:
                 acc.remove_role(role)
                 acc.save()
-        time.sleep(1)
-        flash("Record updated", "success")
+                flash("Role removed", "success")
+            except Exception as e:
+                ex_type, ex_value, ex_traceback = sys.exc_info()
+                flash('Error removing account role: ' + str(ex_value), 'error')
         return redirect(url_for('.username', username=username))
-    else:
-        abort(401)
 
 
 @blueprint.route('/<username>/sword_activate', methods=['POST'])
@@ -837,7 +935,6 @@ def sword_activate(username):
     if sword_status and sword_status.status == 'failing':
         sword_status.activate()
         sword_status.save()
-    time.sleep(2)
     flash('The sword connection has been activated.', "success")
     return redirect(url_for('.username', username=username))
 
@@ -851,7 +948,6 @@ def sword_deactivate(username):
     if sword_status and sword_status.status in ['succeeding', 'problem']:
         sword_status.deactivate()
         sword_status.save()
-    time.sleep(2)
     flash('The sword connection has been deactivated.', "success")
     return redirect(url_for('.username', username=username))
 
@@ -873,7 +969,6 @@ def excluded_license(username):
         rec = models.RepositoryConfig.pull_by_repo(username)
         rec.excluded_license = excluded_licenses
         rec.save()
-        time.sleep(1)
     return redirect(url_for('.username', username=username))
 
 
@@ -889,24 +984,151 @@ def resend_notification(username):
     # 2. Get the url to return the user to
     # 3. If all notifications to be resent, get from and to date and redo the query?
     notification_ids = json.loads(request.form.get('notification_ids'))
-    count = 0
-    duplicate = 0
-    for n_id in list(notification_ids):
-        rec = models.RequestNotification.pull_by_ids(n_id, username, status='queued', size=1)
-        if not rec:
-            rec = models.RequestNotification()
-            rec.account_id = username
-            rec.notification_id = n_id
-            rec.status = 'queued'
-            rec.save()
-            count += 1
-        else:
-            duplicate += 1
+    count, duplicate = request_deposit_helper.request_deposit(notification_ids, username)
     msg = "Queued {n} notifications for deposit".format(n=count)
     if duplicate > 0:
         msg = msg + '<br>' + '{n} notifications are already waiting in queue'.format(n=duplicate)
     return msg, 201
 
+
+@blueprint.route('/<username>/add_ssh_key', methods=["POST"])
+def add_ssh_key(username):
+    if current_user.id != username and not current_user.is_super:
+        abort(401)
+    acc = models.Account.pull(username)
+    if acc is None:
+        abort(404)
+    ssh_key = request.values.get('ssh_key', None)
+    title = request.values.get('title', None)
+    if not ssh_key:
+        flash("Sorry. SSH key is required", "error")
+        return redirect(url_for('.username', username=username))
+    try:
+        acc.add_ssh_key(ssh_key, title)
+        acc.save()
+        subject = f"New SSH key for #{acc.id}"
+        message = f"""New SSH key has been added to the account #{acc.id}.
+        The key has to be copied to the publisher account and when ready needs to be activated in Deepgreen."""
+        email_helper.send_email_to_admin(subject, message)
+        flash('The ssh key has been added', "success")
+    except Exception as e:
+        ex_type, ex_value, ex_traceback = sys.exc_info()
+        flash('Error saving SSH key: ' + str(ex_value), 'error')
+    return redirect(url_for('.username', username=username))
+
+
+@blueprint.route('/<username>/activate_ssh_key', methods=["POST"])
+def activate_ssh_key(username):
+    if not current_user.is_super:
+        abort(401)
+    acc = models.Account.pull(username)
+    if acc is None:
+        abort(404)
+    ssh_key = request.values.get('id', None)
+    try:
+        acc.activate_ssh_key(ssh_key)
+        acc.save()
+        flash('The ssh key has been activated', "success")
+    except Exception as e:
+        ex_type, ex_value, ex_traceback = sys.exc_info()
+        flash('Error activating SSH key: ' + str(ex_value), 'error')
+    return redirect(url_for('.username', username=username))
+
+
+@blueprint.route('/<username>/deactivate_ssh_key', methods=["POST"])
+def deactivate_ssh_key(username):
+    if not current_user.is_super:
+        abort(401)
+    acc = models.Account.pull(username)
+    if acc is None:
+        abort(404)
+    ssh_key = request.values.get('id', None)
+    try:
+        acc.deactivate_ssh_key(ssh_key)
+        acc.save()
+        flash('The ssh key has been set to inactive', "success")
+    except Exception as e:
+        ex_type, ex_value, ex_traceback = sys.exc_info()
+        flash('Error making SSH key inactive: ' + str(ex_value), 'error')
+    return redirect(url_for('.username', username=username))
+
+
+@blueprint.route('/<username>/delete_ssh_key', methods=["POST"])
+def delete_ssh_key(username):
+    if current_user.id != username and not current_user.is_super:
+        abort(401)
+    acc = models.Account.pull(username)
+    if acc is None:
+        abort(404)
+    ssh_key = request.values.get('id', None)
+    try:
+        acc.delete_ssh_key(ssh_key)
+        acc.save()
+        flash('The ssh key has been deleted', "success")
+    except Exception as e:
+        ex_type, ex_value, ex_traceback = sys.exc_info()
+        flash('Error deleting SSH key: ' + str(ex_value), 'error')
+    return redirect(url_for('.username', username=username))
+
+
+@blueprint.route('/<username>/sftp_server', methods=['POST', 'DELETE'])
+def sftp_server(username):
+    acc = models.Account.pull(username)
+    if not current_user.is_super:
+        abort(401)
+    if (request.method == 'DELETE' or
+          (request.method == 'POST' and
+           request.values.get('submit', '').split(' ')[0].lower() == 'delete')):
+        if request.values.get('sftp_server_url', '') == acc.sftp_server_url:
+            sftp_server_details = {'username':'', 'url': '', 'port': ''}
+            try:
+                acc.sftp_server = sftp_server_details
+                acc.save()
+                flash('SFTP server details have been deleted.', "success")
+            except Exception as e:
+                ex_type, ex_value, ex_traceback = sys.exc_info()
+                flash('Error deleting SFTP server details: ' + str(ex_value), 'error')
+    else:
+        sftp_server_details = {}
+        if 'sftp_server_username' in request.values:
+            sftp_server_details['username'] = request.values['sftp_server_username']
+        if 'sftp_server_url' in request.values:
+            sftp_server_details['url'] = request.values['sftp_server_url']
+        if 'sftp_server_port' in request.values:
+            sftp_server_details['port'] = request.values['sftp_server_port']
+        if sftp_server_details:
+            try:
+                acc.sftp_server = sftp_server_details
+                acc.save()
+                flash('SFTP server details have been updated.', "success")
+            except Exception as e:
+                ex_type, ex_value, ex_traceback = sys.exc_info()
+                flash('Error saving SFTP server details: ' + str(ex_value), 'error')
+    return redirect(url_for('.username', username=username))
+
+
+@blueprint.route('/<username>/routing_activate', methods=['POST'])
+def routing_activate(username):
+    if current_user.id != username and not current_user.is_super:
+        abort(401)
+    acc = models.Account.pull(username)
+    if acc.publisher_routing_status != 'active':
+        acc.publisher_routing_status = 'active'
+        acc.save()
+        flash('The publisher routing status has been set to active.', "success")
+    return redirect(url_for('.username', username=username))
+
+
+@blueprint.route('/<username>/routing_deactivate', methods=['POST'])
+def routing_deactivate(username):
+    if current_user.id != username and not current_user.is_super:
+        abort(401)
+    acc = models.Account.pull(username)
+    if acc.publisher_routing_status != 'inactive':
+        acc.publisher_routing_status = 'inactive'
+        acc.save()
+        flash('The publisher routing status has been set to inactive.', "success")
+    return redirect(url_for('.username', username=username))
 
 @blueprint.route('/login', methods=['GET', 'POST'])
 def login():
@@ -940,16 +1162,20 @@ def register():
         abort(401)
 
     form = AdduserForm(request.form)
-    vals = request.json if request.json else request.values
+    vals = request.json if request.json else request.values.to_dict()
 
     if request.method == 'POST' and form.validate():
         role = vals.get('radio', None)
+        if not vals.get('id', None):
+            vals['id'] = str(uuid.uuid4())
         account = models.Account()
-        account.add_account(vals)
-        account.save()
-        if role == 'publisher':
-            account.become_publisher()
-        time.sleep(1)
+        try:
+            account.add_account(vals)
+            account.save()
+        except Exception as e:
+            ex_type, ex_value, ex_traceback = sys.exc_info()
+            flash('Error creating account: ' + str(ex_value), 'error')
+            return render_template('account/register.html', vals=vals, form=form)
         flash('Account created for ' + account.id, 'success')
         return redirect('/account')
 

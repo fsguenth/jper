@@ -4,10 +4,13 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.datastructures import TypeConversionDict
 
 from octopus.core import app
-from octopus.lib import dataobj
+from octopus.lib import dataobj, dates
 from service import dao
 from esprit import raw
+from datetime import datetime
+from copy import deepcopy
 
+SSH_KEY_STATUS = ['new', 'active', 'inactive']
 
 class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
     '''
@@ -32,7 +35,8 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
 
         "publisher" : {
             "name" : "<name of the publisher>",
-            "url" : "<url for the main publisher weg page>"
+            "url" : "<url for the main publisher web page>"
+            "routing_status": "<True|False>"
         },
 
         # "sword_repository" : {
@@ -57,6 +61,19 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
             "url" : "<license url>",
             "version" : "<license version>",
             "gold_license" : [<license type> | <license url>]
+        },
+        "ssh_keys" : [{
+            "id": <uuid for the ssh key>",
+            "title" : "<ssh key title>",
+            "public_key": "<public ssh key>",
+            "status": "<new, active, inactive>",
+            "created_date": "<date key was added>"
+            "last_updated": <date key status was updated">
+        }],
+        "sftp_server" : {
+            "username": "<unique human friendly account id>",
+            "url": <url of the SSH server",
+            "port": <port of the SSH server",
         }
     }
     '''
@@ -84,11 +101,13 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
     #             "publisher": {"contains": "object"},
     #             "sword": {"contains": "object"},
     #             "embargo": {"contains": "object"},
-    #             "license": {"contains": "object"}
+    #             "license": {"contains": "object"},
+    #             "sftp_server": {"contains": "object"},
     #         },
     #         "lists" : {
     #             "role" : {"contains" : "field", "coerce" : "unicode"},
     #             "packaging": {"contains" : "field", "coerce" : "unicode"},
+    #             "ssh_keys": {"contains" : "object"}
     #         },
     #         "structs" : {
     #             "repository" : {
@@ -103,7 +122,8 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
     #             "publisher": {
     #                 "fields": {
     #                     "name": {"coerce": "unicode"},
-    #                     "url": {"coerce": "unicode"}
+    #                     "url": {"coerce": "unicode"},
+    #                     "routing_status": {"coerce": "unicode"}
     #                 }
     #             },
     #             "sword": {
@@ -126,6 +146,23 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
     #                     "type": {"coerce": "unicode"},
     #                     "url": {"coerce": "unicode"},
     #                     "version": {"coerce": "unicode"},
+    #                 }
+    #             },
+    #             "ssh_keys": {
+    #                 "fields": {
+    #                     "id": {"coerce": "unicode"}
+    #                     "title": {"coerce": "unicode"},
+    #                     "public_key": {"coerce": "unicode"},
+    #                     "status": {"coerce": "unicode", "allowed_values": SSH_KEY_STATUS},
+    #                     "created_date": {"coerce": "utcdatetime"},
+    #                     "last_updated": {"coerce": "utcdatetime"},
+    #                 }
+    #             },
+    #             "sftp_server": {
+    #                 "fields": {
+    #                     "username": {"coerce": "unicode"},
+    #                     "url": {"coerce": "unicode"},
+    #                     "port": {"coerce": "unicode"}
     #                 }
     #             },
     #         }
@@ -333,6 +370,7 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
             {
                 "name" : "<name of publisher>",
                 "url" : "<url>",
+                "routing_status" : "<True|False>"
             }
 
         :return: The publisher information as a python dict object
@@ -352,13 +390,14 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
             {
                 "name" : "<name of publisher>",
                 "url" : "<url>",
+                "routing_status": "<True|False>"
             }
 
         :param obj: the publisher object as a dict
         :return:
         """
         # validate the object structure quickly
-        allowed = ["name", "url"]
+        allowed = ["name", "url", "routing_status"]
         for k in list(obj.keys()):
             if k not in allowed:
                 raise dataobj.DataSchemaException("Publisher object must only contain the following keys: {x}".format(x=", ".join(allowed)))
@@ -388,6 +427,16 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
     @publisher_url.setter
     def publisher_url(self, val):
         self._set_single("publisher.url", val, coerce=self._utf8_unicode())
+    # 2020-02-20 TD : end of convenience setter and getter for extra pub infos
+
+    @property
+    def publisher_routing_status(self):
+        return self._get_single("publisher.routing_status", coerce=self._utf8_unicode())
+
+    @publisher_routing_status.setter
+    def publisher_routing_status(self, val):
+        if val in ['active', 'inactive']:
+            self._set_single("publisher.routing_status", val, coerce=self._utf8_unicode())
     # 2020-02-20 TD : end of convenience setter and getter for extra pub infos
 
     @property
@@ -600,6 +649,242 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
         # finally write it
         self._set_single("license", obj)
 
+    @property
+    def ssh_keys(self):
+        return self._get_list("ssh_keys")
+
+    @ssh_keys.setter
+    def ssh_keys(self, vals):
+        self._set_list("ssh_keys", vals)
+
+    @property
+    def sftp_server(self):
+        """
+        The sftp_server information for the publisher
+
+        The returned object is as follows:
+
+        ::
+            {
+                "username": "<connection username for sftp>",
+                "url" : "<connection url for sftp>",
+                "port" : "<connection port for sftp>"            }
+
+        :return: The ftp_server information as a python dict object
+        """
+        sftp_server = self._get_single("sftp_server")
+        if not sftp_server['username']:
+            sftp_server['username'] = self.id
+        if not sftp_server['url']:
+            sftp_server['url'] = app.config.get("DEFAULT_SFTP_SERVER_URL", '')
+        if not sftp_server['port']:
+            sftp_server['port'] = app.config.get("DEFAULT_SFTP_SERVER_PORT", '')
+        return sftp_server
+
+    @sftp_server.setter
+    def sftp_server(self, obj):
+        """
+        Set the sftp_server object
+
+        The object will be validated and types coerced as needed.
+
+        The supplied object should be structured as follows:
+
+        ::
+            {
+                "username": "<connection username for sftp>",
+                "url" : "<connection url for the sftp server>",
+                "port" : "<connection port for the sftp server>"
+            }
+
+        :param obj: the sftp_server object as a dict
+        :return:
+        """
+        # validate the object structure quickly
+        allowed = ["username", "url", "port"]
+        for k in list(obj.keys()):
+            if k not in allowed:
+                raise dataobj.DataSchemaException("sftp_server object must only contain the following keys: {x}".format(x=", ".join(allowed)))
+        if 'username' in obj:
+            self.sftp_server_username = obj['username']
+        if 'url' in obj:
+            self.sftp_server_url = obj['url']
+        if 'port' in obj:
+            self.sftp_server_port = obj['port']
+
+    @property
+    def sftp_server_username(self):
+        # If empty serve the account id
+        val = self._get_single("sftp_server.username", coerce=self._utf8_unicode())
+        if not val:
+            return self.id
+        return val
+
+    @sftp_server_username.setter
+    def sftp_server_username(self, val):
+        # Do not save the default value - account id and check it is unique
+        is_unique = True
+        if val == self.id:
+            val = ''
+        if val:
+            is_unique = self._sftp_username_is_unique(val)
+        if is_unique:
+            self._set_single("sftp_server.username", val, coerce=self._utf8_unicode())
+
+    @property
+    def sftp_server_url(self):
+        # If empty serve the default value - DEFAULT_SFTP_SERVER_URL
+        val = self._get_single("sftp_server.url", coerce=self._utf8_unicode())
+        if not val:
+            return app.config.get("DEFAULT_SFTP_SERVER_URL", '')
+        return val
+
+    @sftp_server_url.setter
+    def sftp_server_url(self, val):
+        # Do not save the default value
+        if val == app.config.get("DEFAULT_SFTP_SERVER_URL", ''):
+            val = ''
+        self._set_single("sftp_server.url", val, coerce=self._utf8_unicode())
+
+    @property
+    def sftp_server_port(self):
+        # If empty serve the default value - DEFAULT_SFTP_SERVER_PORT
+        val = self._get_single("sftp_server.port", coerce=self._utf8_unicode())
+        if not val:
+            return app.config.get("DEFAULT_SFTP_SERVER_PORT", '')
+        return val
+
+    @sftp_server_port.setter
+    def sftp_server_port(self, val):
+        # Do not save the default value
+        if val == app.config.get("DEFAULT_SFTP_SERVER_PORT", ''):
+            val = ''
+        self._set_single("sftp_server.port", val, coerce=self._utf8_unicode())
+
+    def add_ssh_key(self, public_key, title=None):
+        """
+        {
+            "id": {"coerce": "unicode"}
+            "title": {"coerce": "unicode"},
+            "public_key": {"coerce": "unicode"},
+            "status": {"coerce": "unicode", "allowed_values": SSH_KEY_STATUS},
+            "created_date": {"coerce": "utcdatetime"},
+            "last_updated": {"coerce": "utcdatetime"},
+        }
+        """
+        if not public_key:
+            raise dataobj.DataSchemaException("SSH public key is missing")
+        current_date = dates.format(datetime.now())
+        vals = {
+            'id': str(uuid.uuid4()),
+            'title': title,
+            'public_key': public_key,
+            'status': 'new',
+            'created_date': current_date,
+            'last_updated': current_date
+        }
+        if vals['status'] not in SSH_KEY_STATUS:
+            raise dataobj.DataSchemaException(
+                "Key status can only be one of: {x}".format(x=", ".join(SSH_KEY_STATUS)))
+        self._add_to_list("ssh_keys", vals)
+
+    def activate_ssh_key(self, id):
+        """
+        Any key can be made active (not just new)
+        Check id exists
+        Set id to active
+        Multiple keys can be active
+        """
+        if not self._key_exists(id):
+            raise dataobj.DataSchemaException(f"Key {id} does not exist")
+
+        # inactive_keys = self._deactivate_keys(self.ssh_keys)
+        # new_keys = self._set_status(inactive_keys, id, 'active')
+        new_keys = self._set_status(self.ssh_keys, id, 'active')
+        self.ssh_keys = new_keys
+        return True
+
+    def deactivate_ssh_key(self, id):
+        """
+        Any active key can be made inactive
+        Check id exists
+        Set id to inactive
+        """
+        if not self._key_exists(id):
+            raise dataobj.DataSchemaException(f"Key {id} does not exist")
+        current_status = self._get_status(id)
+        if current_status != 'active':
+            raise dataobj.DataSchemaException(f"Cannot make key inactive #{id}. It is not active.")
+        new_keys = self._set_status(self.ssh_keys, id, 'inactive')
+        self.ssh_keys = new_keys
+        return True
+
+    def delete_ssh_key(self, id):
+        """
+        Check id exists and status is inactive before deleting key
+        """
+        if not self._key_exists(id):
+            raise dataobj.DataSchemaException(f"Key {id} does not exist")
+        current_status = self._get_status(id)
+        if current_status == 'active':
+            raise dataobj.DataSchemaException(f"Cannot delete active key #{id}")
+        new_keys = self._delete_key(id, self.ssh_keys)
+        self.ssh_keys = new_keys
+        return True
+
+    def _sftp_username_is_unique(self, val):
+        if val == self.id:
+            return True
+        existing_acc = Account.pull_by_sftp_username(val)
+        if existing_acc and existing_acc.id != self.id:
+            raise dataobj.DataSchemaException(f"Account with sftp username {val} already exists")
+        existing_acc = Account.pull(val)
+        if existing_acc and existing_acc.id != self.id:
+            raise dataobj.DataSchemaException(f"Account with id {val} already exists")
+        return True
+
+
+    def _key_exists(self, id):
+        key_exists = False
+        for key in self.ssh_keys:
+            if key['id'] == id:
+                key_exists = True
+                break
+        return key_exists
+
+    def _get_status(self, id):
+        for rec in self.ssh_keys:
+            if rec['id'] == id:
+                return rec['status']
+        return None
+
+    def _set_status(self, ssh_keys, id, status):
+        if status not in SSH_KEY_STATUS:
+            raise dataobj.DataSchemaException(
+                "Key status can only be one of: {x}".format(x=", ".join(SSH_KEY_STATUS)))
+        new_keys = deepcopy(ssh_keys)
+        for rec in new_keys:
+            if rec['id'] == id:
+                rec['status'] = status
+                rec['last_updated'] = dates.format(datetime.now())
+        return new_keys
+
+    def _deactivate_keys(self, ssh_keys):
+        new_keys = deepcopy(ssh_keys)
+        for rec in new_keys:
+            if rec['status'] == 'active':
+                rec['status'] = 'inactive'
+                rec['last_updated'] = dates.format(datetime.now())
+        return new_keys
+
+    def _delete_key(self, id, ssh_keys):
+        new_keys = deepcopy(ssh_keys)
+        for key in new_keys:
+            if key['id'] == id:
+                new_keys.remove(key)
+                break
+        return new_keys
+
     def add_account(self, account_hash):
         account_hash = _coerce_account_hash(account_hash)
         acc_id = account_hash.get('id', None) or account_hash.get('username', None)
@@ -607,6 +892,9 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
             app.logger.warn("Account params have a different id. Ignoring id in params")
         elif not self.id and acc_id:
             self.id = acc_id
+        has_acc = Account.pull(self.id)
+        if isinstance(has_acc, Account) :
+            raise dataobj.DataSchemaException(f"Account with id {acc_id} already exists")
         password = account_hash.get('password', None)
         if password:
             if not self.password:
@@ -636,6 +924,11 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
             self.embargo = account_hash.get('embargo')
         if account_hash.get('license', {}):
             self.license = account_hash.get('license')
+        if account_hash.get('ssh_keys', []):
+            for key in ssh_keys:
+                if key.get('public_key', None) and key.get('title', None):
+                    self.add_ssh_key(key['public_key'], key['title'])
+        return
 
     def can_log_in(self):
         return True
@@ -794,52 +1087,12 @@ class Account(dataobj.DataObj, dao.AccountDAO, UserMixin):
     def pull_by_email(cls,email):
         return cls.pull_by_key('email',email)
 
+    @classmethod
+    def pull_by_sftp_username(cls, username):
+        return cls.pull_by_key('sftp_server.username',username)
+
     def remove(self):
-        if self.has_role('publisher'):
-            un = self.id
-            try:
-                import os, subprocess
-                fl = os.path.dirname(os.path.abspath(__file__)) + '/deleteFTPuser.sh'
-                subprocess.call(['sudo',fl,un])
-                app.logger.info(str(self.id) + ' calling deleteFTPuser subprocess')
-            except:
-                app.logger.error(str(self.id) + ' failed deleteFTPuser subprocess')
         self.delete()
-
-    def become_publisher(self):
-        # create an FTP user for the account, if it is a publisher
-        # TODO / NOTE: if the service has to be scaled up to run on multiple machines,
-        # the ftp users should only be created on the machine that the ftp address points to.
-        # so the create user scripts should be triggered on that machine. Alternatively the user
-        # accounts could be created on every machine - but that leaves more potential security holes.
-        # Better to restrict the ftp upload to one machine that is configured to accept them. Then
-        # when it runs the schedule, it will check the ftp folder locations and send any to the API
-        # endpoints, so the heavy lifting would still be distributed across machines.
-        #un = self.data['email'].replace('@','_')
-        un = self.id
-        try:
-            import os, subprocess
-            fl = os.path.dirname(os.path.abspath(__file__)) + '/createFTPuser.sh'
-            print("subprocessing " + fl)
-            subprocess.call( [ 'sudo', fl, un, self.data['api_key'] ] )
-            print("creating FTP user for " + un)
-        except:
-            print("could not create an FTP user for " + un)
-        self.add_role('publisher')
-        self.save()
-
-    def cease_publisher(self):
-        un = self.id
-        try:
-            import os, subprocess
-            fl = os.path.dirname(os.path.abspath(__file__)) + '/deleteFTPuser.sh'
-            print("subprocessing " + fl)
-            subprocess.call(['sudo',fl,un])
-            print("deleting FTP user for " + un)
-        except:
-            print("could not delete an FTP user for " + un)
-        self.remove_role('publisher')
-        self.save()
 
 
 def _coerce_account_hash(account_hash):
@@ -853,7 +1106,8 @@ def _coerce_account_hash(account_hash):
         'repository': ['repository_name', 'repository_software', 'repository_url', 'repository_bibid', 'repository_sigel'],
         'sword': ['sword_username', 'sword_password', 'sword_collection'],
         'embargo': ['embargo_duration',],
-        'license': ['license_title', 'license_type', 'license_url', 'license_version', 'license_gold_license']
+        'license': ['license_title', 'license_type', 'license_url', 'license_version', 'license_gold_license'],
+        'ssh_keys': ['title', 'public_key']
     }
     for parent, props in nested_properties.items():
         parent_hash = account_hash.pop(parent, {})

@@ -1,0 +1,22 @@
+{% if licenses %}
+<div class="box box--padding-large box--brd-mgreyblue">
+    <h3>Filter</h3>
+    <div class="row">
+        <form class="form" method="POST" action="{{request.path}}/excluded_license" enctype="multipart/form-data">
+            <p>Your institution appears in the following licenses. More information <a href="https://info.oa-deepgreen.de/unterstuetzer/#Verlage" target="_blank">here</a></p>
+            <p>Please uncheck all licenses you don’t want to receive articles from:</p>
+            {% for license in licenses %}
+                {% set check = "" %}
+                {% if license.checked %}
+                    {% set check = "checked" %}
+                {% endif %}
+                <input type="checkbox" id="license_{{license.id}}" value="{{license.id}}" name='excluded_license' {{check}}>
+                <label for="license_{{license.id}}">{{license.name}}</label> |
+                <a href="/manage_license/view_license/{{license.id}}">view license</a><br>
+            {% endfor %}
+            <input type="hidden" id="license_ids" value="{{license_ids}}" name='license_ids'>
+            <button class="btn btn--3d btnright" id="update" type="submit">Update settings</button>
+        </form>
+    </div>
+</div>
+{% endif %}

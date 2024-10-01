@@ -8,7 +8,7 @@
         {% endif %}
         <dt>Id</dt>
         <dd>
-            <a href="{{ url_for('manage_license.view_raw') }}?record_id={{ rec.id }}">
+            <a href="/manage_license/view_license_manager/{{ rec.id }}">
             {{ rec.id }}</a>
         </dd>
         {% if rec.get('admin_notes', '') %}
@@ -50,7 +50,7 @@
                 <a href="#" class="toggle">Show / hide versions</a> <br/>
             </dd>
         {% endif %}
-        <div><a href="#updateManagementRecordModal" class="btn" rel="modal:open">Update details</a></div>
+        <div><a href="#updateManagementRecordModal_{{ rec.id }}" class="btn" rel="modal:open">Update details</a></div>
         {% include 'manage_license/actions/modal_update_management_record_details.html' %}
     </td>
 {% else %}

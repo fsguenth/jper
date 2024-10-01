@@ -66,8 +66,6 @@ def create_acc(acc_dict: dict):
     account = models.Account()
     account.add_account(acc_dict)
     account.save()
-    if 'publisher' in acc_dict['role']:
-        account.become_publisher()
     return account
 
 

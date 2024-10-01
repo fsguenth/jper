@@ -192,7 +192,7 @@ class PackageManager(object):
 
         :param store_id: the storage id where this object can be found
         :param source_format: format identifier for the input package handler.  As seen in the configuration.
-        :param target_format: format identifier for the output package handler.  As seen in the configuration.
+        :param target_formats: format identifier for the output package handler.  As seen in the configuration.
         :param storage_manager: an instance of Store to use as the storage API
         :return: a list of tuples of the conversions carried out of the form [(format, filename, url name)]
         """
@@ -250,6 +250,53 @@ class PackageManager(object):
 
         # return the conversions record to the caller
         return conversions
+
+    @classmethod
+    def backup(cls, store_id, source_format, target_formats, storage_manager=None):
+        """
+        For the package held in the store at the specified store_id, backup the packages in the
+        target_format, if the source_format exists.
+
+        If a storage_manager is provided, that will be used as the interface to the storage system,
+        otherwise a storage manager will be constructed from the StoreFactory.
+
+        :param store_id: the storage id where this object can be found
+        :param source_format: format identifier for the input package handler.  As seen in the configuration.
+        :param target_formats: format identifier for the output package handler.  As seen in the configuration.
+        :param storage_manager: an instance of Store to use as the storage API
+        :return: a list of tuples of the conversions carried out of the form [(format, filename, url name)]
+        """
+        app.logger.debug(
+            "Package backup - StoreID:{a}; SourceFormat:{b}; TargetFormats:{c}".format(a=store_id, b=source_format,
+                                                                                       c=",".join(target_formats)))
+
+        # load the storage manager
+        if storage_manager is None:
+            storage_manager = store.StoreFactory.get()
+
+        # get the packager that will do the conversions
+        pm = PackageFactory.converter(source_format)
+
+        # check that there is a source package to convert
+        if not storage_manager.exists(store_id):
+            return []
+
+        # first check the file we want exists
+        if not pm.zip_name() in storage_manager.list(store_id):
+            return []
+
+        # a record of all the backups which took place
+        backups = []
+
+        # for each target format, load it's equivalent packager to get the storage name,
+        # then run the conversion
+        for tf in target_formats:
+            tpm = PackageFactory.converter(tf)
+            backup_name = storage_manager.backup(store_id, tpm.zip_name())
+            if backup_name:
+                backups.append(backup_name)
+        # return the conversions record to the caller
+        return backups
 
 class PackageHandler(object):
     """
@@ -1173,8 +1220,20 @@ class FilesAndJATS(PackageHandler):
             if affs is not None and affs != "":
                 obj["affiliation"] = affs
             if orcid is not None and orcid != "":
-                obj["identifier"] = []
-                obj["identifier"].append({"type" : "orcid", "id" : orcid})
+                ids = obj.get("identifier", [])
+                ids.append({"type": "orcid", "id": orcid})
+                obj["identifier"] = ids
+            ringgolds = author.get("ringgold", [])
+            for ringgold in ringgolds:
+                if ringgold is not None and ringgold != "":
+                    ids = obj.get("identifier", [])
+                    ids.append({"type": "ringgold", "id": ringgold})
+                    obj["identifier"] = ids
+            ror = author.get("ror", "")
+            if ror is not None and ror != "":
+                ids = obj.get("identifier", [])
+                ids.append({"type": "ror", "id": ror})
+                obj["identifier"] = ids
             # 2018-10-17 TD
             md.add_author(obj)
 
@@ -1227,8 +1286,20 @@ class FilesAndJATS(PackageHandler):
             if aff is not None:
                 obj["affiliation"] = aff
             if orcid is not None and orcid != "":
-                obj["identifier"] = []
-                obj["identifier"].append({"type" : "orcid", "id" : orcid})
+                ids = obj.get("identifier", [])
+                ids.append({"type": "orcid", "id": orcid})
+                obj["identifier"] = ids
+            ringgolds = author.get("ringgold", [])
+            for ringgold in ringgolds:
+                if ringgold is not None and ringgold != "":
+                    ids = obj.get("identifier", [])
+                    ids.append({"type": "ringgold", "id": ringgold})
+                    obj["identifier"] = ids
+            ror = author.get("ror", "")
+            if ror is not None and ror != "":
+                ids = obj.get("identifier", [])
+                ids.append({"type": "ror", "id": ror})
+                obj["identifier"] = ids
             # 2018-10-17 TD
             md.add_author(obj)
 
@@ -1262,39 +1333,54 @@ class FilesAndJATS(PackageHandler):
             match.add_keyword(c)
 
         # individual authors, emails, affiliations
-        for a in self.jats.contribs:
+        for author in self.jats.contribs:
             # name
-            name = a.get("given-names", "") + " " + a.get("surname", "")
+            name = author.get("given-names", "") + " " + author.get("surname", "")
             if name.strip() != "":
                 match.add_author_id(name, "name")
-            lastname = a.get("surname","")
+            lastname = author.get("surname","")
             if lastname.strip() != "":
                 match.add_author_id(lastname, "lastname")
-                firstname = a.get("given-names", "")
+                firstname = author.get("given-names", "")
                 if firstname.strip() != "":
                     match.add_author_id(firstname, "firstname")
 
             # 2018-10-17 TD : include an ORCID value as well
             # orcid
-            orcid = a.get("orcid", "")
+            orcid = author.get("orcid", "")
             if orcid.strip() != "":
                 match.add_author_id(orcid, "orcid")
 
             # email
-            email = a.get("email")
+            email = author.get("email")
             if email is not None:
                 match.add_email(email)
 
             # affiliations (and postcodes)
-            affs = a.get("affiliations", [])
-            for a in affs:
-                match.add_affiliation(a)
+            affs = author.get("affiliations", [])
+            for aff in affs:
+                match.add_affiliation(aff)
                 # 2017-01-19 TD : not needed in DeepGreen
                 #
-                # codes = postcode.extract_all(a)
+                # codes = postcode.extract_all(aff)
                 # for code in codes:
                 #     match.add_postcode(code)
 
+            # Add RoR
+            ror = author.get("ror", None)
+            if ror:
+                match.add_author_id(ror, "ror")
+
+            # Add Ringgold
+            ringgolds = author.get("ringgold", [])
+            for ringgold in ringgolds:
+                match.add_author_id(ringgold, "ringgold")
+
+            # Add identifiers
+            identifiers = author.get("identifier", [])
+            for i in identifiers:
+                if i.get('id', None) and i.get('type', None):
+                    match.add_author_id(i['id'], i["type"])
         # other keywords
         for k in self.jats.keywords:
             match.add_keyword(k)
@@ -1317,26 +1403,26 @@ class FilesAndJATS(PackageHandler):
 
         # individual authors and their affiliations
         authors = self.epmc.authors
-        for a in authors:
+        for author in authors:
             # name
-            fn = a.get("fullName")
+            fn = author.get("fullName")
             if fn is not None:
                 match.add_author_id(fn, "name")
-            last = a.get("lastName")
+            last = author.get("lastName")
             if last is not None:
                 match.add_author_id(last,"lastname")
-                first = a.get("firstName")
+                first = author.get("firstName")
                 if first is not None:
                     match.add_author_id(first,"firstname")
 
             # 2018-10-17 TD : include an ORCID value as well
             # orcid
-            orcid = a.get("orcid")
+            orcid = author.get("orcid")
             if orcid is not None:
                 match.add_author_id(orcid, "orcid")
 
             # affiliation (and postcode)
-            aff = a.get("affiliation")
+            aff = author.get("affiliation")
             if aff is not None:
                 match.add_affiliation(aff)
                 # 2017-01-19 TD : not needed in DeepGreen
@@ -1344,6 +1430,22 @@ class FilesAndJATS(PackageHandler):
                 # codes = postcode.extract_all(aff)
                 # for code in codes:
                 #     match.add_postcode(code)
+
+            # Add identifier
+            identifiers = author.get("identifier", [])
+            for i in identifiers:
+                if i.get('id', None) and i.get('type', None):
+                    match.add_author_id(i['id'], i["type"])
+
+            # Add RoR
+            ror = author.get("ror", None)
+            if ror:
+                match.add_author_id(ror, "ror")
+
+            # Add Ringgold
+            ringgolds = author.get("ringgold", [])
+            for ringgold in ringgolds:
+                match.add_author_id(ringgold, "ringgold")
 
         # grant ids
         gs = self.epmc.grants
@@ -2015,8 +2117,20 @@ class FilesAndRSC(PackageHandler):
             if affs is not None and affs != "":
                 obj["affiliation"] = affs
             if orcid is not None and orcid != "":
-                obj["identifier"] = []
-                obj["identifier"].append({"type" : "orcid", "id" : orcid})
+                ids = obj.get("identifier", [])
+                ids.append({"type": "orcid", "id": orcid})
+                obj["identifier"] = ids
+            ringgolds = author.get("ringgold", [])
+            for ringgold in ringgolds:
+                if ringgold is not None and ringgold != "":
+                    ids = obj.get("identifier", [])
+                    ids.append({"type": "ringgold", "id": ringgold})
+                    obj["identifier"] = ids
+            ror = author.get("ror", "")
+            if ror is not None and ror != "":
+                ids = obj.get("identifier", [])
+                ids.append({"type": "ror", "id": ror})
+                obj["identifier"] = ids
             # 2018-10-17 TD
             md.add_author(obj)
 
@@ -2039,39 +2153,55 @@ class FilesAndRSC(PackageHandler):
             match.add_keyword(c)
 
         # individual authors, emails, affiliations
-        for a in self.rsc_xml.contribs:
+        for author in self.rsc_xml.contribs:
             # name
-            name = a.get("fname", "") + " " + a.get("surname", "")
+            name = author.get("fname", "") + " " + author.get("surname", "")
             if name.strip() != "":
                 match.add_author_id(name, "name")
             # lastname (and firstname(s))
-            lastname = a.get("surname", "")
+            lastname = author.get("surname", "")
             if lastname.strip() != "":
                 match.add_author_id(lastname, "lastname")
-                firstname = a.get("fname", "")
+                firstname = author.get("fname", "")
                 if firstname.strip() != "":
                     match.add_author_id(firstname, "firstname")
 
             # 2018-10-17 TD : include an ORCID value as well
             # orcid
-            orcid = a.get("orcid", "")
+            orcid = author.get("orcid", "")
             if orcid.strip() != "":
                 match.add_author_id(orcid, "orcid")
 
             # email
-            email = a.get("email")
+            email = author.get("email")
             if email is not None:
                 match.add_email(email)
 
             # affiliations (and postcodes)
-            affs = a.get("affiliations", [])
-            for a in affs:
-                match.add_affiliation(a)
+            affs = author.get("affiliations", [])
+            for aff in affs:
+                match.add_affiliation(aff)
                 # 2016-11-29 TD : skip postcode extraction since
                 #                 it is not needed in DeepGreen
-                # codes = postcode.extract_all(a)
+                # codes = postcode.extract_all(aff)
                 # for code in codes:
                 #     match.add_postcode(code)
+
+            # Add identifiers
+            identifiers = author.get("identifier", [])
+            for i in identifiers:
+                if i.get('id', None) and i.get('type', None):
+                    match.add_author_id(i['id'], i["type"])
+
+            # Add RoR
+            ror = author.get("ror", None)
+            if ror:
+                match.add_author_id(ror, "ror")
+
+            # Add Ringgold
+            ringgolds = author.get("ringgold", [])
+            for ringgold in ringgolds:
+                match.add_author_id(ringgold, "ringgold")
 
         # other keywords
         for k in self.rsc_xml.keywords:
@@ -2155,3 +2285,4 @@ class FilesAndRSC(PackageHandler):
         """
         # is valid if rsc_xml is not none
         return self.rsc_xml is not None 
+

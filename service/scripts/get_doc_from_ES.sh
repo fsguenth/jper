@@ -12,19 +12,25 @@ help() {
 
 $PROGNAME - download ElasticSearch document and prepare for update
 
-usage: $PROGNAME [-h] -t MAPPING -i ID
+usage: $PROGNAME [-h] -t MAPPING -n ID
  -t MAPPING    MAPPING is the "table" e.g. license, alliance, routed202101
  -n ID         document ID
  -h            this help text
 EOT
 }
 
-
-
 # working on a local tunnel
 if [ `hostname` == "probibw41" ]; then
-    ES="http://localhost:9201"
+    ESHOST="localhost"
 fi
+
+# check ESHOST environment variable
+if [ -z "$ESHOST" ] ; then
+    echo; echo "ERROR: ESHOST environment variable missing"; help; exit 1 ;
+fi
+
+ES="http://${ESHOST}:9200"
+
 
 # parse arguments
 while getopts "t:n:h " option; do
@@ -44,7 +50,8 @@ if [ -z "$TYPE" ] || [ -z "$ID" ]; then
     exit 1
 fi
 
-FOUND=`curl -s "${ES}/jper/${TYPE}/${ID}" | jq .found | tr -cd 'truefalse'` 
+echo "${ES}/jper-${TYPE}/_doc/${ID}"
+FOUND=`curl -s "${ES}/jper-${TYPE}/_doc/${ID}" | jq .found | tr -cd 'truefalse'` 
 #echo x"$FOUND"x | od -c > $STDERR 
 #echo > $STDERR
 
@@ -55,7 +62,7 @@ fi
 
 echo "{"
 echo "\"doc\": " | tr -d "\012" | sed 's/^/  /'
-curl -s "${ES}/jper/${TYPE}/${ID}" | jq ._source | sed 's/^/  /'
+curl -s "${ES}/jper-${TYPE}/_doc/${ID}" | jq ._source | sed 's/^/  /'
 echo "}"
 
 

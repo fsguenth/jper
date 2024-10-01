@@ -1,0 +1,32 @@
+<div class="box box--padding-large box--brd-mgreyblue">
+    <h3>Upload matching details</h3>
+
+    <form class="form" method="POST" action="{{request.path}}/config" enctype="multipart/form-data">
+        <ul class="form-fields">
+            <li class="form-fields__item--text">
+                <label>
+                    <a href="https://raw.githubusercontent.com/OA-DeepGreen/jper/develop/docs/csvtemplate.csv" target="_blank">See csv example</a>
+                </label>
+            </li>
+            <li class="form-fields__item--text">
+                <!-- <h4>Or retrieve config file from URL</h4> -->
+                <label class="form-fields__item--text">
+                        <span class="form-fields__label-text">Remote csv file (URL)</span>
+                        <input type="text" name="url" placeholder="(no URL specified)" id="url" class="input--large"/>
+                    <br> <br>
+                    <button class="btn btn--3d btnright" id="config_retrieve" type="submit">Upload new match csv</button>
+                </label>
+            </li>
+            <li class="form-fields__item--text">
+                <!-- <h4>Upload new match config file</h4> -->
+                <label class="form-fields__item--text">
+                        <span class="form-fields__label-text">Local csv file (this computer)</span>
+                    <input type="file" name="file" id="file" class="input--large">
+                    <br> <br>
+                    <button class="btn btn--3d btnright" id="config_upload" type="submit">Upload new match csv</button>
+                </label>
+
+            </li>
+        </ul>
+    </form>
+</div>

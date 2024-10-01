@@ -10,6 +10,7 @@ from flask import Blueprint, abort, render_template, request, redirect, url_for,
 from flask_login.utils import current_user
 from service.models.ezb import LICENSE_TYPES, Alliance, License
 from service.models.license_management import LicenseManagement
+from service.lib import csv_helper
 
 blueprint = Blueprint('manage_license', __name__)
 ALLOWED_DEL_STATUS = ["validation failed", "archived", "validation passed"]
@@ -34,14 +35,13 @@ def details():
                            managed_licenses=ordered_records)
 
 
-@blueprint.route('/view_raw')
-def view_raw():
-    rec_id = request.values.get('record_id')
-    title = "License management record in JSON"
-    if rec_id:
-        rec = LicenseManagement.pull(rec_id)
+@blueprint.route('/view_license_manager/<record_id>')
+def view_license_manager(record_id):
+    title = f"License management record {record_id} in JSON"
+    if record_id:
+        rec = LicenseManagement.pull(record_id)
         if not rec:
-            data = {'Error': f"Record {rec_id} not found"}
+            data = {'Error': f"Record {record_id} not found"}
         else:
             data = rec.data
     else:
@@ -49,27 +49,25 @@ def view_raw():
     return render_template('manage_license/view_json.html', title=title, rec=data)
 
 
-@blueprint.route('/view_license')
-def view_license():
-    rec_id = request.values.get('record_id')
-    title = "License record in JSON"
-    if rec_id:
-        rec = License.pull(rec_id)
-        if not rec:
-            data = {'Error': f"Record {rec_id} not found"}
-        else:
-            data = rec.data
+@blueprint.route('/view_license/<record_id>')
+def view_license(record_id):
+    format = request.values.get('format', 'html')
+    if not record_id:
+        abort(404)
+    rec = License.pull(record_id)
+    if not rec:
+        abort(404)
+    if format == 'json':
+        title = f"License record {record_id} in JSON"
+        return render_template('manage_license/view_json.html', title=title, rec=rec.data)
     else:
-        data = {'Error': f"Please specify a record_id"}
-    return render_template('manage_license/view_json.html', title=title, rec=data)
+        return render_template('manage_license/view_license.html', rec=rec.data)
 
 
-@blueprint.route('/download_license_file')
-def download_license_file():
+@blueprint.route('/download_license_file/<manager_id>')
+def download_license_file(manager_id):
     if not current_user.is_super:
         abort(401)
-
-    manager_id = request.values.get('management_id')
     version = int(request.values.get('version'))
 
     management_record = LicenseManagement.pull(manager_id)
@@ -184,27 +182,27 @@ def delete_license():
     return redirect(url_for('manage_license.details'))
 
 
-@blueprint.route('/view_participant')
-def view_participant():
-    title = "Participant record in JSON"
-    rec_id = request.values.get('record_id')
-    if rec_id:
-        rec = Alliance.pull(rec_id)
-        if not rec:
-            data = {'Error': f"Record {rec_id} not found"}
-        else:
-            data = rec.data
+@blueprint.route('/view_participant/<record_id>')
+def view_participant(record_id):
+    format = request.values.get('format', 'html')
+
+    if not record_id:
+        abort(404)
+    rec = Alliance.pull(record_id)
+    if not rec:
+        abort(404)
+    if format == 'json':
+        title = f"Participant record {record_id} in JSON"
+        return render_template('manage_license/view_json.html', title=title, rec=rec.data)
     else:
-        data = {'Error': f"Please specify a record_id"}
-    return render_template('manage_license/view_json.html', title=title, rec=data)
+        return render_template('manage_license/view_participant.html', rec=rec.data)
 
 
-@blueprint.route('/download_participant_file')
-def download_participant_file():
+@blueprint.route('/download_participant_file/<manager_id>')
+def download_participant_file(manager_id):
     if not current_user.is_super:
         abort(401)
 
-    manager_id = request.values.get('management_id')
     version = int(request.values.get('version'))
 
     management_record = LicenseManagement.pull(manager_id)
@@ -357,7 +355,7 @@ def _upload_participant_file(management_id, uploaded_file):
 
     # load participant_file
     filename = uploaded_file.filename
-    file_bytes = uploaded_file.stream.read()
+    file_bytes = csv_helper.read_uploaded_file(uploaded_file)
 
     # save file
     version_datetime = datetime.now()
@@ -404,7 +402,7 @@ def _upload_participant_file(management_id, uploaded_file):
 def _update_license(lic_type, uploaded_file, management_record):
     # load lic_file
     filename = uploaded_file.filename
-    file_bytes = uploaded_file.stream.read()
+    file_bytes = csv_helper.read_uploaded_file(uploaded_file)
 
     # save file
     version_datetime = datetime.now()
@@ -780,7 +778,9 @@ def _validate_license_file(license_record, license_type, filename, file_bytes, e
     if file_extension in ['.xls', '.xlsx']:
         rows = _load_rows_by_xls_bytes(file_bytes)
     else:
-        csv_str = _decode_csv_bytes(file_bytes)
+        decode_status, csv_str = csv_helper.decode_csv_bytes(file_bytes)
+        if not decode_status:
+            return False, csv_str, license_record, None
         rows = _load_rows_by_csv_str(csv_str)
 
     # validate license file contents
@@ -807,7 +807,9 @@ def _validate_participant_file(participant_record, filename, file_bytes):
 
     csv_str: str = None
     if filename.lower().endswith('.csv'):
-        csv_str = _decode_csv_bytes(file_bytes)
+        decode_status, csv_str = csv_helper.decode_csv_bytes(file_bytes)
+        if not decode_status:
+            return False, csv_str, participant_record, None
     elif any(filename.lower().endswith(fmt) for fmt in ['xls', 'xlsx']):
         csv_str = _load_parti_csv_str_by_xls_bytes(file_bytes)
 
@@ -819,16 +821,6 @@ def _validate_participant_file(participant_record, filename, file_bytes):
         return False, msg, participant_record, None
     participant_record["validation_status"] = "validation passed"
     return True, "Participant file is valid", participant_record, csv_str
-
-
-def _decode_csv_bytes(csv_bytes):
-    encoding = chardet.detect(csv_bytes)['encoding']
-    if encoding == 'ISO-8859-1':
-        return csv_bytes.decode(encoding='iso-8859-1', errors='ignore')
-    else:
-        if encoding != 'utf-8':
-            app.logger.warning(f'unknown encoding[{encoding}], decode as utf8')
-        return csv_bytes.decode(encoding='utf-8', errors='ignore')
 
 
 def _extract_name_ezb_id_by_line(line):
@@ -859,8 +851,13 @@ def _load_rows_by_csv_str(csv_str):
 
 
 def _to_csv_str(headers, data):
-    dict_rows = [{headers[col_idx]: row[col_idx] for col_idx in range(len(headers))}
-                 for row in data]
+    dict_rows = []
+    for row in data:
+        dict_row = {}
+        for col_idx in range(len(headers)):
+            if len(row) > col_idx:
+                dict_row[headers[col_idx]] = row[col_idx]
+        dict_rows.append(dict_row)
 
     tmp_file_path = tempfile.mkstemp(prefix='__lc__')[1]
     with open(tmp_file_path, 'w') as tmp_file:

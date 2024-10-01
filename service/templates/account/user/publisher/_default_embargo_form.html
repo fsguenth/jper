@@ -1,0 +1,13 @@
+<div class="box box--padding-large box--brd-mgreyblue">
+    <h3>Embargo period</h3>
+    <form method="post" action="{{request.path}}/pubinfo" class="form">
+        <input type="hidden" name="embargo_form" value="True">
+        <ul class="form-fields">
+            <li class="form-fields__item--text">
+                    <span class="form-fields__label-text">Embargo duration (months)</span>
+                    <input type="text" name="embargo_duration" class="form-control"	value="{{account.data.get('embargo',{}).get('duration','')}}">
+                <button class="btn btn--3d" id="update_embargo" type="submit">Update details</button>
+            </li>
+        </ul>
+    </form>
+</div>

@@ -1,0 +1,15 @@
+{% if current_user.is_super %}
+    <h2><b>Manage account</b></h2>
+    <div class="box box--padding-large box--brd-mgreyblue">
+        <p>
+        {% if account.has_role('admin') %} Admin account {% endif %}
+        {% if account.has_role('repository') %} Repository account {% endif %}
+        {% if account.has_role('publisher') %} Publisher account {% endif %}
+        </p>
+        <form method="POST" action="" class="form">
+            <div class="form-fields__item--text form-fields__item--single">
+                <input type="submit" name="submit" class="btn btn--3d" id="delete" value="Delete this account">
+            </div>
+        </form>
+    </div>
+{% endif %}

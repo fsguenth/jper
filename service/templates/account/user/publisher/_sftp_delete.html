@@ -1,0 +1,25 @@
+{% if current_user.is_super and account.sftp_server_url %}
+    <hr>
+    <div>
+        <form method="post" action="{{request.path}}/sftp_server" class="form">
+            <input type="hidden" class="input--large" name="sftp_server_url"
+                    value="{{account.sftp_server_url}}" />
+            <div class="form-fields__item--text form-fields__item--single">
+                <input type="submit" name="submit" class="btn btn--3d" id="delete" value="Delete SFTP server connection details">
+            </div>
+        </form>
+    </div>
+    <br>
+    <div class="dl-table">
+        Note: if the SFTP connection details are deleted,
+        you need to revert to the default SFTP server connection
+        <dl>
+            <dt>SFTP username</dt>
+            <dd>{{ account.id }}</dd>
+            <dt>SFTP server URL</dt>
+            <dd>{{ default_sftp_server['url'] }}</dd>
+            <dt>SFTP server port</dt>
+            <dd>{{ default_sftp_server['port'] }}</dd>
+        </dl>
+    </div>
+{% endif %}

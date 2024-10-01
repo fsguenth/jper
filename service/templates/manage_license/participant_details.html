@@ -10,7 +10,7 @@
     <dt>View participant</dt>
     <dd>
         {% if par.get('record_id', '') %}
-            <a href="{{ url_for('manage_license.view_participant') }}?record_id={{ par.get('record_id', '') }}">
+            <a href="/manage_license/view_participant/{{ par.get('record_id', '') }}">
                 {{ par.get('record_id', '') }}</a>
         {% else %}
             <b>No participant record</b>
@@ -18,7 +18,7 @@
     </dl>
     {% if par.get('record_id', '') or par.get('file_name', '') %}
         <dt>Download participant file</dt>
-        <dd><a href="{{ url_for('manage_license.download_participant_file', management_id=rec.id, version=par.get('version', 0)) }}">
+        <dd><a href="/manage_license/download_participant_file/{{rec.id}}?version={{par.get('version', 0) }}">
             {{ par.get('file_name', 'participant file') }}
         </a></dd>
     {% endif %}
